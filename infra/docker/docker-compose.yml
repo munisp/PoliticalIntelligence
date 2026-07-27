@@ -34,6 +34,7 @@ volumes:
   redpanda-data:
   prometheus-data:
   grafana-data:
+  vllm-cache:
 
 services:
   app:
@@ -411,6 +412,43 @@ services:
       interval: 15s
       timeout: 5s
       retries: 6
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # vLLM OpenAI-compatible serving tier (GPU profile — not started by
+  # default; enable with: docker compose --profile gpu up vllm).
+  # Works out of the box: point the ai service at it via
+  #   VLLM_BASE_URL=http://vllm:8000  (router + circuit breakers take over)
+  # Swap VLLM_MODEL for per-tier deployments (see docs/LLM.md).
+  # ------------------------------------------------------------------
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["gpu"]
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen3-32B}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --gpu-memory-utilization ${VLLM_GPU_MEM_UTIL:-0.90}
+    environment:
+      VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen3-32B}
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+    volumes:
+      - vllm-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${VLLM_GPU_COUNT:-1}
+              capabilities: [gpu]
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
     restart: unless-stopped
 
   otel-collector:

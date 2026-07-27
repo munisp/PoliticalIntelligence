@@ -57,6 +57,15 @@ app.route("/v1", rest);
 const { startOutboxRelay } = await import("./utils/events");
 startOutboxRelay();
 
+// Event consumers + DLQ + job-heartbeat sweeper + WORM export interval
+// (EVENT_CONSUMERS=0 disables; default on). Additive, non-blocking.
+if (process.env.EVENT_CONSUMERS !== "0") {
+  const { startConsumers } = await import("./consumers");
+  startConsumers().catch((err) =>
+    console.error("[consumers] startup failed:", err),
+  );
+}
+
 export default app;
 
 if (env.isProduction) {

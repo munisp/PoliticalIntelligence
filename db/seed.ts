@@ -1060,7 +1060,6 @@ async function seed() {
   await ensureStringPk("scenario_templates", schema.scenarioTemplates as never, schema.scenarioTemplates.templateId as never, SCENARIO_TEMPLATES as never, "templateId");
   await ensureStringPk("webhook_subscriptions", schema.webhookSubscriptions as never, schema.webhookSubscriptions.subId as never, WEBHOOKS as never, "subId");
 
-
   // feat-data-loader: canonical model + geo boundaries (idempotent).
   await ensureStringPk("budgets", schema.budgets as never, schema.budgets.budgetId as never, BUDGETS as never, "budgetId");
   await ensureStringPk("officials", schema.officials as never, schema.officials.officialId as never, OFFICIALS as never, "officialId");
@@ -1068,6 +1067,15 @@ async function seed() {
   await ensureStringPk("business_registrations", schema.businessRegistrations as never, schema.businessRegistrations.registrationId as never, BUSINESS_REGISTRATIONS as never, "registrationId");
   await ensureStringPk("facilities", schema.facilities as never, schema.facilities.facilityId as never, FACILITIES_SEED as never, "facilityId");
   await ensureStringPk("geo_boundaries", schema.geoBoundaries as never, schema.geoBoundaries.unitId as never, GEO_BOUNDARIES_SEED as never, "unitId");
+
+  // === feat-llm-events seed ===
+  // Demo job heartbeat (stuck-job sweeper demo target) — additive.
+  await db
+    .insert(schema.jobHeartbeats)
+    .values({ jobId: "job:seed-demo", status: "succeeded", ts: new Date() })
+    .onDuplicateKeyUpdate({ set: { status: "succeeded" } });
+  console.log("  job_heartbeats: 1 upserted (demo)");
+  // === end feat-llm-events seed ===
 
   console.log("Done.");
   process.exit(0);
