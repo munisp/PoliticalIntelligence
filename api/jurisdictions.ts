@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ADMIN_LEVELS } from "@contracts/entities";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { assertJurisdictionRead, accessibleJurisdictionIds, resolveReadScope } from "./utils/rbac";
 import { envelope, apiError } from "./utils/envelope";
 import {
   adminUnitTree,
@@ -58,6 +59,8 @@ const METRIC_TO_SCORE_KEY: Record<string, string> = {
 };
 
 export const jurisdictionsRouter = createRouter({
+  // ABAC-scoped read (SR-10/SEC-3): non-global actors see only their
+  // assigned jurisdictions; executive/platform_admin see all.
   list: publicQuery
     .input(
       z.object({
@@ -67,18 +70,42 @@ export const jurisdictionsRouter = createRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      const scope = await resolveReadScope(ctx);
       const page = await listJurisdictions({
         countryCode: input.country_code,
         adminLevel: input.admin_level,
+        jurisdictionIds: scope.jurisdictionIds,
         cursor: input.cursor,
         limit: input.limit,
       });
       return envelope(page, ctx);
     }),
 
+  /** The actor's accessible jurisdiction set (grants or "all"). */
+  accessible: authedQuery.query(async ({ ctx }) => {
+    const ids = await accessibleJurisdictionIds(ctx);
+    if (ids === null) {
+      return envelope({ scope: "all" as const, jurisdiction_ids: null }, ctx);
+    }
+    const { jurisdictionsForUser } = await import("./queries/users");
+    const grants = await jurisdictionsForUser(ctx.user.id);
+    return envelope(
+      {
+        scope: "assigned" as const,
+        jurisdiction_ids: ids,
+        grants: grants.map((g) => ({
+          jurisdiction_id: g.jurisdictionId,
+          access_level: g.accessLevel,
+        })),
+      },
+      ctx,
+    );
+  }),
+
   get: publicQuery
     .input(z.object({ jurisdiction_id: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
+      await assertJurisdictionRead(ctx, input.jurisdiction_id);
       const jur = await findJurisdiction(input.jurisdiction_id);
       if (!jur)
         throw apiError(ctx, {
@@ -98,6 +125,7 @@ export const jurisdictionsRouter = createRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertJurisdictionRead(ctx, input.jurisdiction_id);
       const jur = await findJurisdiction(input.jurisdiction_id);
       if (!jur)
         throw apiError(ctx, {
@@ -183,6 +211,7 @@ export const jurisdictionsRouter = createRouter({
   geoUnits: publicQuery
     .input(z.object({ jurisdiction_id: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
+      await assertJurisdictionRead(ctx, input.jurisdiction_id);
       const tree = await adminUnitTree(input.jurisdiction_id);
       return envelope(tree, ctx);
     }),

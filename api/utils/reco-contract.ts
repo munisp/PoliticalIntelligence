@@ -112,11 +112,10 @@ export function extractJson(raw: string): {
  * (`estimated_jobs` {min,max,expected}) — both are spec-conformant; the
  * gateway normalizes to the TS shape.
  */
-export function validateRecommendationObject(
-  obj: Record<string, unknown> | null | undefined,
-): string[] {
+export function validateRecommendationObject(input: unknown): string[] {
   const errors: string[] = [];
-  if (!obj || typeof obj !== "object") return ["recommendation is not an object"];
+  if (!input || typeof input !== "object") return ["recommendation is not an object"];
+  const obj = input as Record<string, unknown>;
   for (const key of REQUIRED_SCALAR_KEYS) {
     if (!(key in obj)) errors.push(`missing required key: ${key}`);
   }

@@ -5,6 +5,8 @@ import { getDb } from "./connection";
 
 export async function listLaws(filters: {
   jurisdictionId?: string;
+  /** ABAC read scope: restrict to these jurisdiction ids. */
+  jurisdictionIds?: string[];
   category?: string;
   cursor?: string;
   limit: number;
@@ -12,6 +14,12 @@ export async function listLaws(filters: {
   const conds = [];
   if (filters.jurisdictionId)
     conds.push(eq(schema.laws.jurisdictionId, filters.jurisdictionId));
+  if (filters.jurisdictionIds)
+    conds.push(
+      filters.jurisdictionIds.length > 0
+        ? inArray(schema.laws.jurisdictionId, filters.jurisdictionIds)
+        : eq(schema.laws.jurisdictionId, "__none__"),
+    );
   if (filters.category) conds.push(eq(schema.laws.category, filters.category));
   const offset = filters.cursor ? Math.max(0, Number(filters.cursor) || 0) : 0;
   const rows = await getDb()

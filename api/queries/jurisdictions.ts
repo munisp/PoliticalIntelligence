@@ -1,9 +1,11 @@
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import * as schema from "@db/schema";
 import { getDb } from "./connection";
 
 export async function listJurisdictions(filters: {
   countryCode?: string;
+  /** ABAC read scope: restrict to these jurisdiction ids. */
+  jurisdictionIds?: string[];
   adminLevel?: schema.Jurisdiction["adminLevel"];
   cursor?: string;
   limit: number;
@@ -13,6 +15,12 @@ export async function listJurisdictions(filters: {
     conds.push(eq(schema.jurisdictions.countryCode, filters.countryCode));
   if (filters.adminLevel)
     conds.push(eq(schema.jurisdictions.adminLevel, filters.adminLevel));
+  if (filters.jurisdictionIds)
+    conds.push(
+      filters.jurisdictionIds.length > 0
+        ? inArray(schema.jurisdictions.jurisdictionId, filters.jurisdictionIds)
+        : eq(schema.jurisdictions.jurisdictionId, "__none__"),
+    );
   if (filters.cursor)
     conds.push(gt(schema.jurisdictions.jurisdictionId, filters.cursor));
   const rows = await getDb()

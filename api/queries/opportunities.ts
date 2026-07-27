@@ -34,6 +34,8 @@ export async function sectorMetricsRange(filters: {
 
 export async function opportunityRankings(filters: {
   jurisdictionId?: string;
+  /** ABAC read scope: restrict to these jurisdiction ids. */
+  jurisdictionIds?: string[];
   sectorCode?: string;
   horizonMaxMonths?: number;
   confidenceFloor?: number;
@@ -43,6 +45,12 @@ export async function opportunityRankings(filters: {
   const conds = [];
   if (filters.jurisdictionId)
     conds.push(eq(schema.opportunities.jurisdictionId, filters.jurisdictionId));
+  if (filters.jurisdictionIds)
+    conds.push(
+      filters.jurisdictionIds.length > 0
+        ? inArray(schema.opportunities.jurisdictionId, filters.jurisdictionIds)
+        : eq(schema.opportunities.jurisdictionId, "__none__"),
+    );
   if (filters.sectorCode)
     conds.push(eq(schema.opportunities.sectorCode, filters.sectorCode));
   if (filters.horizonMaxMonths)

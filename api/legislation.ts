@@ -6,7 +6,7 @@ import {
 } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit } from "./utils/envelope";
-import { requireRole, assertJurisdictionAccess } from "./utils/rbac";
+import { requireRole, assertJurisdictionAccess, assertJurisdictionRead, resolveReadScope } from "./utils/rbac";
 import {
   approvalEventsFor,
   citationTrace,
@@ -42,6 +42,8 @@ const TRANSITIONS: Record<ReviewState, ReviewState[]> = {
 };
 
 export const legislationRouter = createRouter({
+  // ABAC-scoped read (SR-10/SEC-3): actors see laws in their assigned
+  // jurisdictions only; executive/platform_admin see all.
   laws: publicQuery
     .input(
       z.object({
@@ -51,17 +53,19 @@ export const legislationRouter = createRouter({
         limit: z.number().int().min(1).max(100).default(25),
       }),
     )
-    .query(async ({ ctx, input }) =>
-      envelope(
+    .query(async ({ ctx, input }) => {
+      const scope = await resolveReadScope(ctx, input.jurisdiction_id);
+      return envelope(
         await listLaws({
-          jurisdictionId: input.jurisdiction_id,
+          jurisdictionId: scope.jurisdictionId,
+          jurisdictionIds: scope.jurisdictionIds,
           category: input.category,
           cursor: input.cursor,
           limit: input.limit,
         }),
         ctx,
-      ),
-    ),
+      );
+    }),
 
   law: publicQuery
     .input(z.object({ law_id: z.string().min(1) }))
@@ -73,15 +77,18 @@ export const legislationRouter = createRouter({
           code: "LAW_NOT_FOUND",
           message: `Law ${input.law_id} not found`,
         });
+      await assertJurisdictionRead(ctx, law.jurisdictionId);
       const clauseCount = (await clausesForLaw(input.law_id)).length;
       return envelope({ ...law, clause_count: clauseCount }, ctx);
     }),
 
   clauses: publicQuery
     .input(z.object({ law_id: z.string().min(1) }))
-    .query(async ({ ctx, input }) =>
-      envelope(await clausesForLaw(input.law_id), ctx),
-    ),
+    .query(async ({ ctx, input }) => {
+      const law = await findLaw(input.law_id);
+      if (law) await assertJurisdictionRead(ctx, law.jurisdictionId);
+      return envelope(await clausesForLaw(input.law_id), ctx);
+    }),
 
   clause: publicQuery
     .input(z.object({ clause_id: z.string().min(1) }))
@@ -93,6 +100,9 @@ export const legislationRouter = createRouter({
           code: "CLAUSE_NOT_FOUND",
           message: `Clause ${input.clause_id} not found`,
         });
+      const clauseLaw = await findLaw(clause.lawId);
+      if (clauseLaw)
+        await assertJurisdictionRead(ctx, clauseLaw.jurisdictionId);
       const [trace, approvals] = await Promise.all([
         citationTrace(input.clause_id),
         approvalEventsFor("clause", input.clause_id),
@@ -113,8 +123,18 @@ export const legislationRouter = createRouter({
           message: "seed_clause_id or seed_law_id is required",
         }),
     )
-    .query(async ({ ctx, input }) =>
-      envelope(
+    .query(async ({ ctx, input }) => {
+      // ABAC: assert read access on the seed law's jurisdiction.
+      const seedLawId =
+        input.seed_law_id ??
+        (input.seed_clause_id
+          ? (await findClause(input.seed_clause_id))?.lawId
+          : undefined);
+      if (seedLawId) {
+        const law = await findLaw(seedLawId);
+        if (law) await assertJurisdictionRead(ctx, law.jurisdictionId);
+      }
+      return envelope(
         await graphQuery({
           seedClauseId: input.seed_clause_id,
           seedLawId: input.seed_law_id,
@@ -122,8 +142,8 @@ export const legislationRouter = createRouter({
           depth: input.depth,
         }),
         ctx,
-      ),
-    ),
+      );
+    }),
 
   reviewQueue: authedQuery
     .input(

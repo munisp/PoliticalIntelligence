@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
+import { assertJurisdictionRead } from "./utils/rbac";
 import { envelope } from "./utils/envelope";
 import { listSectors, sectorMetricsRange } from "./queries/opportunities";
 
@@ -19,6 +20,7 @@ export const sectorsRouter = createRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertJurisdictionRead(ctx, input.jurisdiction_id);
       const rows = await sectorMetricsRange({
         jurisdictionId: input.jurisdiction_id,
         sectorCode: input.sector_code,
