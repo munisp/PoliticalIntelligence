@@ -114,7 +114,12 @@ jobRunner.register("opportunities.generate", async ({ input, reportProgress }) =
   }
   await reportProgress(55);
 
-  const { recommendation, bridge } = await generateRecommendation({
+  // §9.2 contract enforcement: a recommendation that fails validation
+  // (after the bridge's single repair retry) fails the job — it is NEVER
+  // persisted. The failure is recorded in the audit trail.
+  let generated: Awaited<ReturnType<typeof generateRecommendation>>;
+  try {
+    generated = await generateRecommendation({
     opportunity: {
       opportunity_id: opp.opportunityId,
       title: opp.title,
@@ -134,9 +139,23 @@ jobRunner.register("opportunities.generate", async ({ input, reportProgress }) =
       confidence: e.confidence,
       excerpt: e.contentExcerpt,
     })),
-    legal_dependencies: legalDependencies,
-    simulation_scenarios: [],
-  });
+      legal_dependencies: legalDependencies,
+      simulation_scenarios: [],
+    });
+  } catch (err) {
+    const { RecommendationContractError } = await import("./utils/reco-contract");
+    if (err instanceof RecommendationContractError) {
+      await auditBackground(
+        actor_id,
+        "recommendations.contract_validation_failed",
+        "opportunity",
+        opportunity_id,
+        { errors: err.errors },
+      );
+    }
+    throw err; // job fails with the error envelope; nothing is persisted
+  }
+  const { recommendation, bridge } = generated;
   recommendation.generated_at = new Date();
   await reportProgress(80);
 
@@ -288,8 +307,18 @@ jobRunner.register("briefs.generate", async ({ input, reportProgress }) => {
   };
   await reportProgress(75);
 
+  // PII redaction on generated brief content BEFORE persistence (AI-11).
+  // Counts only are logged — never the redacted text.
+  const { redactPayload, logRedactionEvent } = await import("./utils/pii");
+  const piiCounts: Record<string, number> = {};
+  const safeContent =
+    process.env.PII_REDACTION === "off"
+      ? content
+      : (redactPayload(content, undefined, piiCounts) as typeof content);
+  logRedactionEvent("runner.briefs.generate.output", piiCounts);
+
   await updateBrief(brief_id, {
-    content: content as never,
+    content: safeContent as never,
     reviewState: "in_review",
     modelRouting: { tier: "offline-fallback", model: "deterministic", fallback: true } as never,
   });
