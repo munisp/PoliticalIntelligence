@@ -1,0 +1,54 @@
+# Testing & Validation Strategy
+
+## Test layers
+
+| Layer | Scope | Tooling | Gate |
+| ----- | ----- | ------- | ---- |
+| Unit | Pure functions, routers, domain logic in app + both Python services | Vitest (TS), pytest (Python) | Every PR (CI) |
+| Integration | API ↔ MySQL/Redis-like stores, service ↔ service, ingest pipeline slices | pytest + testcontainers / compose | Every PR |
+| Contract | `contracts/` schemas: API payloads + event schemas; provider/consumer verification | Schema checks in CI; Pact-style verification for service boundaries | Every PR; blocks merge on schema drift |
+| E2E API | Golden flows: login → profile → opportunity generation job → scenario → brief | Playwright/Supertest against staging compose | Nightly + pre-release |
+| dbt data contracts | Analytical models: uniqueness, not-null, accepted values, freshness per source | dbt tests | Every pipeline run; failed contract blocks dataset promotion |
+| Model eval + prompt regression | Golden task suites per tier (answer quality, citation correctness, refusal behavior); retrieval recall@k | Eval harness in `services/ai` | Pre-merge for prompt/model/routing changes; nightly full suite |
+| Simulation calibration & reproducibility | Backtests against historical outcomes; same inputs + seed ⇒ identical outputs (`reproducibility_hash`) | pytest suites in `services/simulation` | Pre-release; calibration report attached to release |
+| Security | Dependency scan, container scan, CodeQL, authz policy tests (role × jurisdiction matrix) | CI + scheduled | Every PR (scans); policy matrix pre-release |
+| Performance | Load tests against NFR table below | k6 | Pre-release on staging |
+| UAT | Stakeholder scenarios per `NIGERIA_PILOT.md` user panel | Scripted UAT sessions | Go/no-go gates at month 6 and each rollout wave |
+
+## Non-functional requirements (NFRs)
+
+| NFR | Target | Verified by |
+| --- | ------ | ----------- |
+| Availability | 99.5% uptime (monthly) | SLI on Platform Overview dashboard; error budget policy |
+| Read latency | p95 < 5s for dashboard reads | k6 + `DashboardReadLatencyHigh` alert |
+| Advisory/generation latency | p95 < 20s for advisory (copilot/advisory responses) | k6 + model routing metrics |
+| Concurrency | 100 concurrent read sessions; 20 concurrent LLM sessions | k6 load profiles |
+| DR | RPO ≤ 24h, RTO ≤ 8h | Quarterly restore drill, timed |
+| Audit retention | 7 years, immutable | WORM export verification in DR drill |
+| Reproducibility | Simulation runs and generations re-runnable from manifest (inputs, seed, model/data versions) | Reproducibility test suite |
+| Explainability | Every generated recommendation carries citations to `EvidenceSource`s; specialist-tier reasoning traces stored | Eval harness citation checks |
+| Localization | Jurisdiction hierarchy and sector packs configurable per deployment without code changes | Config-driven deployment test in CI |
+
+## Practical commands
+
+```bash
+# Node: typecheck + unit tests
+npm run check
+npm test
+
+# Python services
+cd services/simulation && pytest
+cd ../ai && pytest
+
+# Full local stack for integration/E2E
+docker compose -f infra/docker/docker-compose.yml up --build
+```
+
+## Release quality gates
+
+1. All CI jobs green (node, python ×2, docker ×3, CodeQL).
+2. dbt data contracts pass on staging data.
+3. Model eval + prompt regression within agreed deltas of the baseline; no citation-correctness regression.
+4. Simulation calibration report attached; reproducibility suite green.
+5. Performance run meets NFR table; security scans clean or triaged.
+6. Staging canary healthy for the bake window before prod promotion.

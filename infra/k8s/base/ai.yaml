@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: ai
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai
+        app.kubernetes.io/part-of: policy-twin
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ai
+          image: ghcr.io/munisp/politicalintelligence/ai:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8200
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          env:
+            - name: MODEL_DEFAULT_TIER
+              valueFrom:
+                configMapKeyRef:
+                  name: platform-config
+                  key: MODEL_DEFAULT_TIER
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: ai
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ai
+  ports:
+    - name: http
+      port: 8200
+      targetPort: http

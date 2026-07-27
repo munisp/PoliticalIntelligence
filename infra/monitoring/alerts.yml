@@ -1,0 +1,86 @@
+# Alert rules per spec: data freshness, job failures, dashboard read latency.
+groups:
+  - name: platform-slo
+    interval: 30s
+    rules:
+      # p95 dashboard read latency above the 5s NFR for 10 minutes.
+      - alert: DashboardReadLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="app",route=~"/v1/(jurisdictions|opportunities|briefs|search).*"}[5m]))
+            by (le)
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Dashboard read p95 latency above 5s (NFR breach)"
+          description: "p95 of dashboard read endpoints on {{ $labels.service }} has exceeded 5s for 10 minutes."
+
+      # Async job failures: opportunity generation, scenario runs, report builds.
+      - alert: JobFailureRateHigh
+        expr: |
+          sum(rate(jobs_failed_total[10m]))
+          /
+          clamp_min(sum(rate(jobs_completed_total[10m])) + sum(rate(jobs_failed_total[10m])), 1)
+          > 0.05
+        for: 15m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Async job failure rate above 5%"
+          description: "More than 5% of platform jobs (opportunities, scenarios, reports) are failing."
+
+      # Data freshness: no successful ingest for a source within its cadence.
+      - alert: DataSourceStale
+        expr: |
+          time() - max by (source) (ingest_last_success_timestamp_seconds)
+          > on(source) group_left max by (source) (ingest_expected_cadence_seconds)
+        for: 30m
+        labels:
+          severity: warning
+          team: data
+        annotations:
+          summary: "Data source {{ $labels.source }} is stale"
+          description: "No successful ingestion from {{ $labels.source }} within its expected cadence."
+
+      # Event backlog: consumer lag growing on any topic.
+      - alert: EventBacklogGrowing
+        expr: |
+          sum by (group, topic) (redpanda_kafka_consumer_group_lag) > 10000
+        for: 20m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Consumer lag > 10k on {{ $labels.topic }}"
+          description: "Consumer group {{ $labels.group }} is falling behind on topic {{ $labels.topic }}."
+
+      # Simulation reproducibility/calibration guard: run error budget burn.
+      - alert: SimulationRunFailures
+        expr: |
+          sum(rate(simulation_runs_failed_total[30m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: simulation
+        annotations:
+          summary: "Simulation runs failing at elevated rate"
+          description: "services/simulation is failing more than 0.1 runs/sec over the last 30 minutes."
+
+      # Model serving health: AI router error rate or tier unavailability.
+      - alert: ModelTierUnavailable
+        expr: |
+          sum(rate(model_requests_failed_total[10m])) by (tier)
+          /
+          clamp_min(sum(rate(model_requests_total[10m])) by (tier), 1)
+          > 0.10
+        for: 10m
+        labels:
+          severity: critical
+          team: ai
+        annotations:
+          summary: "Model tier {{ $labels.tier }} error rate above 10%"
+          description: "The AI router is seeing elevated failures for tier {{ $labels.tier }}; check vLLM/Ray Serve pools."
