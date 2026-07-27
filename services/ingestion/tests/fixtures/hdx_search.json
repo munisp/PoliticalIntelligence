@@ -1,0 +1,94 @@
+{
+ "help": "https://data.humdata.org/api/3/action/help_show?name=package_search",
+ "success": true,
+ "result": {
+  "count": 2,
+  "facets": {},
+  "expanded": {},
+  "results": [
+   {
+    "name": "nigeria-health-facilities",
+    "title": "Nigeria: Health facilities",
+    "organization": {
+     "id": "hdx",
+     "name": "hdx",
+     "title": "HDX",
+     "type": "organization",
+     "description": "The Humanitarian Data Exchange (HDX) is an open data sharing platform managed by the United Nations Office for the Coordination of Humanitarian Affairs. The HDX organization is managed by the HDX data team and is used to share data on behalf of a number of partners",
+     "image_url": "http://labs.reliefweb.int/img/rw-thumbnail-hdx.png",
+     "created": "2014-04-02T12:19:44.486326",
+     "is_organization": true,
+     "approval_status": "approved",
+     "state": "active"
+    },
+    "notes": "Nigeria Health facilities. These are Primary, Secondary and Tertiary entities that provide medical and/or healthcare services and/or engage in the use generally of natural and/or artificial materials to create or dispense drugs. ",
+    "dataset_date": "[2020-10-06T00:00:00 TO 2020-10-06T23:59:59]",
+    "resources": [
+     {
+      "name": "NigeriaHealthFacilities.json",
+      "format": "JSON",
+      "url": "https://data.humdata.org/dataset/3b4a119a-309c-4d3f-900f-18a1f6ca2dfa/resource/5a3bdd13-3ada-4bf4-ac38-643390bc0562/download/nigeriahealthfacilities.json",
+      "id": "5a3bdd13-3ada-4bf4-ac38-643390bc0562"
+     },
+     {
+      "name": "NigeriaHealthFacilities.zip",
+      "format": "SHP",
+      "url": "https://data.humdata.org/dataset/3b4a119a-309c-4d3f-900f-18a1f6ca2dfa/resource/d24b1aa9-116d-49f0-9eb2-ee82e9903d64/download/nigeriahealthfacilities.zip",
+      "id": "d24b1aa9-116d-49f0-9eb2-ee82e9903d64"
+     },
+     {
+      "name": "NigeriaHealthFacilities.csv",
+      "format": "CSV",
+      "url": "https://data.humdata.org/dataset/3b4a119a-309c-4d3f-900f-18a1f6ca2dfa/resource/4658aa59-0554-4fac-8473-377da4b7a0e9/download/nigeriahealthfacilities.csv",
+      "id": "4658aa59-0554-4fac-8473-377da4b7a0e9"
+     }
+    ]
+   },
+   {
+    "name": "nigeria-health-care-facilities-in-nigeria",
+    "title": "Nigeria: Health Care Facilities in Nigeria",
+    "organization": {
+     "id": "hdx",
+     "name": "hdx",
+     "title": "HDX",
+     "type": "organization",
+     "description": "The Humanitarian Data Exchange (HDX) is an open data sharing platform managed by the United Nations Office for the Coordination of Humanitarian Affairs. The HDX organization is managed by the HDX data team and is used to share data on behalf of a number of partners",
+     "image_url": "http://labs.reliefweb.int/img/rw-thumbnail-hdx.png",
+     "created": "2014-04-02T12:19:44.486326",
+     "is_organization": true,
+     "approval_status": "approved",
+     "state": "active"
+    },
+    "notes": "Nigeria country-wide primary, secondary, and tertiary health care facility points and names and functional status",
+    "dataset_date": "[2018-12-18T00:00:00 TO 2024-04-26T23:59:59]",
+    "resources": [
+     {
+      "name": "GRID3_NGA_-_Health_Facilities",
+      "format": "SHP",
+      "url": "https://data.humdata.org/dataset/bfd0888d-ca7f-40ec-b1e7-97eb3fe15dc2/resource/2101856b-a471-4805-8d74-c703d99e9c47/download/grid3_nga_-_health_facilities_-1.zip",
+      "id": "2101856b-a471-4805-8d74-c703d99e9c47"
+     },
+     {
+      "name": "GRID3_NGA_-_Health_Facilities",
+      "format": "CSV",
+      "url": "https://data.humdata.org/dataset/bfd0888d-ca7f-40ec-b1e7-97eb3fe15dc2/resource/1ad3ca9f-d8f0-4c13-8e57-246c2f834c4e/download/grid3_nga_-_health_facilities_-1.csv",
+      "id": "1ad3ca9f-d8f0-4c13-8e57-246c2f834c4e"
+     },
+     {
+      "name": "GRID3_NGA_-_Health_Facilities",
+      "format": "GeoJSON",
+      "url": "https://data.humdata.org/dataset/bfd0888d-ca7f-40ec-b1e7-97eb3fe15dc2/resource/1c9faa0b-49fc-4971-9872-f64d580805bc/download/grid3_nga_-_health_facilities_-1.geojson",
+      "id": "1c9faa0b-49fc-4971-9872-f64d580805bc"
+     }
+    ]
+   }
+  ],
+  "sort": "score desc, last_modified desc",
+  "search_facets": {
+   "pivot": {},
+   "queries": []
+  },
+  "facet_pivot": {},
+  "facet_queries": {}
+ }
+}
