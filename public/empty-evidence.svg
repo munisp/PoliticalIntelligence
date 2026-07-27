@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" fill="none" role="img" aria-label="No evidence found">
+  <g stroke="#5E6D87" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <!-- back sheet -->
+    <path d="M96 60 h96 v120 h-96 z" opacity="0.45"/>
+    <!-- middle sheet -->
+    <path d="M84 72 h96 v120 h-96 z" opacity="0.7"/>
+    <!-- front sheet -->
+    <path d="M72 84 h96 v120 h-96 z"/>
+    <!-- text lines on front sheet -->
+    <line x1="84" y1="102" x2="144" y2="102"/>
+    <line x1="84" y1="116" x2="152" y2="116"/>
+    <line x1="84" y1="130" x2="136" y2="130"/>
+    <line x1="84" y1="144" x2="148" y2="144"/>
+    <!-- magnifier -->
+    <circle cx="196" cy="140" r="34"/>
+    <line x1="221" y1="165" x2="246" y2="190"/>
+  </g>
+  <!-- chain glyph inside magnifier (teal accent) -->
+  <g stroke="#3FAE9E" stroke-width="3" stroke-linecap="round">
+    <path d="M186 148 a8 8 0 0 1 0 -11 l7 -7 a8 8 0 0 1 11 11 l-7 7 a8 8 0 0 1 -11 0 z" fill="none"/>
+    <path d="M199 135 a8 8 0 0 1 11 0 l7 7 a8 8 0 0 1 -11 11 l-7 -7" fill="none"/>
+  </g>
+</svg>
