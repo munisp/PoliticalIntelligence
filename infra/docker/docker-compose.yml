@@ -1,0 +1,392 @@
+# Full local/staging stack for the Jurisdiction Economic Intelligence & Policy Twin Platform.
+# Usage:
+#   cp infra/docker/.env.example .env
+#   docker compose -f infra/docker/docker-compose.yml --env-file .env up --build
+#
+# Services:
+#   app            Node 20 monolith: builds the React+Vite PWA and serves the Hono+tRPC API (port 3000)
+#   simulation     FastAPI simulation/scenario microservice (port 8100)
+#   ai             FastAPI AI/model-routing microservice (port 8200)
+#   mysql          MySQL 8.x — Drizzle ORM operational store
+#   minio (+init)  S3-compatible object storage for documents/lakehouse staging
+#   neo4j          Knowledge graph (entities, laws, relationships)
+#   opensearch     Full-text + vector search (single-node, security disabled for dev)
+#   postgis        Geospatial store (wards, LGAs, facilities, GRID3 layers)
+#   keycloak       OIDC identity provider (dev mode, realm import placeholder)
+#   redpanda       Kafka-compatible event backbone (single broker)
+#   prometheus     Metrics scrape
+#   grafana        Dashboards (provisioned from infra/monitoring/grafana)
+#   otel-collector Traces/metrics/logs pipeline
+
+name: policy-twin
+
+networks:
+  platform:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  minio-data:
+  neo4j-data:
+  opensearch-data:
+  postgis-data:
+  redpanda-data:
+  prometheus-data:
+  grafana-data:
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    image: policy-twin/app:local
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: "3000"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      neo4j:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      postgis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      simulation:
+        condition: service_started
+      ai:
+        condition: service_started
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  simulation:
+    build:
+      context: ../../services/simulation
+    image: policy-twin/simulation:local
+    ports:
+      - "${SIMULATION_PORT:-8100}:8100"
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8100/healthz').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: ../../services/ai
+    image: policy-twin/ai:local
+    ports:
+      - "${AI_PORT:-8200}:8200"
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      KAFKA_BROKERS: redpanda:9092
+      # Model tier endpoints (vLLM / Ray Serve). Defaults point at in-process dev stubs.
+      MODEL_DEFAULT_TIER: ${MODEL_DEFAULT_TIER:-qwen3-dev}
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+      RAY_SERVE_URL: ${RAY_SERVE_URL:-http://localhost:8001}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8200/healthz').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-policytwin}
+      MYSQL_USER: ${MYSQL_USER:-policytwin}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-policytwin}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/$${MINIO_BUCKET};
+      mc anonymous set download local/$${MINIO_BUCKET}/public || true;
+      echo 'minio-init: bucket ready';
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-policy-twin}
+    networks: [platform]
+    restart: "no"
+
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-policytwin}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+    volumes:
+      - neo4j-data:/data
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    ports:
+      - "${OPENSEARCH_PORT:-9200}:9200"
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_ADMIN_PASSWORD:-unused-security-disabled}
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  postgis:
+    image: postgis/postgis:16-3.4
+    ports:
+      - "${POSTGIS_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGIS_USER:-policytwin}
+      POSTGRES_PASSWORD: ${POSTGIS_PASSWORD:-policytwin}
+      POSTGRES_DB: ${POSTGIS_DB:-geo}
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HEALTH_ENABLED: "true"
+    command: ["start-dev", "--import-realm"]
+    volumes:
+      - ./keycloak/realm-import:/opt/keycloak/data/import:ro
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    ports:
+      - "${REDPANDA_PORT:-9092}:9092"
+      - "${REDPANDA_ADMIN_PORT:-9644}:9644"
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.104.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    ports:
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+    networks: [platform]
+    restart: unless-stopped

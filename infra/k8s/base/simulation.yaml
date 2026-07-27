@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simulation
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: simulation
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: simulation
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: simulation
+        app.kubernetes.io/part-of: policy-twin
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: simulation
+          image: ghcr.io/munisp/politicalintelligence/simulation:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8100
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: platform-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simulation
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: simulation
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: simulation
+  ports:
+    - name: http
+      port: 8100
+      targetPort: http

@@ -1,0 +1,34 @@
+# Ingress for the app. OIDC is terminated at the platform SSO gateway;
+# the annotations below are a placeholder for an oauth2-proxy / auth2
+# fronting pattern — adjust to your ingress controller + Keycloak realm.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/part-of: policy-twin
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    # ── OIDC placeholder (oauth2-proxy style) ──
+    # nginx.ingress.kubernetes.io/auth-url: "https://auth.example.gov.ng/oauth2/auth"
+    # nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.gov.ng/oauth2/start?rd=$escaped_request_uri"
+    # nginx.ingress.kubernetes.io/auth-response-headers: "x-auth-request-user,x-auth-request-email,x-auth-request-groups"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: policy-twin.example.gov.ng
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - policy-twin.example.gov.ng
+      secretName: policy-twin-tls
