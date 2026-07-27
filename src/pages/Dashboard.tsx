@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { approvalStateLabel } from "@/lib/trpc-data";
+import { ProvenanceChipFromInfo } from "@/components/provenance";
 import { useAuth } from "@/hooks/useAuth";
 import {
   ExecutiveStatCard,
@@ -474,6 +475,15 @@ export default function Dashboard() {
       )}
 
       {/* Section 1 — Executive KPI row */}
+      {/* INNOVATIONS-PROVENANCE: jurisdiction provenance chip on the KPI row header */}
+      {(profile as { provenance?: import("@/lib/innovations-client").ProvenanceInfo } | null)?.provenance && (
+        <div className="flex items-center justify-end gap-2">
+          <span className="caption-label text-ink-muted">Jurisdiction data</span>
+          <ProvenanceChipFromInfo
+            provenance={(profile as { provenance?: import("@/lib/innovations-client").ProvenanceInfo }).provenance}
+          />
+        </div>
+      )}
       {profileQ.isLoading || runsLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
