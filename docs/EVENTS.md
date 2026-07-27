@@ -25,3 +25,15 @@ The event backbone is Redpanda (Kafka-compatible). Schemas live in `contracts/` 
 - **Ordering.** Partition keys choose the ordering scope: `document_id` for parse/index flows, `jurisdiction_id` for feature materialization, `scenario_id` for simulation flows. Cross-partition ordering is not assumed; downstream state must tolerate out-of-order arrival across keys.
 - **Replay.** Raw events and run manifests are persisted to object storage so projections (graph, search, features) can be rebuilt by replaying topics from retained offsets.
 - **Prod isolation.** In production, ingest, simulation, and AI workload domains run on isolated brokers (see `infra/k8s/overlays/prod`) so a stalled consumer in one domain cannot backpressure the others.
+
+## Implementation status
+
+| Component | Status | Where |
+| --- | --- | --- |
+| Topic catalog (contracts constant) | Shipped — `EventTopics` in `contracts/entities.ts` | Producers reference the constant, not string literals |
+| Kafka/Redpanda producer | Shipped, env-gated — active when `KAFKA_BROKERS` is set; `kafkajs` is an `optionalDependency` (guarded dynamic import, API boots without it) | `api/utils/events.ts` (`getProducer`) |
+| Durable outbox fallback | Shipped — `event_outbox` table (event_id, topic, partition_key, payload, attempts, delivered_at); relay loop retries undelivered rows and stamps `delivered_at` | `api/utils/events.ts` (`persistOutbox`, `relayOutboxOnce`, `startOutboxRelay`) |
+| Emitters | Shipped — job lifecycle (queued/running/succeeded/failed), simulation runs, recommendations, approvals, backtests, recalibrations | `api/runner.ts`, `api/utils/events.ts` (`emitJobLifecycle`) |
+| Webhook fan-out | Shipped — active `webhook_subscriptions` receive HMAC-SHA256 signed payloads (`X-PolicyTwin-Signature: sha256=…`) with 3-retry exponential backoff (250ms, 500ms) | `api/utils/events.ts` (`deliverWebhooks`), `api/innovations.ts` (`innovations.webhooks.*`) |
+| DLQ / replay tooling | Pending — outbox rows with exhausted attempts retain `last_error` for future replay admin tooling | — |
+| Metrics | `events_emitted_total{topic}` counter exposed at `GET /metrics` | `api/utils/metrics.ts` |
