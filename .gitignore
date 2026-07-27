@@ -1,22 +1,54 @@
-node_modules
-dist
-.DS_Store
-# Environment variables
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment & secrets
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
+*.local
+
 # Database
 *.db
 *.sqlite
 *.sqlite3
-db/migrations/*.sql
-# TypeScript cache
-*.tsbuildinfo
-# Build outputs
-dist/
-build/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Platform artifacts (runs, exports, parsed docs)
+artifacts/
+
 # Test coverage
 coverage/
 .nyc_output/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Infra
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
 # Logs
 *.log
+logs/
