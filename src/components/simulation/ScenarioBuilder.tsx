@@ -917,4 +917,3 @@ function shortLabel(runId: string): string {
   const raw = runId.replace(/^sim:/, "");
   return `#${raw.slice(0, 6).toUpperCase()}`;
 }
-
