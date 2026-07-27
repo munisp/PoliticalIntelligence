@@ -76,6 +76,7 @@ class JobManager:
             job.records_out = summary["records_out"]
             job.artifact = summary["artifact"]
             job.contract = summary["contract"]
+            job.loader = summary.get("loader")
             self.totals[job.connector] = (
                 self.totals.get(job.connector, 0) + job.records_out
             )

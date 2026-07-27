@@ -120,6 +120,7 @@ class JobPublic(BaseModel):
     records_out: int = 0
     artifact: str | None = None
     contract: ContractResult | None = None
+    loader: dict | None = None
     error: str | None = None
 
 
