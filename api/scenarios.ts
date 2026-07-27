@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { SIMULATION_ENGINES, type BandPoint, type SimulationResultSummary } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit } from "./utils/envelope";
-import { requireRole } from "./utils/rbac";
+import { requireRole, assertJurisdictionAccess } from "./utils/rbac";
 import {
   findAssumptionSet,
   findScenario,
@@ -35,6 +35,7 @@ export const scenariosRouter = createRouter({
     )
     .mutation(async ({ ctx, input }) => {
       requireRole(ctx, ["simulation_specialist", "policy_analyst"]);
+      await assertJurisdictionAccess(ctx, input.jurisdiction_id, "write");
       if (input.assumptions_set_id) {
         const set = await findAssumptionSet(input.assumptions_set_id);
         if (!set)
@@ -126,6 +127,7 @@ export const scenariosRouter = createRouter({
           code: "SCENARIO_NOT_FOUND",
           message: `Scenario ${input.scenario_id} not found`,
         });
+      await assertJurisdictionAccess(ctx, scenario.jurisdictionId, "write");
       const simulationRunId = `sim:${nanoid(10)}`;
       await insertSimulationRun({
         simulationRunId,
