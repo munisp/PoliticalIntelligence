@@ -1,0 +1,46 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.1 (fixture: trimmed structural sample; sandbox egress blocked live capture — endpoint verified in docs/DATA_SOURCES_REAL.md §10)",
+  "osm3s": {
+    "timestamp_osm_base": "2025-01-15T00:00:00Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+    {
+      "type": "node",
+      "id": 5234109876,
+      "lat": 10.5223,
+      "lon": 7.4382,
+      "tags": {
+        "amenity": "school",
+        "name": "Government Secondary School Kaduna"
+      }
+    },
+    {
+      "type": "node",
+      "id": 5234109877,
+      "lat": 10.5101,
+      "lon": 7.4210,
+      "tags": {
+        "amenity": "school"
+      }
+    },
+    {
+      "type": "way",
+      "id": 812345678,
+      "center": { "lat": 10.4899, "lon": 7.4521 },
+      "tags": {
+        "amenity": "school",
+        "name": "Kaduna Capital School"
+      }
+    },
+    {
+      "type": "way",
+      "id": 812345679,
+      "tags": {
+        "amenity": "school",
+        "name": "No Geometry Should Be Skipped"
+      }
+    }
+  ]
+}
