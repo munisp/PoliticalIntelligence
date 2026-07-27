@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router'
 import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import { TRPCProvider } from "@/providers/trpc"
+import { LocaleProvider } from "@/lib/LocaleContext"
 import App from './App.tsx'
 
 // Register the PWA service worker (app shell + runtime API caching, offline shell).
@@ -25,7 +26,10 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <TRPCProvider>
-        <App />
+        {/* I18N: locale provider (default English) — additive wrap. */}
+        <LocaleProvider>
+          <App />
+        </LocaleProvider>
       </TRPCProvider>
     </BrowserRouter>
   </StrictMode>,

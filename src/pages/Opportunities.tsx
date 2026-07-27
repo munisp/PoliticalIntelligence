@@ -11,8 +11,14 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Toaster } from "@/components/ui/sonner";
+import type { FeatureCollection } from "geojson";
 import FilterBar, { type FilterBarValue } from "@/components/shared/FilterBar";
-import MapPanel, { type LgaDatum } from "@/components/shared/MapPanel";
+import MapPanel, {
+  type LgaDatum,
+  type MapMarker,
+} from "@/components/shared/MapPanel";
+import { isProcedureMissing } from "@/lib/innovations-client";
+import { useT } from "@/lib/LocaleContext";
 import EvidenceDrawer, {
   type EvidenceSource,
 } from "@/components/shared/EvidenceDrawer";
@@ -26,6 +32,7 @@ import GenerateModal from "@/components/opportunities/GenerateModal";
 import {
   baseOpportunityScore,
   costPerJob,
+  facilityCountByType,
   formatDate,
   lgaLayerValue,
   metaOf,
@@ -66,6 +73,33 @@ const SAVED_VIEWS = [
 ];
 
 const TERMINAL_JOB_STATES: JobStatus[] = ["succeeded", "failed", "canceled"];
+
+/** Per-LGA facility summary row (geo.lgaSummary envelope payload). */
+interface LgaSummaryRow {
+  unit_id: string;
+  name: string;
+  centroid_lat: number | null;
+  centroid_lon: number | null;
+  facility_count: number;
+  by_type: Record<string, number>;
+}
+
+/** Facility row (geo.facilitiesNear envelope payload). */
+interface FacilityNearRow {
+  facility_id: string;
+  type: string;
+  name: string;
+  lat: number;
+  lon: number;
+  distance_km: number;
+}
+
+/** Retry policy: never retry when the geo router is not deployed yet —
+ *  the map then degrades gracefully to the derived SVG grid. */
+const geoRetry = (count: number, err: unknown) =>
+  isProcedureMissing(err) ? false : count < 2;
+
+const bareLga = (name: string) => name.replace(/ LGA$/, "");
 
 /** Parse a citation string into drawer source fields. */
 function toEvidenceSource(row: {
@@ -112,6 +146,7 @@ function freshnessFor(updatedAt: string | Date): {
 export default function Opportunities() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
+  const t = useT();
 
   /* ------------------------------ state ------------------------------ */
   const [filters, setFilters] = useState<FilterBarValue>(DEFAULT_FILTERS);
@@ -153,6 +188,62 @@ export default function Opportunities() {
     { staleTime: 300_000 },
   );
   const geoUnits = unwrapData<AdminUnitNode[]>(geoQuery.data) ?? [];
+
+  /* ---------------- geo API: real boundaries + facility summary -------- */
+  const boundariesQuery = trpc.geo.boundaries.useQuery(
+    { jurisdiction_id: JURISDICTION_ID },
+    { staleTime: 600_000, retry: geoRetry },
+  );
+  const boundaries = unwrapData<FeatureCollection>(boundariesQuery.data);
+  const boundariesOk =
+    !boundariesQuery.isError && (boundaries?.features?.length ?? 0) > 0;
+  const provenanceUrl = useMemo(() => {
+    const u = boundaries?.features?.[0]?.properties?.source_url;
+    return typeof u === "string" ? u : null;
+  }, [boundaries]);
+
+  const lgaSummaryQuery = trpc.geo.lgaSummary.useQuery(
+    { jurisdiction_id: JURISDICTION_ID },
+    { staleTime: 300_000, retry: geoRetry },
+  );
+  const lgaSummary = unwrapData<{ items: LgaSummaryRow[] }>(
+    lgaSummaryQuery.data,
+  );
+  const summaryByName = useMemo(() => {
+    const m = new Map<string, LgaSummaryRow>();
+    for (const row of lgaSummary?.items ?? []) m.set(bareLga(row.name), row);
+    return m;
+  }, [lgaSummary]);
+
+  /** Real per-LGA facility counts (drives choropleth + tooltips). */
+  const facilityCounts = useMemo<Record<string, number> | undefined>(() => {
+    if (summaryByName.size === 0) return undefined;
+    const rec: Record<string, number> = {};
+    for (const [name, row] of summaryByName) rec[name] = row.facility_count;
+    return rec;
+  }, [summaryByName]);
+
+  /** Real per-LGA school counts from the facility type breakdown. */
+  const schoolCounts = useMemo<Record<string, number> | undefined>(() => {
+    if (summaryByName.size === 0) return undefined;
+    const rec: Record<string, number> = {};
+    let any = false;
+    for (const [name, row] of summaryByName) {
+      rec[name] = facilityCountByType(row.by_type, /school|education|academy/i);
+      if (rec[name] > 0) any = true;
+    }
+    return any ? rec : undefined;
+  }, [summaryByName]);
+
+  /** Raw values that drive the real choropleth where the geo API provides
+   *  them; other layers keep the deterministic derived 0–1 index. */
+  const mapValues = useMemo<Record<string, number> | undefined>(() => {
+    if (layer === "facilities") return facilityCounts;
+    if (layer === "schools") return schoolCounts;
+    return undefined;
+  }, [layer, facilityCounts, schoolCounts]);
+
+
   const lgaUnits = useMemo(
     () => geoUnits.filter((u) => u.adminLevel === "lga" || u.children.length === 0),
     [geoUnits],
@@ -168,6 +259,48 @@ export default function Opportunities() {
 
   const selectedLga = lgaUnits.find((u) => u.adminUnitId === filters.geography);
   const selectedLgaName = selectedLga?.name.replace(/ LGA$/, "") ?? null;
+
+  /* ------------- facilities-near-me markers (facilities layer) --------- */
+  const nearCenter = useMemo(() => {
+    const sel = selectedLgaName ? summaryByName.get(selectedLgaName) : undefined;
+    if (sel?.centroid_lat != null && sel.centroid_lon != null)
+      return { lat: sel.centroid_lat, lon: sel.centroid_lon, radius: 25 };
+    const pts = [...summaryByName.values()].filter(
+      (r) => r.centroid_lat != null && r.centroid_lon != null,
+    );
+    if (pts.length === 0) return null;
+    return {
+      lat: pts.reduce((a, r) => a + (r.centroid_lat ?? 0), 0) / pts.length,
+      lon: pts.reduce((a, r) => a + (r.centroid_lon ?? 0), 0) / pts.length,
+      radius: 60,
+    };
+  }, [summaryByName, selectedLgaName]);
+
+  const facilitiesNearQuery = trpc.geo.facilitiesNear.useQuery(
+    {
+      lat: nearCenter?.lat ?? 0,
+      lon: nearCenter?.lon ?? 0,
+      radius_km: nearCenter?.radius ?? 25,
+      limit: 100,
+    },
+    {
+      enabled: layer === "facilities" && nearCenter != null,
+      staleTime: 300_000,
+      retry: geoRetry,
+    },
+  );
+  const facilityMarkers = useMemo<MapMarker[]>(() => {
+    const rows =
+      (unwrapData<FacilityNearRow[]>(facilitiesNearQuery.data) ?? []).filter(
+        (f) => Number.isFinite(f.lat) && Number.isFinite(f.lon),
+      );
+    return rows.map((f) => ({
+      lat: f.lat,
+      lon: f.lon,
+      label: f.name,
+      type: f.type,
+    }));
+  }, [facilitiesNearQuery.data]);
 
   /* --------------------- filtering, sorting, mapping ------------------ */
   const visibleItems = useMemo(() => {
@@ -320,6 +453,17 @@ export default function Opportunities() {
   const simulate = (id: string) =>
     navigate(`/simulation?opportunity=${encodeURIComponent(id)}`);
 
+  /** Click on a boundary polygon → scope the explorer to that LGA. */
+  const onSelectUnit = useCallback(
+    (name: string) => {
+      const unit = lgaUnits.find((u) => bareLga(u.name) === name);
+      if (unit)
+        applyFilters({ ...filters, geography: unit.adminUnitId });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lgaUnits, filters],
+  );
+
   const geographyPath = selectedLgaName
     ? `Kaduna State › ${selectedLgaName}`
     : "Kaduna State › All LGAs";
@@ -439,8 +583,20 @@ export default function Opportunities() {
       <MapPanel
         title="Kaduna State — LGA choropleth"
         data={mapData}
+        geoJson={boundariesOk && boundaries ? boundaries : undefined}
+        values={mapValues}
+        facilityCounts={facilityCounts}
+        onSelectUnit={onSelectUnit}
+        selectedUnit={selectedLgaName}
+        markers={layer === "facilities" ? facilityMarkers : undefined}
+        provenanceUrl={provenanceUrl}
         legendLabel={MAP_LAYERS.find((l) => l.id === layer)?.legend}
       />
+      {layer === "facilities" && facilitiesNearQuery.isError && (
+        <p className="text-[11px] text-ink-muted" role="status">
+          Nearby-facility markers unavailable — showing per-LGA counts.
+        </p>
+      )}
     </div>
   );
 
@@ -457,13 +613,13 @@ export default function Opportunities() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="caption-label text-ink-muted">
-            Kaduna State · Opportunity Explorer
+            {t.opportunities.caption}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
-            Sector Opportunity Explorer
+            {t.opportunities.title}
           </h1>
           <p className="mt-1 text-[13px] text-ink-secondary">
-            {allItems.length} ranked opportunities · Scoring model v2.4
+            {t.opportunities.subtitle.replace("{count}", String(allItems.length))}
             {generatedDate ? ` · Generated ${formatDate(new Date(generatedDate))}` : ""}
           </p>
           {/* Live async job status (aria-live per design.md §6) */}
@@ -497,7 +653,7 @@ export default function Opportunities() {
             className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle bg-ink-surface px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors hover:border-ink-strong hover:text-ink-primary"
           >
             <GitCompareArrows aria-hidden className="h-4 w-4" />
-            Compare ({compareIds.length}/3)
+            {t.opportunities.compare} ({compareIds.length}/3)
           </button>
           <button
             type="button"
@@ -505,7 +661,7 @@ export default function Opportunities() {
             className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3.5 py-1.5 text-sm font-medium text-ink-base transition-transform hover:bg-civic-strong active:scale-[0.98]"
           >
             <Sparkles aria-hidden className="h-4 w-4" />
-            Generate opportunities
+            {t.opportunities.generate}
           </button>
         </div>
       </header>
