@@ -394,6 +394,35 @@ async function main() {
     assert(env.data.reviewState === "signed_off", `state ${env.data.reviewState}`);
   });
 
+  group("documents pipeline (authenticated)");
+  await test("documents.register with documents service DOWN → processing_mode fallback", async () => {
+    const analyst = requireAuth("analyst");
+    // The e2e environment does not run services/documents (DOCUMENTS_BASE_URL
+    // unset → localhost:8400 unreachable), so the gateway must degrade to its
+    // deterministic local fallback processor and FLAG the result.
+    const payload = Buffer.from(
+      "Kaduna State Fiscal Responsibility Law, 2026. Section 1. Budget discipline.",
+      "utf8",
+    ).toString("base64");
+    const env = await trpcMutation(
+      "documents.register",
+      {
+        title: `e2e fallback doc ${Date.now()}`,
+        jurisdiction_id: JUR,
+        doc_type: "law",
+        filename: "law.txt",
+        content_base64: payload,
+        idempotency_key: `e2e-doc-${Date.now()}`,
+      },
+      analyst,
+    );
+    const d = env.data;
+    assert(d.processing_mode === "fallback", `processing_mode ${d.processing_mode}`);
+    assert(d.status === "fallback", `status ${d.status}`);
+    assert(d.review_state === "in_review", `review_state ${d.review_state}`);
+    assert(typeof d.ocr_confidence === "number", "ocr_confidence computed by fallback");
+  });
+
   group("audit chain");
   await test("audit chain verify endpoint → intact chain", async () => {
     const exec = requireAuth("executive");

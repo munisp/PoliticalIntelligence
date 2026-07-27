@@ -7,6 +7,8 @@
 #   app            Node 20 monolith: builds the React+Vite PWA and serves the Hono+tRPC API (port 3000)
 #   simulation     FastAPI simulation/scenario microservice (port 8100)
 #   ai             FastAPI AI/model-routing microservice (port 8200)
+#   ingestion      FastAPI ingestion connectors + loader (port 8300)
+#   documents      FastAPI document/OCR/legal-NLP/AKN pipeline (port 8400)
 #   mysql          MySQL 8.x — Drizzle ORM operational store
 #   minio (+init)  S3-compatible object storage for documents/lakehouse staging
 #   neo4j          Knowledge graph (entities, laws, relationships)
@@ -25,6 +27,7 @@ networks:
     driver: bridge
 
 volumes:
+  documents-artifacts:
   ingestion-artifacts:
   mysql-data:
   minio-data:
@@ -63,6 +66,9 @@ services:
       # Ingestion service + shared loader key (feat-data-loader).
       INGESTION_BASE_URL: http://ingestion:8300
       LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      # Document & legal processing service (spec §18); the gateway falls
+      # back to its local processor when this is unreachable.
+      DOCUMENTS_BASE_URL: http://documents:8400
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
@@ -87,6 +93,8 @@ services:
       ai:
         condition: service_started
       ingestion:
+        condition: service_started
+      documents:
         condition: service_started
     networks: [platform]
     healthcheck:
@@ -151,6 +159,40 @@ services:
     networks: [platform]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8300/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # Document & legal processing service (spec §18): upload -> OCR ->
+  # legal NLP -> Akoma Ntoso. The app gateway talks to it via
+  # DOCUMENTS_BASE_URL and degrades to a local fallback processor when it
+  # is down (processing_mode="fallback" on the register response).
+  documents:
+    build:
+      context: ../../services/documents
+    image: policy-twin/documents:local
+    ports:
+      - "${DOCUMENTS_PORT:-8400}:8400"
+    environment:
+      PORT: "8400"
+      DOCUMENTS_ARTIFACTS_DIR: /srv/artifacts/documents
+      DOCUMENTS_S3_ENDPOINT_URL: http://minio:9000
+      DOCUMENTS_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      DOCUMENTS_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      DOCUMENTS_S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      KAFKA_BROKERS: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - documents-artifacts:/srv/artifacts/documents
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8400/health').status==200 else 1)"]
       interval: 15s
       timeout: 5s
       retries: 10

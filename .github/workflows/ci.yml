@@ -83,8 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # services/documents does not exist yet; add it here when it lands.
-        service: [simulation, ai, ingestion]
+        service: [simulation, ai, ingestion, documents]
     defaults:
       run:
         working-directory: services/${{ matrix.service }}
