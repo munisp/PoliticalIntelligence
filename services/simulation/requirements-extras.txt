@@ -1,0 +1,9 @@
+# Optional heavy dependencies. The service runs fully without them; each
+# engine detects availability at import time (try/import) and falls back to
+# its deterministic numpy implementation.
+pymc>=5.19,<6
+dowhy>=0.11,<1
+mesa>=3.0,<4
+pysd>=3.14,<4
+ortools>=9.11,<10
+boto3>=1.35,<2
