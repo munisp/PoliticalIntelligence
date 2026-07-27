@@ -1,5 +1,6 @@
 # Jurisdiction Economic Intelligence & Policy Twin Platform
 
+> **Media assets**: the three PNG assets (`public/auth-topo.png`, `public/pwa-icon-512.png`, `public/og-cover.png`) are generated, not committed. After cloning run `python scripts/generate-assets.py` (requires `pillow`) once before `npm run dev`/`npm run build`.
 [![CI](https://github.com/munisp/PoliticalIntelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/munisp/PoliticalIntelligence/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/munisp/PoliticalIntelligence/actions/workflows/codeql.yml/badge.svg)](https://github.com/munisp/PoliticalIntelligence/actions/workflows/codeql.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
