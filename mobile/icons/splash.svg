@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Policy Twin splash screen — same shield + globe motif as icon.svg,
+  centered on the dark slate field. Canvas 2732×2732 (Capacitor universal
+  splash spec); the artwork occupies the central ~1200px so it survives
+  CENTER_CROP scaling on every aspect ratio. Flat, no text.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+  <!-- Full-bleed background (matches SplashScreen backgroundColor in capacitor.config.ts) -->
+  <rect width="2732" height="2732" fill="#0f172a"/>
+
+  <!-- Motif centered at (1366, 1366), scaled 1.25× from the 1024 icon artwork -->
+  <g transform="translate(1366,1366) scale(1.25) translate(-512,-512)">
+    <!-- Shield -->
+    <path d="M512 208 L748 284 V516 C748 668 646 772 512 824 C378 772 276 668 276 516 V284 Z"
+          fill="#1e293b" stroke="#f59e0b" stroke-width="26" stroke-linejoin="round"/>
+
+    <!-- Globe -->
+    <g fill="none" stroke="#f59e0b" stroke-width="20">
+      <circle cx="512" cy="498" r="142"/>
+      <ellipse cx="512" cy="498" rx="66" ry="142"/>
+      <line x1="512" y1="356" x2="512" y2="640"/>
+      <ellipse cx="512" cy="498" rx="142" ry="56"/>
+      <line x1="380" y1="446" x2="644" y2="446"/>
+      <line x1="380" y1="550" x2="644" y2="550"/>
+    </g>
+
+    <!-- Apex accent -->
+    <path d="M512 150 L524 182 L558 182 L530 202 L541 236 L512 216 L483 236 L494 202 L466 182 L500 182 Z"
+          fill="#f59e0b"/>
+  </g>
+</svg>

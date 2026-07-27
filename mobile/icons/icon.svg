@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Policy Twin launcher icon — shield + globe motif.
+  Dark slate (#0f172a) field, amber (#f59e0b) accents, flat, no text.
+  Canvas 1024×1024. The inner artwork stays inside the ~66% adaptive-icon
+  safe zone (centered 660×660) so Android launchers can crop freely.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Background field -->
+  <rect width="1024" height="1024" fill="#0f172a"/>
+
+  <!-- Subtle inner panel for depth (flat, no gradients) -->
+  <rect x="64" y="64" width="896" height="896" rx="180" fill="#111c33"/>
+
+  <!-- Shield -->
+  <path d="M512 208 L748 284 V516 C748 668 646 772 512 824 C378 772 276 668 276 516 V284 Z"
+        fill="#1e293b" stroke="#f59e0b" stroke-width="26" stroke-linejoin="round"/>
+
+  <!-- Globe inside the shield -->
+  <g fill="none" stroke="#f59e0b" stroke-width="20">
+    <circle cx="512" cy="498" r="142"/>
+    <!-- Vertical meridians -->
+    <ellipse cx="512" cy="498" rx="66" ry="142"/>
+    <line x1="512" y1="356" x2="512" y2="640"/>
+    <!-- Parallels -->
+    <ellipse cx="512" cy="498" rx="142" ry="56"/>
+    <line x1="380" y1="446" x2="644" y2="446"/>
+    <line x1="380" y1="550" x2="644" y2="550"/>
+  </g>
+
+  <!-- Apex accent: policy "north star" -->
+  <path d="M512 150 L524 182 L558 182 L530 202 L541 236 L512 216 L483 236 L494 202 L466 182 L500 182 Z"
+        fill="#f59e0b"/>
+</svg>

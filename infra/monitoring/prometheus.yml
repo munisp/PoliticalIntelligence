@@ -1,0 +1,66 @@
+# Prometheus scrape configuration for the Policy Twin platform.
+# Mounted by infra/docker/docker-compose.yml; for Kubernetes, convert these
+# jobs to ServiceMonitors / pod annotations.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    platform: policy-twin
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # Node API (Hono+tRPC) — serves /metrics on the app port.
+  - job_name: app
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["app:3000"]
+        labels:
+          service: app
+          tier: api
+
+  # FastAPI simulation service.
+  - job_name: simulation
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["simulation:8100"]
+        labels:
+          service: simulation
+          tier: worker
+
+  # FastAPI AI service (model router, retrieval pipeline).
+  - job_name: ai
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ai:8200"]
+        labels:
+          service: ai
+          tier: worker
+
+  # OpenTelemetry Collector re-exposes app metrics in Prometheus format.
+  - job_name: otel-collector
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["otel-collector:8889"]
+        labels:
+          service: otel-collector
+          tier: observability
+
+  # Redpanda admin metrics (queue depth, consumer lag for event topics).
+  - job_name: redpanda
+    metrics_path: /public_metrics
+    static_configs:
+      - targets: ["redpanda:9644"]
+        labels:
+          service: redpanda
+          tier: messaging
+
+  # Self-monitoring.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: prometheus
+          tier: observability

@@ -1,0 +1,46 @@
+{
+  "name": "policy-twin-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Capacitor Android/iOS native wrapper for the Jurisdiction Economic Intelligence & Policy Twin Platform. Lives entirely under mobile/ so it never conflicts with the root web build.",
+  "type": "module",
+  "scripts": {
+    "build:web": "npm --prefix .. run build",
+    "copy": "cap copy",
+    "sync": "npm run build:web && cap sync",
+    "sync:android": "npm run build:web && cap sync android",
+    "sync:ios": "npm run build:web && cap sync ios",
+    "add:android": "cap add android",
+    "add:ios": "cap add ios",
+    "android": "cap open android",
+    "ios": "cap open ios",
+    "run:android": "npm run build:web && cap run android",
+    "run:ios": "npm run build:web && cap run ios",
+    "build:android": "cd android && ./gradlew assembleRelease",
+    "build:android:bundle": "cd android && ./gradlew bundleRelease",
+    "build:ios": "xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -archivePath build/App.xcarchive archive",
+    "icons": "node icons/generate-icons.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/app": "^7.1.0",
+    "@capacitor/core": "^7.4.3",
+    "@capacitor/ios": "^7.4.3",
+    "@capacitor/network": "^7.0.2",
+    "@capacitor/preferences": "^7.0.2",
+    "@capacitor/push-notifications": "^7.0.3",
+    "@capacitor/share": "^7.0.2",
+    "@capacitor/splash-screen": "^7.0.3",
+    "@capacitor/status-bar": "^7.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.4.3",
+    "sharp": "^0.33.5",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
