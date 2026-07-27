@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { REVIEW_STATES, type ReviewState } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit, requestMeta } from "./utils/envelope";
-import { requireRole, requireSignOff } from "./utils/rbac";
+import { requireRole, requireSignOff, assertJurisdictionAccess } from "./utils/rbac";
 import { findBrief, insertBrief, listBriefs, updateBrief } from "./queries/briefs";
 import { insertApprovalEvent, approvalEventsFor } from "./queries/legislation";
 import { insertJob } from "./queries/admin";
@@ -31,6 +31,7 @@ async function transitionBrief(
       code: "BRIEF_NOT_FOUND",
       message: `Brief ${briefId} not found`,
     });
+  await assertJurisdictionAccess(ctx as never, brief.jurisdictionId, "write");
   const from = brief.reviewState;
   if (!(TRANSITIONS[from] ?? []).includes(toState))
     throw apiError(ctx, {
@@ -111,6 +112,7 @@ export const briefsRouter = createRouter({
     )
     .mutation(async ({ ctx, input }) => {
       requireRole(ctx, ["policy_analyst"]);
+      await assertJurisdictionAccess(ctx, input.jurisdiction_id, "write");
       const briefId =
         input.brief_id ??
         `brf:${input.jurisdiction_id.replace(/^jur:/, "")}:${nanoid(8)}`;
