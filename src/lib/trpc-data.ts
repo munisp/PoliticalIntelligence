@@ -9,8 +9,10 @@ export interface EnvelopeMeta {
   api_version: string;
 }
 export interface EnvelopeAudit {
+  /** Actor id as emitted by the API (numeric user id; null for system actors). */
   actor_id: string | number | null;
-  generated_at: string;
+  /** API emits a Date (superjson) — tolerate ISO strings too. */
+  generated_at: string | Date;
 }
 export interface Envelope<T> {
   data: T;
