@@ -1,0 +1,84 @@
+# Nairobi County, Kenya — NON-NIGERIA jurisdiction. Same pipeline, different
+# country, admin structure, currency, languages. This pack is the generality
+# proof: no code changes were required.
+pack_version: "1.0"
+
+jurisdiction:
+  id: ke-nbi
+  name: Nairobi County
+  country_iso3: KEN
+  country_code: KE
+  admin_level: state           # Kenyan county ≈ state level in the canonical model
+  admin_levels: [federal, state, ward]
+  currency: KES
+  languages: [en, sw]
+  parent_id: ken
+
+hierarchy:
+  # Nairobi County sub-counties (county -> sub-county -> ward in Kenya's
+  # devolved structure; sub-counties map to the canonical `lga` level).
+  level: lga
+  units:
+    - { id: ke-nbi-01, name: Westlands }
+    - { id: ke-nbi-02, name: Dagoretti North }
+    - { id: ke-nbi-03, name: Dagoretti South }
+    - { id: ke-nbi-04, name: Langata }
+    - { id: ke-nbi-05, name: Kibra }
+    - { id: ke-nbi-06, name: Roysambu }
+    - { id: ke-nbi-07, name: Kasarani }
+    - { id: ke-nbi-08, name: Ruaraka }
+    - { id: ke-nbi-09, name: Embakasi South }
+    - { id: ke-nbi-10, name: Embakasi North }
+    - { id: ke-nbi-11, name: Embakasi Central }
+    - { id: ke-nbi-12, name: Embakasi East }
+    - { id: ke-nbi-13, name: Embakasi West }
+    - { id: ke-nbi-14, name: Makadara }
+    - { id: ke-nbi-15, name: Kamukunji }
+    - { id: ke-nbi-16, name: Starehe }
+    - { id: ke-nbi-17, name: Mathare }
+
+connectors:
+  # World Bank KEN series verified live (docs/DATA_SOURCES_REAL.md §1, §11).
+  worldbank:
+    country_iso3: KEN
+    since: "2015"
+    indicators:
+      - NY.GDP.MKTP.KD.ZG
+      - SL.UEM.TOTL.ZS
+      - SP.POP.TOTL
+      - SE.PRM.ENRR
+      - FP.CPI.TOTL.ZG
+      - EG.ELC.ACCS.ZS
+  overpass:
+    area_name: Nairobi
+    admin_level: 4
+    amenities: [school, clinic, hospital, marketplace]
+  hdx:
+    queries:
+      - kenya subnational administrative boundaries
+      - kenya health facilities
+    download_csv: true
+  # nada/budeshi are Nigeria-specific catalogs; intentionally omitted.
+  # Kenya open-data portal (opendata.go.ke) is defunct — see DATA_SOURCES_REAL.md §11.
+
+sectors:
+  - { code: trade, name: Trade & Retail, multiplier_set: ke_default }
+  - { code: digital, name: ICT & Digital Services, multiplier_set: ke_default }
+  - { code: manufacturing, name: Agro-processing & Manufacturing, multiplier_set: ke_default }
+  - { code: health, name: Healthcare Delivery, multiplier_set: ke_default }
+  - { code: education, name: Education Services, multiplier_set: ke_default }
+
+seed_policy:
+  allowed: [sector_metrics, opportunities, evidence_sources]
+  notes: >
+    National KEN indicators are live (World Bank). County-level series
+    (KNBS county statistics) are PDF/Excel publications — PORTAL-MANUAL —
+    so county-granular fallbacks carry origin=seed.
+
+targets:
+  jobs_target: 150000
+  horizon_months: 36
+
+branding:
+  display_name: Nairobi County Policy Twin
+  tagline: Evidence-grounded investment and policy intelligence for Nairobi County
