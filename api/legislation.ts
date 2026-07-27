@@ -19,6 +19,18 @@ import {
   listLaws,
   updateClauseReviewState,
 } from "./queries/legislation";
+import { findDocument } from "./queries/admin";
+import {
+  CLAUSE_REVIEW_CONFIDENCE,
+  type ClauseArtifact,
+} from "@contracts/documents";
+import {
+  DocumentsServiceUnreachable,
+  ensureReviewTask,
+  fetchClausesArtifact,
+  upsertClause,
+  upsertLaw,
+} from "./queries/documents";
 
 /** Valid review-state transitions (spec §27). */
 const TRANSITIONS: Record<ReviewState, ReviewState[]> = {
@@ -182,5 +194,107 @@ export const legislationRouter = createRouter({
       });
       const updated = await findClause(input.clause_id);
       return envelope(updated, ctx);
+    }),
+
+  /**
+   * Import a processed law document (spec §18.6): idempotently creates /
+   * updates laws + clauses rows from the documents service's clauses JSON.
+   * Clauses below the BR-4 confidence floor are routed to review tasks.
+   */
+  importFromDocument: authedQuery
+    .input(z.object({ document_id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, ["legal_analyst", "data_steward"]);
+      const doc = await findDocument(input.document_id);
+      if (!doc)
+        throw apiError(ctx, {
+          http: "NOT_FOUND",
+          code: "DOCUMENT_NOT_FOUND",
+          message: `Document ${input.document_id} not found`,
+        });
+      if (doc.docType !== "law")
+        throw apiError(ctx, {
+          http: "BAD_REQUEST",
+          code: "NOT_A_LAW_DOCUMENT",
+          message: `Document ${input.document_id} has doc_type '${doc.docType}', expected 'law'`,
+        });
+      await assertJurisdictionAccess(ctx, doc.jurisdictionId, "write");
+
+      let clauses: ClauseArtifact[];
+      try {
+        clauses = await fetchClausesArtifact(input.document_id);
+      } catch (err) {
+        if (err instanceof DocumentsServiceUnreachable)
+          throw apiError(ctx, {
+            http: "INTERNAL_SERVER_ERROR",
+            code: "DOCUMENTS_SERVICE_UNREACHABLE",
+            message: "documents service unreachable",
+            retryable: true,
+          });
+        throw err;
+      }
+
+      const lawId = `law:${doc.jurisdictionId.replace(/^jur:/, "")}:${input.document_id.replace(/^doc:[^:]+:/, "")}`;
+      const yearMatch = doc.title.match(/\b(19|20)\d{2}\b/);
+      await upsertLaw({
+        lawId,
+        title: doc.title,
+        jurisdictionId: doc.jurisdictionId,
+        category: doc.docType,
+        status: "in_force",
+        year: yearMatch ? Number(yearMatch[0]) : null,
+        sourceUri: doc.sourceUri,
+      });
+
+      let imported = 0;
+      let reviewTaskCount = 0;
+      for (const clause of clauses) {
+        if (!clause.text.trim()) continue;
+        const clauseId = `cls:${lawId}:${clause.section_path}`.slice(0, 96);
+        await upsertClause({
+          clauseId,
+          lawId,
+          sectionPath: clause.section_path,
+          text: clause.text,
+          language: doc.language,
+          confidence: clause.confidence,
+          reviewState: "draft",
+          obligations: clause.obligations as never,
+        });
+        imported += 1;
+        if (clause.confidence < CLAUSE_REVIEW_CONFIDENCE) {
+          await ensureReviewTask({
+            type: "legal_extract",
+            entityRef: clauseId,
+            assigneeRole: "legal_analyst",
+            payload: {
+              document_id: input.document_id,
+              section_path: clause.section_path,
+              confidence: clause.confidence,
+              threshold: CLAUSE_REVIEW_CONFIDENCE,
+            },
+          });
+          reviewTaskCount += 1;
+        }
+      }
+      audit(ctx, "legislation.imported_from_document", {
+        type: "law",
+        id: lawId,
+        scopes: ["legislation:import"],
+        payload: {
+          document_id: input.document_id,
+          clauses_imported: imported,
+          review_tasks: reviewTaskCount,
+        },
+      });
+      return envelope(
+        {
+          law_id: lawId,
+          document_id: input.document_id,
+          clauses_imported: imported,
+          review_tasks_created: reviewTaskCount,
+        },
+        ctx,
+      );
     }),
 });
