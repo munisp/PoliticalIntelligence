@@ -1,0 +1,5 @@
+# Optional live-backend dependencies. The service runs fully without them
+# using deterministic in-process fallbacks.
+neo4j>=5.26,<6
+opensearch-py>=2.7,<3
+boto3>=1.35,<2
