@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Civic-ink dark theme applied as the default (:root) — dark-first product. */
+  :root {
+    --background: 222 47% 8%;        /* #0B1220 */
+    --foreground: 218 40% 93%;       /* #E6ECF5 */
+    --card: 220 48% 12%;             /* #101A2E */
+    --card-foreground: 218 40% 93%;
+    --popover: 218 44% 16%;          /* #16233C */
+    --popover-foreground: 218 40% 93%;
+    --primary: 169 47% 47%;          /* #3FAE9E */
+    --primary-foreground: 222 47% 8%;
+    --secondary: 218 44% 16%;
+    --secondary-foreground: 218 40% 93%;
+    --muted: 218 44% 16%;
+    --muted-foreground: 217 22% 55%; /* #9AA8BF */
+    --accent: 169 47% 47%;
+    --accent-foreground: 222 47% 8%;
+    --destructive: 2 60% 61%;        /* #D9635F */
+    --destructive-foreground: 218 40% 93%;
+    --border: 219 41% 20%;           /* #1E2C47 */
+    --input: 219 41% 20%;
+    --ring: 169 47% 47%;
+    --radius: 0.375rem;              /* 6px */
+    --sidebar-background: 220 48% 12%;
+    --sidebar-foreground: 217 22% 55%;
+    --sidebar-primary: 169 47% 47%;
+    --sidebar-primary-foreground: 222 47% 8%;
+    --sidebar-accent: 218 44% 16%;
+    --sidebar-accent-foreground: 218 40% 93%;
+    --sidebar-border: 219 41% 20%;
+    --sidebar-ring: 169 47% 47%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-ink-base text-ink-primary font-sans;
+    font-variant-numeric: tabular-nums;
+    /* Safe-area insets for PWA / Capacitor native shells */
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  ::selection {
+    background: rgba(63, 174, 158, 0.28);
+  }
+  /* Visible focus ring: 2px accent outer ring + 2px offset (WCAG 2.2 AA) */
+  :focus-visible {
+    outline: 2px solid #3fae9e;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Skeleton shimmer matching final layout (no layout shift) */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      #16233c 0%,
+      #1e2c47 40%,
+      #16233c 80%
+    );
+    background-size: 400px 100%;
+    @apply animate-shimmer rounded-sm;
+  }
+  /* Sticky topbar offset / safe-area aware bottom nav */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .h-safe-top {
+    height: env(safe-area-inset-top);
+  }
+}
+
+@layer utilities {
+  .font-document {
+    @apply font-serif;
+    font-size: 15px;
+    line-height: 26px;
+  }
+  .caption-label {
+    @apply text-xs font-medium uppercase tracking-[0.04em];
+  }
+}
+
+/* Reduced motion: disable counters, staggers, pulses, chart draw-in (design.md §5) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Print stylesheet (design.md §6): light-on-white inversion, hide chrome,
+   expand collapsed evidence, citation footer appended by print templates. */
+@media print {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 30% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 10%;
+    --border: 220 15% 80%;
+  }
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    padding: 0 !important;
+  }
+  /* Hide interactive chrome */
+  nav,
+  aside,
+  header[data-app-chrome],
+  [data-print-hidden],
+  button,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  * {
+    background: transparent !important;
+    color: #111827 !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+  }
+  details,
+  [data-collapsed] {
+    display: block !important;
+  }
+  details:not([open]) > *:not(summary) {
+    display: block !important;
+  }
+  a {
+    text-decoration: underline;
+  }
+  /* Citation footer on every printed page */
+  body::after {
+    content: "Generated " attr(data-generated-at) " · Request ID " attr(data-request-id)
+      " · Approval state " attr(data-approval-state);
+    display: block;
+    margin-top: 24pt;
+    padding-top: 8pt;
+    border-top: 1pt solid #9ca3af;
+    font-size: 9pt;
+    color: #4b5563 !important;
+  }
+  @page {
+    margin: 18mm 16mm;
+  }
+}
