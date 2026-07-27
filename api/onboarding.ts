@@ -33,6 +33,43 @@ const onboardingRunner = createJobRunner(dbJobStore);
 
 type ConnectorJob = { connector: string; job_id: string | null; error?: string };
 
+type IngestionJobPoll = {
+  status: string;
+  records_in: number;
+  records_out: number;
+  contract?: unknown;
+  loader?: {
+    status?: string;
+    entities?: Record<
+      string,
+      { records: number; inserted: number; updated: number; errors: number }
+    >;
+    error_messages?: string[];
+  } | null;
+  error?: string | null;
+};
+
+/** Poll one ingestion-service job to a terminal state (feat-data-loader). */
+async function pollIngestionJob(
+  jobId: string,
+  timeoutMs = 120_000,
+  intervalMs = 2_000,
+): Promise<IngestionJobPoll> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const resp = await fetch(`${INGESTION_BASE_URL}/v1/ingest/jobs/${jobId}`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resp.ok) throw new Error(`ingestion job poll ${resp.status}`);
+    const body = (await resp.json()) as { data: IngestionJobPoll };
+    const job = body.data;
+    if (job.status === "succeeded" || job.status === "failed") return job;
+    if (Date.now() > deadline)
+      throw new Error(`ingestion job ${jobId} timed out (${job.status})`);
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
 async function callIngestionService(
   connector: string,
   jurisdictionId: string,
@@ -86,10 +123,15 @@ onboardingRunner.register("onboarding.onboard", async ({ input, reportProgress }
   }
 
   // 3. Record every attempted run in ingestion_runs (audit trail — including
-  //    service-unavailable fallbacks, so nothing is silently seed).
+  //    service-unavailable fallbacks, so nothing is silently seed), then
+  //    poll each accepted job to completion and persist the final status,
+  //    record counts, and loader (ingestion -> DB) outcome.
+  const runIds = new Map<string, string>();
   for (const cj of connectorJobs) {
+    const runId = `run_${nanoid(12)}`;
+    runIds.set(cj.connector, runId);
     await recordIngestionRun({
-      runId: `run_${nanoid(12)}`,
+      runId,
       connector: cj.connector,
       jurisdictionId,
       status: cj.job_id ? "queued" : "failed",
@@ -97,7 +139,59 @@ onboardingRunner.register("onboarding.onboard", async ({ input, reportProgress }
       finishedAt: cj.job_id ? undefined : new Date(),
     });
   }
+
+  const loaderCounts: Record<
+    string,
+    { inserted: number; updated: number; errors: number }
+  > = {};
+  let step2 = 0;
+  for (const cj of connectorJobs) {
+    if (!cj.job_id) continue;
+    try {
+      const job = await pollIngestionJob(cj.job_id);
+      await recordIngestionRun({
+        runId: runIds.get(cj.connector)!,
+        connector: cj.connector,
+        jurisdictionId,
+        status: job.status === "succeeded" ? "succeeded" : "failed",
+        recordsIn: job.records_in,
+        recordsOut: job.records_out,
+        contractResults: {
+          contract: job.contract ?? null,
+          loader: job.loader ?? null,
+        },
+        error: job.error ?? null,
+        finishedAt: new Date(),
+      });
+      for (const [entity, c] of Object.entries(job.loader?.entities ?? {})) {
+        const acc = loaderCounts[entity] ?? { inserted: 0, updated: 0, errors: 0 };
+        acc.inserted += c.inserted;
+        acc.updated += c.updated;
+        acc.errors += c.errors;
+        loaderCounts[entity] = acc;
+      }
+    } catch (err) {
+      await recordIngestionRun({
+        runId: runIds.get(cj.connector)!,
+        connector: cj.connector,
+        jurisdictionId,
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+        finishedAt: new Date(),
+      });
+    }
+    step2++;
+    await reportProgress(85 + Math.round((10 * step2) / connectorJobs.length));
+  }
   await reportProgress(95);
+
+  // 4. Post-load provenance counts for this jurisdiction.
+  const summaries = await jurisdictionProvenanceSummaries();
+  const provenance = summaries.find(
+    (s) =>
+      s.jurisdiction_id === jurisdictionId ||
+      s.jurisdiction_id === `jur:${jurisdictionId}`,
+  ) ?? null;
 
   return {
     pack_code,
@@ -105,6 +199,8 @@ onboardingRunner.register("onboarding.onboard", async ({ input, reportProgress }
     mode,
     connector_jobs: connectorJobs,
     upserts,
+    loader_counts: loaderCounts,
+    provenance,
     actor_id,
   };
 });
