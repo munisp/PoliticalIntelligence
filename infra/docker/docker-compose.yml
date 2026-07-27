@@ -199,6 +199,38 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # Refresh-cadence scheduler (SR-1): runs each connector on its own
+  # interval with jitter; last-run state persisted in the artifacts volume.
+  # Not started by default — enable with:
+  #   docker compose --profile scheduler up ingestion-scheduler
+  ingestion-scheduler:
+    build:
+      context: ../../services/ingestion
+    image: policy-twin/ingestion:local
+    profiles: ["scheduler"]
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      SCHEDULER_ENABLED: "1"
+      SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
+      # Optional JSON override: {"worldbank": 86400, "nbs_bulletin": 604800}
+      SCHEDULER_CADENCE: ${SCHEDULER_CADENCE:-}
+      KAFKA_BROKERS: redpanda:9092
+      PLATFORM_API_URL: http://app:3000
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      INGESTION_ARTIFACTS_DIR: /srv/artifacts/ingestion
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ingestion-artifacts:/srv/artifacts/ingestion
+    depends_on:
+      app:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    restart: unless-stopped
+
   ai:
     build:
       context: ../../services/ai
