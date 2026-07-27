@@ -1,0 +1,26 @@
+{
+  "realm": "policy-twin",
+  "enabled": true,
+  "displayName": "Policy Twin (dev placeholder)",
+  "clients": [
+    {
+      "clientId": "policy-twin-app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"]
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "executive-consumer" },
+      { "name": "policy-analyst" },
+      { "name": "legal-analyst" },
+      { "name": "data-steward" },
+      { "name": "simulation-specialist" },
+      { "name": "platform-administrator" }
+    ]
+  }
+}
