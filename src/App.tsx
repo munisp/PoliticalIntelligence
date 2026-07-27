@@ -10,6 +10,7 @@ import DataHealth from "./pages/DataHealth";
 import Copilot from "./pages/Copilot";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import InnovationsRouter from "./pages/innovations";
 
 export default function App() {
   return (
@@ -26,6 +27,8 @@ export default function App() {
         <Route path="/briefs" element={<Briefs />} />
         <Route path="/data-health" element={<DataHealth />} />
         <Route path="/copilot" element={<Copilot />} />
+        {/* INNOVATIONS-ROUTE */}
+        <Route path="/innovations/*" element={<InnovationsRouter />} />
         {/* Secondary-nav destinations (stubbed) */}
         <Route path="/documents" element={<Briefs />} />
         <Route path="/audit-log" element={<DataHealth />} />
