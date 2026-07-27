@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import {
@@ -26,6 +26,9 @@ import JobTargetTracker, {
 } from "@/components/dashboard/JobTargetTracker";
 import TopRisks, { type RiskItem } from "@/components/dashboard/TopRisks";
 import SectorHighlights from "@/components/dashboard/SectorHighlights";
+/* GEO-MINIMAP: additive real-polygon LGA choropleth (lazy — the dashboard
+ * renders fine without it while the chunk / geo API loads). */
+const LgaMiniMap = lazy(() => import("@/components/dashboard/LgaMiniMap"));
 import ScenarioStrip, {
   type ScenarioCardData,
 } from "@/components/dashboard/ScenarioStrip";
@@ -596,6 +599,11 @@ export default function Dashboard() {
           opportunities={opportunities}
         />
       )}
+
+      {/* GEO-MINIMAP: real LGA boundary choropleth (220px, lazy, additive) */}
+      <Suspense fallback={<SkeletonCard metric={false} lines={3} />}>
+        <LgaMiniMap />
+      </Suspense>
 
       {/* Section 4 — Scenario summaries */}
       {runsLoading ? (
