@@ -9,7 +9,7 @@ export interface EnvelopeMeta {
   api_version: string;
 }
 export interface EnvelopeAudit {
-  actor_id: string;
+  actor_id: string | number | null;
   generated_at: string;
 }
 export interface Envelope<T> {
