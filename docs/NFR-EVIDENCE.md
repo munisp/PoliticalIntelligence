@@ -60,3 +60,47 @@ docker compose -f infra/docker/docker-compose.yml up prometheus grafana
 - `security` — `npm audit --omit=dev --audit-level=high` + gitleaks.
 - `release-gate` — main only; requires every job green and echoes the
   remaining pre-release evidence checklist from `docs/TESTING.md`.
+
+## Observation windows (availability + recorded runs)
+
+**Availability measurement method.** The availability SLI (99.5% monthly) is
+measured with the Prometheus blackbox prober, not self-reported uptime:
+
+- `infra/monitoring/blackbox.yml` + the `blackbox-exporter` compose service
+  probe `GET /healthz` (app, simulation, ai) and `GET /health` (ingestion,
+  documents) every 15s via the `blackbox-health` job in
+  `infra/monitoring/prometheus.yml`.
+- Alert `UptimeProbeFailing` (`infra/monitoring/alerts.yml`, group
+  `platform-uptime`) fires when `probe_success == 0` for 5m on any target.
+- Monthly SLI per target: `avg_over_time(probe_success[30d])`; the platform
+  SLI is the minimum across targets. A 7-day observation window
+  (`avg_over_time(probe_success[7d])`) is the pre-production gate.
+
+**First-window checklist (7-day, staging):**
+
+1. `docker compose -f infra/docker/docker-compose.yml up -d` (full stack incl.
+   `blackbox-exporter`, `prometheus`).
+2. Verify `probe_success` = 1 for all 5 targets in Prometheus (`/graph`).
+3. Record window start; leave the stack undisturbed except planned chaos
+   (one deliberate `docker stop app` to validate the alert fires ≤5m).
+4. At day 7, export `avg_over_time(probe_success[7d])` per target and attach
+   the Prometheus export to the release evidence bundle.
+5. File the result below under "Executed windows".
+
+**Executed windows:**
+
+| Window | Environment | Targets | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| _pending_ | staging | 5 health endpoints | — | first run of the checklist above |
+
+**Executed performance runs:**
+
+| Date | Method | Profile | p95 reads | p95 advisory | Error rate | Requests | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-07-27 | `node tests/perf/local-bench.mjs` (zero-dep bench, same thresholds as `tests/k6/*.k6.js`) against the built server on the seeded MySQL pilot | NFR smoke | **360 ms** | **610 ms** | **0%** | 340 reads + 71 advisory | ✅ within NFR (p95 < 5s / 20s) |
+
+Method note: the bench drives the real HTTP surface (`/v1/jurisdictions`,
+`/v1/opportunities/rankings`, brief/advisory intake + status polling) with
+concurrent workers; p95 is computed client-side over completed requests.
+The k6 profiles (`tests/k6/api-reads.k6.js`, `tests/k6/advisory.k6.js`) run
+the same thresholds on staging for the full 5-minute windows.
