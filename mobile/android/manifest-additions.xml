@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  manifest-additions.xml — REFERENCE SNIPPET (not merged automatically).
+
+  Capacitor's generated AndroidManifest.xml already requests INTERNET and
+  nothing else; that is the correct default for this platform — it only talks
+  HTTPS to the Policy Twin API and renders bundled web assets.
+
+  Copy individual lines below into
+  android/app/src/main/AndroidManifest.xml ONLY when the matching feature is
+  enabled. Nothing else should ever be added (no location, contacts, camera,
+  or storage permissions — the platform handles public economic data only).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- DEFAULT (already present in the generated manifest): network access. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      PUSH NOTIFICATIONS (Android 13+, API 33+):
+      Required so FCM alerts can display. The runtime request is handled by
+      @capacitor/push-notifications (see registerPush() in mobile/src/native.ts).
+      Uncomment together with adding google-services.json to android/app/.
+    -->
+    <!-- <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> -->
+
+    <application>
+        <!--
+          Never enable these on release builds:
+            android:usesCleartextTraffic="true"   (HTTP blocked by policy)
+            android:allowBackup="true"            (session hints must not
+                                                   leave the device via backup)
+          The generated manifest already ships with safe defaults; keep them.
+        -->
+    </application>
+</manifest>
