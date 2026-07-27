@@ -24,6 +24,7 @@ import ApprovalBadge from "@/components/shared/ApprovalBadge";
 import MapPanel, { type LgaDatum } from "@/components/shared/MapPanel";
 import { useInstallPrompt } from "@/hooks/use-pwa";
 import { cn } from "@/lib/utils";
+import { LOGIN_PATH } from "@/const";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -162,7 +163,7 @@ function LandingNav() {
           </button>
         )}
         <Link
-          to="/login"
+          to={LOGIN_PATH}
           className="rounded-md px-3 py-1.5 text-[13px] font-medium text-ink-secondary hover:bg-ink-elevated hover:text-ink-primary"
         >
           Sign in
@@ -463,7 +464,7 @@ export default function Home() {
 
             <div data-hero-fade className="mt-7 flex flex-wrap items-center gap-3">
               <Link
-                to="/login"
+                to={LOGIN_PATH}
                 className="rounded-md bg-civic px-5 py-2.5 text-sm font-semibold text-ink-base transition-all hover:bg-civic-strong active:scale-[0.98]"
               >
                 Sign in to the platform
@@ -774,7 +775,7 @@ export default function Home() {
             </h2>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <Link
-                to="/login"
+                to={LOGIN_PATH}
                 className="animate-pulse-glow rounded-md bg-civic px-6 py-2.5 text-sm font-semibold text-ink-base transition-all hover:bg-civic-strong active:scale-[0.98] motion-reduce:animate-none"
               >
                 Sign in

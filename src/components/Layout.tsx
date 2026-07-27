@@ -31,6 +31,201 @@ import CommandPalette, {
   openCommandPalette,
 } from "@/components/shared/CommandPalette";
 import { useInstallPrompt, useOnlineStatus } from "@/hooks/use-pwa";
+import { useAuth } from "@/hooks/useAuth";
+import { LOGIN_PATH } from "@/const";
+import { LogOut } from "lucide-react";
+
+/* ------------------------------------------------------------------ */
+/* Auth slot (Phase 5): sidebar user card + topbar control             */
+/* ------------------------------------------------------------------ */
+
+function userInitials(name?: string | null): string {
+  if (!name) return "?";
+  return name
+    .split(/\s+/)
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function roleLabel(role?: string | null, platformRole?: string | null): string {
+  const r = role === "admin" ? "executive" : (platformRole ?? role ?? "user");
+  return r.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function AuthAvatar({ size = "h-7 w-7" }: { size?: string }) {
+  const { user } = useAuth();
+  if (user?.avatar) {
+    return (
+      <img
+        src={user.avatar}
+        alt=""
+        aria-hidden
+        className={cn(size, "shrink-0 rounded-full object-cover")}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        size,
+        "flex shrink-0 items-center justify-center rounded-full bg-civic/20 font-mono text-[11px] font-medium text-civic",
+      )}
+    >
+      {userInitials(user?.name)}
+    </span>
+  );
+}
+
+/** Sidebar user card: loading skeleton / sign-in link / user + logout. */
+function AuthUserCard({
+  collapsed,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div
+        aria-busy="true"
+        aria-label="Loading account"
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-md border border-ink-subtle bg-ink-elevated px-2.5 py-2",
+          collapsed && "justify-center px-0",
+        )}
+      >
+        <span aria-hidden className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-ink-inset" />
+        {!collapsed && (
+          <span aria-hidden className="h-3 w-24 animate-pulse rounded bg-ink-inset" />
+        )}
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <Link
+        to={LOGIN_PATH}
+        onClick={onNavigate}
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-md border border-ink-subtle bg-ink-elevated px-2.5 py-2 hover:border-civic/50",
+          collapsed && "justify-center px-0",
+        )}
+      >
+        <span
+          aria-hidden
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-inset"
+        >
+          <UserRound className="h-4 w-4 text-ink-muted" />
+        </span>
+        {!collapsed && (
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block text-[13px] font-medium text-ink-primary">
+              Sign in
+            </span>
+            <span className="block truncate text-[11px] text-ink-muted">
+              Government SSO · role-based
+            </span>
+          </span>
+        )}
+      </Link>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-md border border-ink-subtle bg-ink-elevated px-2.5 py-2",
+        collapsed && "justify-center px-0",
+      )}
+    >
+      <AuthAvatar />
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-[13px] font-medium text-ink-primary">
+              {user.name ?? "Signed-in user"}
+            </span>
+            <span className="block truncate text-[11px] text-ink-muted">
+              {roleLabel(user.role, user.platformRole)}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              onNavigate?.();
+            }}
+            aria-label="Sign out"
+            className="rounded p-1 text-ink-muted hover:text-ink-primary"
+          >
+            <LogOut aria-hidden className="h-4 w-4" />
+          </button>
+        </>
+      )}
+      {collapsed && (
+        <span className="sr-only">
+          Signed in as {user.name ?? "user"} — use the topbar to sign out
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Topbar auth control: loading skeleton / sign-in icon / avatar + sign out. */
+function AuthTopbarControl() {
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
+
+  if (isLoading) {
+    return (
+      <span
+        aria-busy="true"
+        aria-label="Loading account"
+        className="h-8 w-8 animate-pulse rounded-full border border-ink-subtle bg-ink-elevated"
+      />
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <Link
+        to={LOGIN_PATH}
+        aria-label="Sign in"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-ink-subtle bg-ink-elevated text-ink-muted hover:border-civic/50 hover:text-ink-primary"
+      >
+        <UserRound aria-hidden className="h-4 w-4" />
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="hidden max-w-32 truncate text-xs text-ink-secondary lg:inline">
+        {user.name ?? "Signed-in user"}
+      </span>
+      <span
+        className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-ink-subtle bg-ink-elevated"
+        title={user.name ?? "Account"}
+      >
+        <AuthAvatar size="h-8 w-8" />
+      </span>
+      <button
+        type="button"
+        onClick={logout}
+        aria-label="Sign out"
+        title="Sign out"
+        className="rounded p-1.5 text-ink-secondary hover:text-ink-primary"
+      >
+        <LogOut aria-hidden className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Nav model                                                           */
@@ -250,34 +445,9 @@ function SidebarContent({
         ))}
       </nav>
 
-      {/* User card */}
+      {/* User card — wired to useAuth() (Phase 5) */}
       <div className="border-t border-ink-subtle p-3">
-        {/* AUTH-SLOT: rewired to useAuth() in Phase 5 */}
-        <Link
-          to="/login"
-          onClick={onNavigate}
-          className={cn(
-            "flex w-full items-center gap-2.5 rounded-md border border-ink-subtle bg-ink-elevated px-2.5 py-2 hover:border-civic/50",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          <span
-            aria-hidden
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-inset"
-          >
-            <UserRound className="h-4 w-4 text-ink-muted" />
-          </span>
-          {!collapsed && (
-            <span className="min-w-0 flex-1 text-left">
-              <span className="block text-[13px] font-medium text-ink-primary">
-                Sign in
-              </span>
-              <span className="block truncate text-[11px] text-ink-muted">
-                Government SSO · role-based
-              </span>
-            </span>
-          )}
-        </Link>
+        <AuthUserCard collapsed={collapsed} onNavigate={onNavigate} />
       </div>
     </div>
   );
@@ -433,14 +603,8 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           </select>
         </label>
 
-        {/* AUTH-SLOT: rewired to useAuth() in Phase 5 */}
-        <Link
-          to="/login"
-          aria-label="Sign in"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-ink-subtle bg-ink-elevated text-ink-muted hover:border-civic/50 hover:text-ink-primary"
-        >
-          <UserRound aria-hidden className="h-4 w-4" />
-        </Link>
+        {/* Auth control — wired to useAuth() (Phase 5) */}
+        <AuthTopbarControl />
       </div>
     </header>
   );
