@@ -25,6 +25,7 @@ networks:
     driver: bridge
 
 volumes:
+  ingestion-artifacts:
   mysql-data:
   minio-data:
   neo4j-data:
@@ -58,6 +59,9 @@ services:
       OPENSEARCH_URL: http://opensearch:9200
       POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
       KAFKA_BROKERS: redpanda:9092
+      # Ingestion service + shared loader key (feat-data-loader).
+      INGESTION_BASE_URL: http://ingestion:8300
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
@@ -80,6 +84,8 @@ services:
       simulation:
         condition: service_started
       ai:
+        condition: service_started
+      ingestion:
         condition: service_started
     networks: [platform]
     healthcheck:
@@ -114,6 +120,36 @@ services:
     networks: [platform]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8100/healthz').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  ingestion:
+    build:
+      context: ../../services/ingestion
+    image: policy-twin/ingestion:local
+    ports:
+      - "${INGESTION_PORT:-8300}:8300"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      # Loader -> platform API (feat-data-loader, docs/LOADER.md).
+      PLATFORM_API_URL: http://app:3000
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      INGESTION_ARTIFACTS_DIR: /srv/artifacts/ingestion
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ingestion-artifacts:/srv/artifacts/ingestion
+    depends_on:
+      app:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8300/health').status==200 else 1)"]
       interval: 15s
       timeout: 5s
       retries: 10
