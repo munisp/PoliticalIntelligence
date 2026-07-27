@@ -442,6 +442,7 @@ export const facilities = mysqlTable(
   (t) => ({
     jurIdx: index("facilities_jur_idx").on(t.jurisdictionId),
     typeIdx: index("facilities_type_idx").on(t.type),
+    latLonIdx: index("facilities_lat_lon_idx").on(t.lat, t.lon),
   }),
 );
 
@@ -493,6 +494,130 @@ export const ingestionRuns = mysqlTable(
 );
 
 export type IngestionRun = typeof ingestionRuns.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Canonical model completion (additive — feat-data-loader)            */
+/* ------------------------------------------------------------------ */
+
+/** State budget lines: appropriation vs release per MDA/sector/year. */
+export const budgets = mysqlTable(
+  "budgets",
+  {
+    budgetId: varchar("budget_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    fiscalYear: int("fiscal_year").notNull(),
+    /** Ministry/Department/Agency. */
+    mda: varchar("mda", { length: 255 }).notNull(),
+    sectorCode: varchar("sector_code", { length: 32 }),
+    /** Figures in ₦ (naira), not millions. */
+    appropriatedNgn: double("appropriated_ngn"),
+    releasedNgn: double("released_ngn"),
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurYearIdx: index("budgets_jur_year_idx").on(t.jurisdictionId, t.fiscalYear),
+  }),
+);
+
+export type Budget = typeof budgets.$inferSelect;
+
+/** Public officials relevant to policy twin (tenure-windowed). */
+export const officials = mysqlTable(
+  "officials",
+  {
+    officialId: varchar("official_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    role: varchar("role", { length: 255 }).notNull(),
+    level: adminLevelEnum("level"),
+    party: varchar("party", { length: 64 }),
+    /** Tenure window as ISO date labels (e.g. "2023-05-29"). */
+    validFrom: varchar("valid_from", { length: 32 }),
+    validTo: varchar("valid_to", { length: 32 }),
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("officials_jur_idx").on(t.jurisdictionId),
+  }),
+);
+
+export type Official = typeof officials.$inferSelect;
+
+/** Flagship government programs (status + headline targets). */
+export const programs = mysqlTable(
+  "programs",
+  {
+    programId: varchar("program_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    sectorCode: varchar("sector_code", { length: 32 }),
+    status: varchar("status", { length: 32 }).default("active").notNull(),
+    targetJobs: int("target_jobs"),
+    budgetId: varchar("budget_id", { length: 96 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("programs_jur_idx").on(t.jurisdictionId),
+  }),
+);
+
+export type Program = typeof programs.$inferSelect;
+
+/** Business registrations (CAC-style) — SME formalization proxy. */
+export const businessRegistrations = mysqlTable(
+  "business_registrations",
+  {
+    registrationId: varchar("registration_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    rcNumber: varchar("rc_number", { length: 32 }),
+    entityType: varchar("entity_type", { length: 64 }),
+    /** Registration date as ISO date label. */
+    registeredAt: varchar("registered_at", { length: 32 }),
+    status: varchar("status", { length: 32 }).default("active").notNull(),
+    lga: varchar("lga", { length: 128 }),
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("business_registrations_jur_idx").on(t.jurisdictionId),
+    rcIdx: index("business_registrations_rc_idx").on(t.rcNumber),
+  }),
+);
+
+export type BusinessRegistration = typeof businessRegistrations.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Geospatial (additive — feat-data-loader)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Administrative boundary polygons (GeoJSON Feature per unit) with real
+ * centroids. Mirrors public/geo/*.geojson; powers choropleths and the
+ * point-in-polygon fallback when POSTGIS_URL is not configured.
+ */
+export const geoBoundaries = mysqlTable(
+  "geo_boundaries",
+  {
+    /** e.g. "adm:ng-kd-zaria" — mirrors admin_units ids. */
+    unitId: varchar("unit_id", { length: 96 }).primaryKey(),
+    level: adminLevelEnum("level"),
+    /** GeoJSON Feature (Polygon/MultiPolygon) with name/osm props. */
+    geojson: json("geojson").notNull(),
+    centroidLat: double("centroid_lat"),
+    centroidLon: double("centroid_lon"),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+);
+
+export type GeoBoundary = typeof geoBoundaries.$inferSelect;
 
 /* ------------------------------------------------------------------ */
 /* Briefs                                                              */
