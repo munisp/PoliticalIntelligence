@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Reference copy of the strings file that `npx cap add android` generates at
+  android/app/src/main/res/values/strings.xml.
+
+  - `app_name` / `title_activity_main` come from `appName` in
+    capacitor.config.ts ("Policy Twin").
+  - `package_name` and `custom_url_scheme` come from `appId`
+    (gov.policytwin.platform); the reverse-domain scheme is used for
+    app-redirect deep links.
+  - Do NOT hardcode a `server_url` here — production loads bundled assets.
+-->
+<resources>
+    <string name="app_name">Policy Twin</string>
+    <string name="title_activity_main">Policy Twin</string>
+    <string name="package_name">gov.policytwin.platform</string>
+    <string name="custom_url_scheme">gov.policytwin.platform</string>
+</resources>

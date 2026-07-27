@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Standalone: the mobile wrapper does not inherit the root app's config
+    // (different module graph, no React, no path aliases). Type resolution
+    // comes from mobile/node_modules after `npm install` here.
+    "types": []
+  },
+  "include": ["src", "capacitor.config.ts", "icons/**/*.ts"]
+}
