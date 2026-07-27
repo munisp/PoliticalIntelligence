@@ -8,7 +8,7 @@
 import { useMemo } from "react";
 import type { FeatureCollection } from "geojson";
 import { trpc } from "@/providers/trpc";
-import { unwrapData } from "@/lib/trpc-data";
+import { unwrapData } from "@/components/opportunities/types";
 import { isProcedureMissing } from "@/lib/innovations-client";
 import MapPanel, { type LgaDatum } from "@/components/shared/MapPanel";
 import { SkeletonCard } from "@/components/shared/Skeleton";
