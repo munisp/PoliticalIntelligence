@@ -898,6 +898,15 @@ async function seed() {
   await ensureStringPk("scenario_templates", schema.scenarioTemplates as never, schema.scenarioTemplates.templateId as never, SCENARIO_TEMPLATES as never, "templateId");
   await ensureStringPk("webhook_subscriptions", schema.webhookSubscriptions as never, schema.webhookSubscriptions.subId as never, WEBHOOKS as never, "subId");
 
+  // === feat-llm-events seed ===
+  // Demo job heartbeat (stuck-job sweeper demo target) — additive.
+  await db
+    .insert(schema.jobHeartbeats)
+    .values({ jobId: "job:seed-demo", status: "succeeded", ts: new Date() })
+    .onDuplicateKeyUpdate({ set: { status: "succeeded" } });
+  console.log("  job_heartbeats: 1 upserted (demo)");
+  // === end feat-llm-events seed ===
+
   console.log("Done.");
   process.exit(0);
 }

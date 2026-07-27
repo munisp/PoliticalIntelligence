@@ -207,6 +207,9 @@ class RoutingAuditEntry(BaseModel):
     fallback_used: bool
     offline: bool
     latency_ms: float
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    circuit_breakers: dict[str, str] = Field(default_factory=dict)
 
 
 Recommendation.model_rebuild()

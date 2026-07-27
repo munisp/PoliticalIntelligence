@@ -13,6 +13,7 @@ from app.config import settings
 from app.errors import ServiceError, ValidationError
 from app.llm.offline import synthesize_copilot_answer, synthesize_recommendation
 from app.llm.router import ModelRouter, audit_log
+from app.llm.serving import ServingClient
 from app.logging_setup import configure_logging, get_logger
 from app.models import (Audit, CopilotQuery, Envelope, ErrorEnvelope, Meta,
                         RecommendationRequest, RetrieveRequest)
@@ -25,7 +26,8 @@ log = get_logger("api")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.retriever = HybridRetriever()
-    app.state.router = ModelRouter()
+    app.state.serving = ServingClient()  # env-driven; unconfigured -> offline
+    app.state.router = ModelRouter(serving=app.state.serving)
     log.info("service started", extra={
         "request_id": "startup",
         "model_tier": "offline" if not app.state.router.online else "online",
@@ -167,6 +169,13 @@ async def copilot_query(req: CopilotQuery, request: Request):
 async def routing_audit(request: Request, limit: int = 100):
     entries = [e.model_dump(mode="json") for e in audit_log.list(limit)]
     return _envelope(request, {"entries": entries, "count": len(entries)})
+
+
+@app.get("/v1/serving/metrics")
+async def serving_metrics(request: Request):
+    """Per-tier serving metrics: requests, failures, p95 latency, breakers."""
+    serving: ServingClient = request.app.state.serving
+    return _envelope(request, serving.metrics_snapshot())
 
 
 @app.get("/v1/regression/latest")

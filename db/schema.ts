@@ -815,3 +815,67 @@ export const webhookSubscriptions = mysqlTable("webhook_subscriptions", {
 });
 
 export type WebhookSubscription = typeof webhookSubscriptions.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+// === feat-llm-events tables ===
+/* ------------------------------------------------------------------ */
+
+/**
+ * Dead-letter queue for the event backbone (docs/EVENTS.md). Rows land here
+ * after the consumer retry budget (3x backoff) is exhausted — either from a
+ * Kafka consumer group or from the outbox-mode polled consumer. The original
+ * event_outbox row keeps its attempts/last_error; this table is the durable
+ * DLQ record (`<topic>.dlq` equivalent when Kafka is not deployed).
+ */
+export const eventDlq = mysqlTable("event_dlq", {
+  eventId: varchar("event_id", { length: 64 }).primaryKey(),
+  /** Source topic (the DLQ topic is derived as `${topic}.dlq`). */
+  topic: varchar("topic", { length: 128 }).notNull(),
+  dlqTopic: varchar("dlq_topic", { length: 160 }).notNull(),
+  partitionKey: varchar("partition_key", { length: 128 }),
+  payload: json("payload").notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  /** Consumer group / handler that exhausted retries. */
+  consumerGroup: varchar("consumer_group", { length: 128 }),
+  deadAt: timestamp("dead_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  /** Set when an operator replays the message back onto the bus. */
+  replayedAt: timestamp("replayed_at"),
+});
+
+export type EventDlqRow = typeof eventDlq.$inferSelect;
+
+/**
+ * Job heartbeats (SR-9 jobs hardening). The in-process runner stamps a row
+ * on every lifecycle transition; a sweeper interval auto-fails jobs whose
+ * heartbeat is stale (>10 min) while the jobs row still says running.
+ */
+export const jobHeartbeats = mysqlTable("job_heartbeats", {
+  jobId: varchar("job_id", { length: 64 }).primaryKey(),
+  /** Last lifecycle status observed by the runner. */
+  status: varchar("status", { length: 32 }).notNull(),
+  ts: timestamp("ts").defaultNow().notNull(),
+});
+
+export type JobHeartbeat = typeof jobHeartbeats.$inferSelect;
+
+/**
+ * WORM audit export checkpoints (SEC-4). One row per export file: anchors
+ * the running hash-chain head + sha256 manifest so continuity across
+ * hourly exports is verifiable even if the artifact dir is remounted.
+ */
+export const auditWormExports = mysqlTable("audit_worm_exports", {
+  exportId: varchar("export_id", { length: 64 }).primaryKey(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  /** First/last audit event ids included (inclusive). */
+  fromEventId: bigint("from_event_id", { mode: "number" }),
+  toEventId: bigint("to_event_id", { mode: "number" }),
+  eventCount: int("event_count").default(0).notNull(),
+  /** Chain head (entry_hash of the last exported event) and manifest sha. */
+  chainHead: varchar("chain_head", { length: 64 }).notNull(),
+  manifestSha256: varchar("manifest_sha256", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AuditWormExport = typeof auditWormExports.$inferSelect;
