@@ -19,6 +19,7 @@ import EvidenceDrawer, {
 import EmptyState from "@/components/shared/EmptyState";
 import StatusDot from "@/components/shared/StatusDot";
 import RankingRow, { SkeletonRankingRow } from "@/components/opportunities/RankingRow";
+import { ProvenanceChipFromInfo } from "@/components/provenance";
 import CompareTray from "@/components/opportunities/CompareTray";
 import CompareView from "@/components/opportunities/CompareView";
 import GenerateModal from "@/components/opportunities/GenerateModal";
@@ -375,8 +376,19 @@ export default function Opportunities() {
       )}
 
       {visibleItems.map((o, i) => (
+        /* INNOVATIONS-PROVENANCE: additive wrapper — chip overlays the row's
+           chip area without touching the shared RankingRow component. */
+        <div key={o.opportunityId} className="relative">
+        {(o as { provenance?: import("@/lib/innovations-client").ProvenanceInfo }).provenance && (
+          <div className="pointer-events-none absolute right-12 top-2 z-10">
+            <div className="pointer-events-auto">
+              <ProvenanceChipFromInfo
+                provenance={(o as { provenance?: import("@/lib/innovations-client").ProvenanceInfo }).provenance}
+              />
+            </div>
+          </div>
+        )}
         <RankingRow
-          key={o.opportunityId}
           ref={(el) => {
             if (el) rowRefs.current.set(o.opportunityId, el);
             else rowRefs.current.delete(o.opportunityId);
@@ -395,6 +407,7 @@ export default function Opportunities() {
           onSimulate={() => simulate(o.opportunityId)}
           onToggleCompare={() => toggleCompare(o.opportunityId)}
         />
+        </div>
       ))}
     </div>
   );

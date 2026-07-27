@@ -24,6 +24,7 @@ import {
   X,
   Download,
   MoreHorizontal,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -249,6 +250,8 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const SECONDARY_NAV: NavItem[] = [
+  /* INNOVATIONS-NAV */
+  { label: "Innovations", href: "/innovations", Icon: Sparkles },
   { label: "Documents library", href: "/documents", Icon: FolderOpen },
   { label: "Audit log", href: "/audit-log", Icon: ScrollText },
   { label: "Settings", href: "/settings", Icon: Settings },
