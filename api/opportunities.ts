@@ -42,6 +42,12 @@ export const opportunitiesRouter = createRouter({
           items: page.items.map((o) => ({
             ...o,
             confidence_tier: confidenceTier(o.confidence),
+            // Additive provenance label (feat-ingestion): live/derived/seed.
+            provenance: {
+              origin: o.origin,
+              source_url: o.sourceUrl,
+              fetched_at: o.fetchedAt,
+            },
           })),
         },
         ctx,

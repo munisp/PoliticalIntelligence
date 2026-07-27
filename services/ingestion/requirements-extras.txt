@@ -1,0 +1,3 @@
+# Optional extras — install only when the corresponding infra exists.
+# Kafka/Redpanda event producer (events fall back to stdout when absent).
+kafka-python==2.0.2

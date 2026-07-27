@@ -62,6 +62,18 @@ const adminLevelEnum = (name: string) =>
 const sourceHealthEnum = (name: string) =>
   mysqlEnum(name, ["healthy", "stale", "failing"]).default("healthy").notNull();
 
+/**
+ * Provenance columns (additive, migration-safe — never dropped).
+ * origin: "live" (fetched from a real source), "derived" (computed/parsed
+ * from fetched artifacts), "seed" (demo data; the honest default for the
+ * pre-ingestion seed corpus).
+ */
+const provenanceColumns = () => ({
+  origin: varchar("origin", { length: 8 }).default("seed").notNull(),
+  sourceUrl: text("source_url"),
+  fetchedAt: timestamp("fetched_at"),
+});
+
 /* ------------------------------------------------------------------ */
 /* Geography                                                           */
 /* ------------------------------------------------------------------ */
@@ -74,6 +86,7 @@ export const jurisdictions = mysqlTable("jurisdictions", {
   parentId: varchar("parent_id", { length: 64 }),
   validFrom: timestamp("valid_from"),
   sourceRefs: json("source_refs"),
+  ...provenanceColumns(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -90,6 +103,7 @@ export const adminUnits = mysqlTable(
     parentId: varchar("parent_id", { length: 64 }),
     population: int("population"),
     sourceRefs: json("source_refs"),
+    ...provenanceColumns(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
@@ -124,6 +138,7 @@ export const sectorMetrics = mysqlTable(
     period: varchar("period", { length: 16 }).notNull(),
     confidence: double("confidence").default(0.5).notNull(),
     sourceId: varchar("source_id", { length: 64 }),
+    ...provenanceColumns(),
   },
   (t) => ({
     jurSectorIdx: index("sector_metrics_jur_sector_idx").on(
@@ -157,6 +172,7 @@ export const opportunities = mysqlTable(
     horizonMonths: int("horizon_months"),
     reviewState: reviewStateEnum("review_state"),
     evidenceRefs: json("evidence_refs"),
+    ...provenanceColumns(),
     createdBy: bigint("created_by", { mode: "number", unsigned: true }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -399,10 +415,84 @@ export const evidenceSources = mysqlTable("evidence_sources", {
   contentExcerpt: text("content_excerpt"),
   /** Linked entity ids: {opportunity_ids, clause_ids, law_ids, brief_ids}. */
   linkedEntityIds: json("linked_entity_ids"),
+  ...provenanceColumns(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type EvidenceSource = typeof evidenceSources.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Ingestion & provenance (additive — feat-ingestion)                  */
+/* ------------------------------------------------------------------ */
+
+export const facilities = mysqlTable(
+  "facilities",
+  {
+    facilityId: varchar("facility_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    type: varchar("type", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    lat: double("lat"),
+    lon: double("lon"),
+    /** Source locator, e.g. "osm:node/123", "hdx:nigeria-health-facilities". */
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("facilities_jur_idx").on(t.jurisdictionId),
+    typeIdx: index("facilities_type_idx").on(t.type),
+  }),
+);
+
+export type Facility = typeof facilities.$inferSelect;
+
+export const procurementRecords = mysqlTable(
+  "procurement_records",
+  {
+    recordId: varchar("record_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    buyer: varchar("buyer", { length: 255 }).notNull(),
+    supplier: varchar("supplier", { length: 255 }),
+    valueNgn: double("value_ngn"),
+    awardDate: varchar("award_date", { length: 32 }),
+    status: varchar("status", { length: 32 }).default("unknown").notNull(),
+    /** Open Contracting ID (OCDS). */
+    ocid: varchar("ocid", { length: 128 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("procurement_records_jur_idx").on(t.jurisdictionId),
+    ocidIdx: index("procurement_records_ocid_idx").on(t.ocid),
+  }),
+);
+
+export type ProcurementRecord = typeof procurementRecords.$inferSelect;
+
+export const ingestionRuns = mysqlTable(
+  "ingestion_runs",
+  {
+    runId: varchar("run_id", { length: 64 }).primaryKey(),
+    connector: varchar("connector", { length: 32 }).notNull(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    status: jobStatusEnum("status"),
+    recordsIn: int("records_in").default(0).notNull(),
+    recordsOut: int("records_out").default(0).notNull(),
+    /** {schema_ok, freshness_ok, completeness_ok, notes[]} from the connector. */
+    contractResults: json("contract_results"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("ingestion_runs_jur_idx").on(t.jurisdictionId),
+    connectorIdx: index("ingestion_runs_connector_idx").on(t.connector),
+  }),
+);
+
+export type IngestionRun = typeof ingestionRuns.$inferSelect;
 
 /* ------------------------------------------------------------------ */
 /* Briefs                                                              */

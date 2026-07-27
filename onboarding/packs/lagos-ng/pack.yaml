@@ -1,0 +1,87 @@
+# Lagos State, Nigeria — second jurisdiction, SAME pipeline as Kaduna.
+pack_version: "1.0"
+
+jurisdiction:
+  id: ng-la
+  name: Lagos State
+  country_iso3: NGA
+  country_code: NG
+  admin_level: state
+  admin_levels: [federal, state, lga]
+  currency: NGN
+  languages: [en, yo]
+  parent_id: nga
+
+hierarchy:
+  level: lga
+  units:
+    - { id: ng-la-01, name: Agege }
+    - { id: ng-la-02, name: Ajeromi-Ifelodun }
+    - { id: ng-la-03, name: Alimosho }
+    - { id: ng-la-04, name: Amuwo-Odofin }
+    - { id: ng-la-05, name: Apapa }
+    - { id: ng-la-06, name: Badagry }
+    - { id: ng-la-07, name: Epe }
+    - { id: ng-la-08, name: Eti-Osa }
+    - { id: ng-la-09, name: Ibeju-Lekki }
+    - { id: ng-la-10, name: Ifako-Ijaiye }
+    - { id: ng-la-11, name: Ikeja }
+    - { id: ng-la-12, name: Ikorodu }
+    - { id: ng-la-13, name: Kosofe }
+    - { id: ng-la-14, name: Lagos Island }
+    - { id: ng-la-15, name: Lagos Mainland }
+    - { id: ng-la-16, name: Mushin }
+    - { id: ng-la-17, name: Ojo }
+    - { id: ng-la-18, name: Oshodi-Isolo }
+    - { id: ng-la-19, name: Shomolu }
+    - { id: ng-la-20, name: Surulere }
+
+connectors:
+  worldbank:
+    country_iso3: NGA
+    since: "2015"
+    indicators:
+      - NY.GDP.MKTP.KD.ZG
+      - SL.UEM.TOTL.ZS
+      - SP.POP.TOTL
+      - SE.PRM.ENRR
+      - FP.CPI.TOTL.ZG
+      - EG.ELC.ACCS.ZS
+  overpass:
+    area_name: Lagos
+    admin_level: 4
+    amenities: [school, clinic, hospital, marketplace]
+  hdx:
+    queries:
+      - nigeria subnational administrative boundaries
+      - nigeria health facilities
+    download_csv: true
+  nada:
+    page_size: 50
+  budeshi:
+    buyer_names:
+      - Lagos State
+      - Lagos State Ministry of Works and Infrastructure
+    limit: 200
+
+sectors:
+  - { code: trade, name: Trade & Logistics, multiplier_set: ng_default }
+  - { code: manufacturing, name: Manufacturing, multiplier_set: ng_default }
+  - { code: digital, name: Digital & Creative Economy, multiplier_set: ng_default }
+  - { code: housing, name: Housing & Construction, multiplier_set: ng_default }
+  - { code: health, name: Healthcare Delivery, multiplier_set: ng_default }
+  - { code: education, name: Education Services, multiplier_set: ng_default }
+
+seed_policy:
+  allowed: [sector_metrics, opportunities, evidence_sources]
+  notes: >
+    Same provenance rules as Kaduna: national indicators live; Lagos-state
+    granular series fall back to origin=seed where no live source exists.
+
+targets:
+  jobs_target: 250000
+  horizon_months: 36
+
+branding:
+  display_name: Lagos State Policy Twin
+  tagline: Evidence-grounded investment and policy intelligence for Lagos State

@@ -1,0 +1,104 @@
+# Kaduna State, Nigeria — onboarding pack (pilot jurisdiction)
+pack_version: "1.0"
+
+jurisdiction:
+  id: ng-kd
+  name: Kaduna State
+  country_iso3: NGA
+  country_code: NG
+  admin_level: state
+  admin_levels: [federal, state, lga]
+  currency: NGN
+  languages: [en, ha]
+  parent_id: nga
+
+hierarchy:
+  level: lga
+  units:
+    - { id: ng-kd-01, name: Birnin Gwari }
+    - { id: ng-kd-02, name: Chikun }
+    - { id: ng-kd-03, name: Giwa }
+    - { id: ng-kd-04, name: Igabi }
+    - { id: ng-kd-05, name: Ikara }
+    - { id: ng-kd-06, name: Jaba }
+    - { id: ng-kd-07, name: Jema'a }
+    - { id: ng-kd-08, name: Kachia }
+    - { id: ng-kd-09, name: Kaduna North }
+    - { id: ng-kd-10, name: Kaduna South }
+    - { id: ng-kd-11, name: Kagarko }
+    - { id: ng-kd-12, name: Kajuru }
+    - { id: ng-kd-13, name: Kaura }
+    - { id: ng-kd-14, name: Kauru }
+    - { id: ng-kd-15, name: Kubau }
+    - { id: ng-kd-16, name: Kudan }
+    - { id: ng-kd-17, name: Lere }
+    - { id: ng-kd-18, name: Makarfi }
+    - { id: ng-kd-19, name: Sabon Gari }
+    - { id: ng-kd-20, name: Sanga }
+    - { id: ng-kd-21, name: Soba }
+    - { id: ng-kd-22, name: Zangon Kataf }
+    - { id: ng-kd-23, name: Zaria }
+
+connectors:
+  # LIVE: World Bank publishes national (NGA) series only — state-level
+  # granularity is not available from any live API (see seed_policy below).
+  worldbank:
+    country_iso3: NGA
+    since: "2015"
+    indicators:
+      - NY.GDP.MKTP.KD.ZG   # GDP growth (annual %)
+      - SL.UEM.TOTL.ZS      # Unemployment (% labor force)
+      - SP.POP.TOTL         # Population
+      - SE.PRM.ENRR         # School enrollment, primary (% gross)
+      - FP.CPI.TOTL.ZG      # Inflation (CPI annual %)
+      - EG.ELC.ACCS.ZS      # Access to electricity (% population)
+  overpass:
+    area_name: Kaduna
+    admin_level: 4
+    amenities: [school, clinic, hospital, marketplace]
+  hdx:
+    queries:
+      - nigeria subnational administrative boundaries
+      - nigeria health facilities
+      - grid3 nigeria
+    download_csv: true
+  nada:
+    page_size: 50
+  budeshi:
+    buyer_names:
+      - Kaduna State
+      - Kaduna State Ministry of Health
+      - Kaduna State Universal Basic Education Board
+    limit: 200
+  file_harvester:
+    files:
+      - url: https://budgetoffice.gov.ng/index.php/resources/2024-appropriation-act
+        kind: pdf
+
+sectors:
+  - { code: agriculture, name: Agriculture & Agro-processing, multiplier_set: ng_default }
+  - { code: manufacturing, name: Light Manufacturing, multiplier_set: ng_default }
+  - { code: education, name: Education Services, multiplier_set: ng_default }
+  - { code: health, name: Healthcare Delivery, multiplier_set: ng_default }
+  - { code: energy, name: Energy Access, multiplier_set: ng_default }
+  - { code: digital, name: Digital Services, multiplier_set: ng_default }
+
+seed_policy:
+  # Honest fallback: World Bank/HDX/OSM cover national metrics, boundaries,
+  # and facilities. State-level economic series (Kaduna GSP, LGA unemployment)
+  # are NOT available from any live API today — those records may fall back
+  # to demo data, and are labeled origin=seed end-to-end (never hidden).
+  allowed: [sector_metrics, opportunities, evidence_sources]
+  notes: >
+    National indicators are live (World Bank NGA). Kaduna-state granular
+    series (state GDP, LGA labor statistics) have no live machine-readable
+    source (NBS state series are PDF/portal-only) — fallback records carry
+    origin=seed and are excluded from live/derived provenance counts.
+
+targets:
+  jobs_target: 100000
+  horizon_months: 36
+
+branding:
+  display_name: Kaduna State Policy Twin
+  tagline: Evidence-grounded investment and policy intelligence for Kaduna State

@@ -1,0 +1,35 @@
+{
+  "records": [
+    {
+      "ocid": "ocds-213f4a-kdsg-2023-001",
+      "title": "Construction of Primary Healthcare Centre, Igabi LGA",
+      "buyer": { "name": "Kaduna State Ministry of Health" },
+      "status": "active",
+      "awards": [
+        {
+          "date": "2023-06-14",
+          "status": "active",
+          "value": { "amount": 84500000, "currency": "NGN" },
+          "suppliers": [ { "name": "Buildwell Nigeria Ltd" } ]
+        }
+      ]
+    },
+    {
+      "ocid": "ocds-213f4a-kdsg-2024-014",
+      "tender": { "title": "Supply of School Furniture, Zaria" },
+      "procuringEntity": { "name": "Kaduna State Universal Basic Education Board" },
+      "status": "complete",
+      "awards": [
+        {
+          "date": "2024-02-01",
+          "value": { "amount": 31250000, "currency": "NGN" },
+          "suppliers": [ { "name": "Zaria Woodworks Cooperative" } ]
+        }
+      ]
+    },
+    {
+      "note": "record without ocid must be skipped",
+      "buyer": { "name": "Kaduna State" }
+    }
+  ]
+}
