@@ -722,6 +722,79 @@ const APPROVAL_EVENTS: Omit<typeof schema.approvalEvents.$inferInsert, "id">[] =
 ];
 
 /* ------------------------------------------------------------------ */
+/* Demo users + jurisdiction grants (ABAC)                             */
+/* ------------------------------------------------------------------ */
+
+const DEMO_USERS: (typeof schema.users.$inferInsert)[] = [
+  { unionId: "demo-policy-analyst", name: "Demo Policy Analyst", email: "analyst@example.test", role: "user", platformRole: "policy_analyst" },
+  { unionId: "demo-legal-analyst", name: "Demo Legal Analyst", email: "legal@example.test", role: "user", platformRole: "legal_analyst" },
+  { unionId: "demo-sim-specialist", name: "Demo Simulation Specialist", email: "sim@example.test", role: "user", platformRole: "simulation_specialist" },
+];
+
+/* ------------------------------------------------------------------ */
+/* Sector jobs-multiplier library (documented literature ranges)       */
+/* ------------------------------------------------------------------ */
+
+const SECTOR_MULTIPLIERS: (typeof schema.sectorMultipliers.$inferInsert)[] = [
+  { sectorCode: "edu", direct: 1.0, indirect: 0.4, induced: 0.3, source: "ILO employment-multiplier ranges for public education programmes (2019); UK ONS education Type-II ~1.6", confidence: 0.7 },
+  { sectorCode: "sme", direct: 1.0, indirect: 0.6, induced: 0.5, source: "World Bank SME formalization multipliers (2021); Nigeria SMEDAN MSME survey-derived ranges", confidence: 0.65 },
+  { sectorCode: "proc", direct: 1.0, indirect: 0.8, induced: 0.6, source: "OECD public-procurement local-content multiplier band 1.8-2.4; BPP NOCOPO preference-scheme evaluations", confidence: 0.6 },
+  { sectorCode: "agro", direct: 1.0, indirect: 0.7, induced: 0.5, source: "IFPRI Nigeria agro-processing SAM multipliers (2020); FAO agro-industry Type-II 1.9-2.3", confidence: 0.7 },
+  { sectorCode: "digital", direct: 1.0, indirect: 0.5, induced: 0.4, source: "GSMA digital-services employment multiplier range (2022); NCC broadband-economy studies", confidence: 0.55 },
+];
+
+/* ------------------------------------------------------------------ */
+/* Scenario template marketplace seed                                  */
+/* ------------------------------------------------------------------ */
+
+const SCENARIO_TEMPLATES: (typeof schema.scenarioTemplates.$inferInsert)[] = [
+  {
+    templateId: "tpl:edu-teacher-pipeline",
+    name: "Teacher Pipeline 25k",
+    description: "Recruit and license 25,000 teachers over 36 months with school-meals local sourcing.",
+    config: { intervention_ids: ["itv:teacher-recruitment", "itv:school-meals-sourcing"], model_plan: [{ engine: "forecast" }, { engine: "system_dynamics" }], horizon_months: 36 },
+    authorJurisdiction: "jur:ng-kd",
+    installs: 4,
+    rating: 4.5,
+    publishedState: "approved",
+  },
+  {
+    templateId: "tpl:sme-formalization",
+    name: "SME Formalization Drive",
+    description: "CAC one-stop formalization + credit window for 40k informal firms.",
+    config: { intervention_ids: ["itv:sme-formalization"], model_plan: [{ engine: "microsim" }], horizon_months: 24 },
+    authorJurisdiction: "jur:ng-kd",
+    installs: 2,
+    rating: 4.0,
+    publishedState: "approved",
+  },
+  {
+    templateId: "tpl:proc-local-content",
+    name: "Local-Content Procurement Shift",
+    description: "Margin-of-preference procurement steering 60% of state spend to in-state suppliers.",
+    config: { intervention_ids: ["itv:procurement-preference"], model_plan: [{ engine: "causal" }], horizon_months: 36 },
+    authorJurisdiction: "jur:ng-kd",
+    installs: 1,
+    rating: 3.8,
+    publishedState: "in_review",
+  },
+];
+
+/* ------------------------------------------------------------------ */
+/* Webhook subscription seed                                           */
+/* ------------------------------------------------------------------ */
+
+const WEBHOOKS: (typeof schema.webhookSubscriptions.$inferInsert)[] = [
+  {
+    subId: "sub:demo-ops-alerts",
+    url: "http://localhost:3000/api/webhooks/demo",
+    topics: ["ops.alerts", "simulations.run.completed"],
+    secret: "demo-webhook-secret-0123456789abcdef",
+    active: 1,
+  },
+];
+
+/* ------------------------------------------------------------------ */
 /* Main                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -789,6 +862,41 @@ async function seed() {
   } else {
     console.log("  approval_events: already seeded, skipped");
   }
+
+  // Demo users + jurisdiction grants (ABAC demo mapping).
+  const existingUsers = await db.select({ unionId: schema.users.unionId }).from(schema.users);
+  const haveUsers = new Set(existingUsers.map((u) => u.unionId));
+  const missingUsers = DEMO_USERS.filter((u) => !haveUsers.has(u.unionId));
+  if (missingUsers.length > 0) {
+    await db.insert(schema.users).values(missingUsers);
+  }
+  console.log(`  users: ${missingUsers.length} inserted, ${haveUsers.size} existing`);
+
+  const demoAnalyst = await db.query.users.findFirst({
+    where: (t, { eq }) => eq(t.unionId, "demo-policy-analyst"),
+  });
+  const demoLegal = await db.query.users.findFirst({
+    where: (t, { eq }) => eq(t.unionId, "demo-legal-analyst"),
+  });
+  const demoSim = await db.query.users.findFirst({
+    where: (t, { eq }) => eq(t.unionId, "demo-sim-specialist"),
+  });
+  const grants = [
+    ...(demoAnalyst ? [{ userId: Number(demoAnalyst.id), jurisdictionId: "jur:ng-kd", accessLevel: "write" as const }] : []),
+    ...(demoLegal ? [{ userId: Number(demoLegal.id), jurisdictionId: "jur:ng-kd", accessLevel: "write" as const }] : []),
+    ...(demoSim ? [{ userId: Number(demoSim.id), jurisdictionId: "jur:ng-kd", accessLevel: "write" as const }] : []),
+  ];
+  for (const g of grants) {
+    await db
+      .insert(schema.userJurisdictions)
+      .values(g)
+      .onDuplicateKeyUpdate({ set: { accessLevel: g.accessLevel } });
+  }
+  console.log(`  user_jurisdictions: ${grants.length} upserted (jur:ng-kd)`);
+
+  await ensureStringPk("sector_multipliers", schema.sectorMultipliers as never, schema.sectorMultipliers.sectorCode as never, SECTOR_MULTIPLIERS as never, "sectorCode");
+  await ensureStringPk("scenario_templates", schema.scenarioTemplates as never, schema.scenarioTemplates.templateId as never, SCENARIO_TEMPLATES as never, "templateId");
+  await ensureStringPk("webhook_subscriptions", schema.webhookSubscriptions as never, schema.webhookSubscriptions.subId as never, WEBHOOKS as never, "subId");
 
   console.log("Done.");
   process.exit(0);

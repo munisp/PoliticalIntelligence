@@ -181,13 +181,16 @@ export async function generateRecommendation(body: {
   legal_dependencies: Recommendation["legal_dependencies"];
   simulation_scenarios: Recommendation["simulation_scenarios"];
 }): Promise<{ recommendation: Recommendation; bridge: "remote" | "fallback" }> {
+  const { llmRoutingDecisions } = await import("../utils/metrics");
   try {
     const recommendation = await postJson<Recommendation>(
       "/v1/recommendations",
       body,
     );
+    llmRoutingDecisions.inc({ tier: "remote" });
     return { recommendation, bridge: "remote" };
   } catch {
+    llmRoutingDecisions.inc({ tier: "offline-fallback" });
     const recommendation = fallbackRecommendation({
       opportunity: body.opportunity,
       evidence: body.evidence,
