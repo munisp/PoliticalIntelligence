@@ -62,6 +62,18 @@ const adminLevelEnum = (name: string) =>
 const sourceHealthEnum = (name: string) =>
   mysqlEnum(name, ["healthy", "stale", "failing"]).default("healthy").notNull();
 
+/**
+ * Provenance columns (additive, migration-safe — never dropped).
+ * origin: "live" (fetched from a real source), "derived" (computed/parsed
+ * from fetched artifacts), "seed" (demo data; the honest default for the
+ * pre-ingestion seed corpus).
+ */
+const provenanceColumns = () => ({
+  origin: varchar("origin", { length: 8 }).default("seed").notNull(),
+  sourceUrl: text("source_url"),
+  fetchedAt: timestamp("fetched_at"),
+});
+
 /* ------------------------------------------------------------------ */
 /* Geography                                                           */
 /* ------------------------------------------------------------------ */
@@ -74,6 +86,7 @@ export const jurisdictions = mysqlTable("jurisdictions", {
   parentId: varchar("parent_id", { length: 64 }),
   validFrom: timestamp("valid_from"),
   sourceRefs: json("source_refs"),
+  ...provenanceColumns(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -90,6 +103,7 @@ export const adminUnits = mysqlTable(
     parentId: varchar("parent_id", { length: 64 }),
     population: int("population"),
     sourceRefs: json("source_refs"),
+    ...provenanceColumns(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
@@ -124,6 +138,7 @@ export const sectorMetrics = mysqlTable(
     period: varchar("period", { length: 16 }).notNull(),
     confidence: double("confidence").default(0.5).notNull(),
     sourceId: varchar("source_id", { length: 64 }),
+    ...provenanceColumns(),
   },
   (t) => ({
     jurSectorIdx: index("sector_metrics_jur_sector_idx").on(
@@ -157,6 +172,7 @@ export const opportunities = mysqlTable(
     horizonMonths: int("horizon_months"),
     reviewState: reviewStateEnum("review_state"),
     evidenceRefs: json("evidence_refs"),
+    ...provenanceColumns(),
     createdBy: bigint("created_by", { mode: "number", unsigned: true }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -399,10 +415,84 @@ export const evidenceSources = mysqlTable("evidence_sources", {
   contentExcerpt: text("content_excerpt"),
   /** Linked entity ids: {opportunity_ids, clause_ids, law_ids, brief_ids}. */
   linkedEntityIds: json("linked_entity_ids"),
+  ...provenanceColumns(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type EvidenceSource = typeof evidenceSources.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Ingestion & provenance (additive — feat-ingestion)                  */
+/* ------------------------------------------------------------------ */
+
+export const facilities = mysqlTable(
+  "facilities",
+  {
+    facilityId: varchar("facility_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    type: varchar("type", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    lat: double("lat"),
+    lon: double("lon"),
+    /** Source locator, e.g. "osm:node/123", "hdx:nigeria-health-facilities". */
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("facilities_jur_idx").on(t.jurisdictionId),
+    typeIdx: index("facilities_type_idx").on(t.type),
+  }),
+);
+
+export type Facility = typeof facilities.$inferSelect;
+
+export const procurementRecords = mysqlTable(
+  "procurement_records",
+  {
+    recordId: varchar("record_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    buyer: varchar("buyer", { length: 255 }).notNull(),
+    supplier: varchar("supplier", { length: 255 }),
+    valueNgn: double("value_ngn"),
+    awardDate: varchar("award_date", { length: 32 }),
+    status: varchar("status", { length: 32 }).default("unknown").notNull(),
+    /** Open Contracting ID (OCDS). */
+    ocid: varchar("ocid", { length: 128 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("procurement_records_jur_idx").on(t.jurisdictionId),
+    ocidIdx: index("procurement_records_ocid_idx").on(t.ocid),
+  }),
+);
+
+export type ProcurementRecord = typeof procurementRecords.$inferSelect;
+
+export const ingestionRuns = mysqlTable(
+  "ingestion_runs",
+  {
+    runId: varchar("run_id", { length: 64 }).primaryKey(),
+    connector: varchar("connector", { length: 32 }).notNull(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    status: jobStatusEnum("status"),
+    recordsIn: int("records_in").default(0).notNull(),
+    recordsOut: int("records_out").default(0).notNull(),
+    /** {schema_ok, freshness_ok, completeness_ok, notes[]} from the connector. */
+    contractResults: json("contract_results"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("ingestion_runs_jur_idx").on(t.jurisdictionId),
+    connectorIdx: index("ingestion_runs_connector_idx").on(t.connector),
+  }),
+);
+
+export type IngestionRun = typeof ingestionRuns.$inferSelect;
 
 /* ------------------------------------------------------------------ */
 /* Briefs                                                              */
@@ -533,7 +623,7 @@ export const jobs = mysqlTable(
 
 export type Job = typeof jobs.$inferSelect;
 
-/** Append-only audit log (spec §27). */
+/** Append-only audit log (spec §27) with hash-chained tamper evidence. */
 export const auditEvents = mysqlTable(
   "audit_events",
   {
@@ -546,6 +636,10 @@ export const auditEvents = mysqlTable(
     requestId: varchar("request_id", { length: 64 }),
     correlationId: varchar("correlation_id", { length: 64 }),
     payload: json("payload"),
+    /** SHA-256 of the previous event's entry_hash (GENESIS for the first). */
+    prevHash: varchar("prev_hash", { length: 64 }),
+    /** SHA-256 of canonical payload + prev_hash. */
+    entryHash: varchar("entry_hash", { length: 64 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
@@ -574,3 +668,150 @@ export const approvalEvents = mysqlTable(
 );
 
 export type ApprovalEvent = typeof approvalEvents.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Jurisdiction-scoped authorization (ABAC)                            */
+/* ------------------------------------------------------------------ */
+
+/** Per-actor jurisdiction grants; executive/platform_admin bypass (all). */
+export const userJurisdictions = mysqlTable(
+  "user_jurisdictions",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("user_id", { mode: "number", unsigned: true }).notNull(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    accessLevel: mysqlEnum("access_level", ["read", "write", "admin"])
+      .default("read")
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    userJurIdx: uniqueIndex("user_jurisdictions_user_jur_idx").on(
+      t.userId,
+      t.jurisdictionId,
+    ),
+    jurIdx: index("user_jurisdictions_jur_idx").on(t.jurisdictionId),
+  }),
+);
+
+export type UserJurisdiction = typeof userJurisdictions.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Event backbone fallback: durable outbox                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Durable outbox for domain events (docs/EVENTS.md). When KAFKA_BROKERS is
+ * configured the relay delivers to Redpanda/Kafka and stamps delivered_at;
+ * otherwise rows accumulate for replay. Webhook subscriptions fan out from
+ * the same bus with HMAC-signed payloads.
+ */
+export const eventOutbox = mysqlTable(
+  "event_outbox",
+  {
+    eventId: varchar("event_id", { length: 64 }).primaryKey(),
+    topic: varchar("topic", { length: 128 }).notNull(),
+    /** Ordering/partition key (document_id, jurisdiction_id, scenario_id...). */
+    partitionKey: varchar("partition_key", { length: 128 }),
+    payload: json("payload").notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    deliveredAt: timestamp("delivered_at"),
+  },
+  (t) => ({
+    topicIdx: index("event_outbox_topic_idx").on(t.topic),
+    deliveredIdx: index("event_outbox_delivered_idx").on(t.deliveredAt),
+  }),
+);
+
+export type EventOutboxRow = typeof eventOutbox.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Innovation: sector jobs-multiplier library                          */
+/* ------------------------------------------------------------------ */
+
+export const sectorMultipliers = mysqlTable("sector_multipliers", {
+  sectorCode: varchar("sector_code", { length: 32 }).primaryKey(),
+  direct: double("direct").notNull(),
+  indirect: double("indirect").notNull(),
+  induced: double("induced").notNull(),
+  /** Literature provenance label (documented ranges). */
+  source: varchar("source", { length: 255 }).notNull(),
+  confidence: double("confidence").default(0.5).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type SectorMultiplier = typeof sectorMultipliers.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Innovation: adaptive twin recalibration state                       */
+/* ------------------------------------------------------------------ */
+
+export const twinStates = mysqlTable(
+  "twin_states",
+  {
+    id: serial("id").primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    /** Twin layer: demographics | labour | fiscal | procurement | ... */
+    layer: varchar("layer", { length: 64 }).notNull(),
+    state: json("state").notNull(),
+    version: int("version").default(1).notNull(),
+    calibratedAt: timestamp("calibrated_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurLayerIdx: uniqueIndex("twin_states_jur_layer_idx").on(
+      t.jurisdictionId,
+      t.layer,
+    ),
+  }),
+);
+
+export type TwinState = typeof twinStates.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Innovation: scenario template marketplace                           */
+/* ------------------------------------------------------------------ */
+
+export const scenarioTemplates = mysqlTable(
+  "scenario_templates",
+  {
+    templateId: varchar("template_id", { length: 64 }).primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    /** Canonical scenario config (intervention_ids, model_plan, horizon...). */
+    config: json("config").notNull(),
+    authorJurisdiction: varchar("author_jurisdiction", { length: 64 }),
+    installs: int("installs").default(0).notNull(),
+    rating: double("rating").default(0).notNull(),
+    /** Publish gate: draft -> in_review -> approved (human review required). */
+    publishedState: varchar("published_state", { length: 32 })
+      .default("draft")
+      .notNull(),
+    createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    stateIdx: index("scenario_templates_state_idx").on(t.publishedState),
+  }),
+);
+
+export type ScenarioTemplate = typeof scenarioTemplates.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Innovation: signed webhook subscriptions                            */
+/* ------------------------------------------------------------------ */
+
+export const webhookSubscriptions = mysqlTable("webhook_subscriptions", {
+  subId: varchar("sub_id", { length: 64 }).primaryKey(),
+  url: varchar("url", { length: 512 }).notNull(),
+  /** Topics filter (dot-namespaced, docs/EVENTS.md). */
+  topics: json("topics").notNull(),
+  /** HMAC-SHA256 signing secret (X-PolicyTwin-Signature). */
+  secret: varchar("secret", { length: 128 }).notNull(),
+  active: int("active").default(1).notNull(),
+  createdBy: bigint("created_by", { mode: "number", unsigned: true }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type WebhookSubscription = typeof webhookSubscriptions.$inferSelect;
