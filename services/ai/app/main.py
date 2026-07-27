@@ -169,6 +169,16 @@ async def routing_audit(request: Request, limit: int = 100):
     return _envelope(request, {"entries": entries, "count": len(entries)})
 
 
+@app.get("/v1/regression/latest")
+async def regression_latest(request: Request):
+    """Latest model/prompt regression report (golden Q&A harness)."""
+    from app import regression
+    report = regression.latest_report()
+    if report is None:  # first call computes it (fast, fully offline)
+        report = regression.run_regression()
+    return _envelope(request, report.to_dict())
+
+
 def main() -> None:  # pragma: no cover
     import uvicorn
     uvicorn.run("app.main:app", host=settings.host, port=settings.port)
