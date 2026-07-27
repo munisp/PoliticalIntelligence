@@ -314,10 +314,17 @@ export function createConsumer(
   let kafkaConsumer: { connect(): Promise<void>; subscribe(c: unknown): Promise<void>; run(c: unknown): Promise<void>; disconnect(): Promise<void> } | null = null;
 
   async function alreadyDead(eventId: string): Promise<boolean> {
+    const { and } = await import("drizzle-orm");
     const rows = await getDb()
       .select({ eventId: schema.eventDlq.eventId })
       .from(schema.eventDlq)
-      .where(eq(schema.eventDlq.eventId, eventId))
+      .where(
+        and(
+          eq(schema.eventDlq.eventId, eventId),
+          // Replayed rows are back on the bus — not dead anymore.
+          isNull(schema.eventDlq.replayedAt),
+        ),
+      )
       .limit(1);
     return rows.length > 0;
   }
@@ -444,6 +451,146 @@ export function createConsumer(
       kafkaConsumer = null;
     },
   };
+}
+
+/* ------------------------------ Replay ------------------------------- */
+
+export interface ReplayOptions {
+  topic: string;
+  /** Only rows created at/after this ISO timestamp. */
+  since?: string;
+  limit?: number;
+  /** Which backlog to replay: dead-lettered rows, stuck outbox rows, both. */
+  source?: "dlq" | "outbox" | "both";
+  /** Actor id recorded in the replay audit event. */
+  actorId?: number | null;
+}
+
+export interface ReplayResult {
+  topic: string;
+  mode: "kafka" | "outbox";
+  replayed_dlq: number;
+  replayed_outbox: number;
+}
+
+/**
+ * Event replay (docs/EVENTS.md §replay; gap EVT-2).
+ *
+ *  - DLQ rows are REQUEUED: removed from `event_dlq` and reset in
+ *    `event_outbox` (attempts=0, delivered_at=NULL) so the consumer group
+ *    picks them up again with full retry semantics. In Kafka mode the
+ *    event is published back to its source topic directly.
+ *  - Stuck outbox rows (undelivered, attempts>0) are reset for another
+ *    relay pass when source includes "outbox".
+ *
+ * Every replay is recorded in the audit trail (`events.replayed`).
+ */
+export async function replayEvents(opts: ReplayOptions): Promise<ReplayResult> {
+  const { and, gte, isNotNull } = await import("drizzle-orm");
+  const topic = opts.topic;
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 1000);
+  const source = opts.source ?? "dlq";
+  const producer = await getProducer();
+  const mode = producer ? "kafka" : "outbox";
+  const sinceDate = opts.since ? new Date(opts.since) : null;
+
+  let replayedDlq = 0;
+  let replayedOutbox = 0;
+
+  if (source === "dlq" || source === "both") {
+    const conds = [eq(schema.eventDlq.topic, topic)];
+    if (sinceDate) conds.push(gte(schema.eventDlq.createdAt, sinceDate));
+    const rows = await getDb()
+      .select()
+      .from(schema.eventDlq)
+      .where(and(...conds))
+      .orderBy(asc(schema.eventDlq.createdAt))
+      .limit(limit);
+    for (const row of rows) {
+      if (producer) {
+        // Kafka mode: publish back to the source topic.
+        await producer.send({
+          topic,
+          messages: [
+            {
+              ...(row.partitionKey ? { key: row.partitionKey } : {}),
+              value: JSON.stringify(row.payload),
+            },
+          ],
+        });
+      } else {
+        // Outbox mode: reset the outbox row so the polled consumer group
+        // re-processes it (consumers skip event_ids still present in DLQ,
+        // so the DLQ row is deleted below).
+        await getDb()
+          .insert(schema.eventOutbox)
+          .values({
+            eventId: row.eventId,
+            topic: row.topic,
+            partitionKey: row.partitionKey ?? null,
+            payload: row.payload as never,
+            attempts: 0,
+            lastError: null,
+            deliveredAt: null,
+          })
+          .onDuplicateKeyUpdate({
+            set: { attempts: 0, lastError: null, deliveredAt: null },
+          });
+      }
+      // Stamp (not delete) the DLQ row: the replay itself is auditable.
+      // Consumers ignore DLQ rows that have been replayed (see alreadyDead).
+      await getDb()
+        .update(schema.eventDlq)
+        .set({ replayedAt: new Date() })
+        .where(eq(schema.eventDlq.eventId, row.eventId));
+      replayedDlq += 1;
+    }
+  }
+
+  if (source === "outbox" || source === "both") {
+    // Stuck undelivered outbox rows (relay exhausted): reset attempts.
+    const conds = [
+      eq(schema.eventOutbox.topic, topic),
+      isNull(schema.eventOutbox.deliveredAt),
+      isNotNull(schema.eventOutbox.lastError),
+    ];
+    if (sinceDate) conds.push(gte(schema.eventOutbox.createdAt, sinceDate));
+    const stuck = await getDb()
+      .select({ eventId: schema.eventOutbox.eventId })
+      .from(schema.eventOutbox)
+      .where(and(...conds))
+      .limit(limit);
+    for (const row of stuck) {
+      await getDb()
+        .update(schema.eventOutbox)
+        .set({ attempts: 0, lastError: null })
+        .where(eq(schema.eventOutbox.eventId, row.eventId));
+      replayedOutbox += 1;
+    }
+  }
+
+  // Replay audit (tamper-evident chain via insertAuditEvent).
+  try {
+    const { insertAuditEvent } = await import("../queries/audit");
+    await insertAuditEvent({
+      actorId: opts.actorId ?? null,
+      action: "events.replayed",
+      entityType: "event_topic",
+      entityId: topic,
+      payload: {
+        topic,
+        mode,
+        source,
+        since: opts.since ?? null,
+        replayed_dlq: replayedDlq,
+        replayed_outbox: replayedOutbox,
+      } as never,
+    });
+  } catch (err) {
+    console.error("[events] replay audit insert failed:", err);
+  }
+
+  return { topic, mode, replayed_dlq: replayedDlq, replayed_outbox: replayedOutbox };
 }
 
 /* --------------------------- Emit helpers ---------------------------- */
