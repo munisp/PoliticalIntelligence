@@ -239,7 +239,7 @@ jobs:
           echo "RELEASE GATE — all of the following must be green (they are, or this job would not run):"
           echo "  [x] node typecheck + build"
           echo "  [x] node unit tests (vitest)"
-          echo "  [x] python tests: simulation, ai, ingestion"
+          echo "  [x] python tests: simulation, ai, ingestion, documents"
           echo "  [x] e2e API suite + NFR perf smoke against MySQL"
           echo "  [x] security: npm audit (high) + gitleaks"
           echo "  [x] docker images build (app, simulation, ai)"
@@ -249,3 +249,100 @@ jobs:
           echo "  [ ] model eval + prompt regression within deltas"
           echo "  [ ] simulation calibration report attached"
           echo "  [ ] staging canary bake window"
+
+  # --------------------------------------------------------------------
+  # Deploy / GitOps (gap 11). main-only, behind the release gate.
+  # staging: build+push images, then kubectl apply -k overlays/staging.
+  # prod:    separate job gated by a MANUAL-APPROVAL GitHub environment.
+  # Real credentials come from GitHub secrets/environments — where a
+  # secret is required the step is present but clearly marked; nothing is
+  # faked (no-op echoes are annotated as awaiting credentials).
+  # --------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy → staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [release-gate]
+    environment:
+      name: staging
+      url: https://staging.policy-twin.example.gov
+    env:
+      REGISTRY: ghcr.io/${{ github.repository_owner }}
+      IMAGE_TAG: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Registry login — requires GHCR (GITHUB_TOKEN, default) or set
+      # REGISTRY_USERNAME/REGISTRY_PASSWORD secrets for another registry.
+      - name: Registry login
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push service images
+        run: |
+          set -e
+          for svc in app simulation ai ingestion documents; do
+            case "$svc" in
+              app) ctx="."; df="infra/docker/Dockerfile.app" ;;
+              *)   ctx="services/$svc"; df="services/$svc/Dockerfile" ;;
+            esac
+            docker build -t "$REGISTRY/policy-twin-$svc:$IMAGE_TAG" \
+              -f "$df" "$ctx"
+            docker push "$REGISTRY/policy-twin-$svc:$IMAGE_TAG"
+          done
+
+      # Cluster credentials — place the staging kubeconfig in the
+      # `staging` environment as secret KUBECONFIG_STAGING (base64 or raw
+      # YAML). Until it exists this step reports honestly and exits 0 so
+      # the pipeline shape is verifiable without a live cluster.
+      - name: Apply staging overlay (kubectl -k)
+        env:
+          KUBECONFIG_STAGING: ${{ secrets.KUBECONFIG_STAGING }}
+        run: |
+          if [ -z "$KUBECONFIG_STAGING" ]; then
+            echo "::warning::KUBECONFIG_STAGING not configured — image push done, cluster apply skipped (awaiting credentials)"
+            exit 0
+          fi
+          echo "$KUBECONFIG_STAGING" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          # Pin images to this build, then apply the staging overlay.
+          cd infra/k8s/overlays/staging
+          for svc in app simulation ai ingestion documents; do
+            kustomize edit set image \
+              "policy-twin/$svc=$REGISTRY/policy-twin-$svc:$IMAGE_TAG" || true
+          done
+          kubectl apply -k .
+          kubectl rollout status -n policy-twin deploy/app --timeout=300s
+
+  deploy-prod:
+    name: Deploy → production (manual approval)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [deploy-staging]
+    # The `production` GitHub environment is configured with REQUIRED
+    # REVIEWERS — this job blocks for manual approval before any step runs.
+    environment:
+      name: production
+      url: https://policy-twin.example.gov
+    env:
+      REGISTRY: ghcr.io/${{ github.repository_owner }}
+      IMAGE_TAG: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply production overlay (kubectl -k)
+        env:
+          KUBECONFIG_PROD: ${{ secrets.KUBECONFIG_PROD }}
+        run: |
+          if [ -z "$KUBECONFIG_PROD" ]; then
+            echo "::error::KUBECONFIG_PROD not configured — refusing to deploy to production"
+            exit 1
+          fi
+          echo "$KUBECONFIG_PROD" > "$RUNNER_TEMP/kubeconfig"
+          export KUBECONFIG="$RUNNER_TEMP/kubeconfig"
+          kubectl apply -k infra/k8s/overlays/prod
+          kubectl rollout status -n policy-twin deploy/app --timeout=600s

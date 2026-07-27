@@ -1,0 +1,66 @@
+# Argo CD Applications for the Policy Twin platform (ENV-4, gap 11).
+#
+# Two Applications over the SAME kustomize overlays the CI deploy jobs use:
+#   policy-twin-staging  auto-sync + self-heal (continuous deployment)
+#   policy-twin-prod     manual sync only (change-controlled release)
+#
+# Argo CD image-updater (optional) keeps staging on the newest sha-* tag;
+# production tags are bumped by PR (GitOps, never by CI mutation).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policy-twin-staging
+  namespace: argocd
+  labels:
+    platform: policy-twin
+    env: staging
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/CHANGE-ME/policy-twin.git
+    targetRevision: main
+    path: infra/k8s/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: policy-twin-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policy-twin-prod
+  namespace: argocd
+  labels:
+    platform: policy-twin
+    env: prod
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/CHANGE-ME/policy-twin.git
+    targetRevision: main
+    path: infra/k8s/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: policy-twin
+  syncPolicy:
+    # NO automated block: production syncs are manual (argocd app sync or
+    # the UI), matching the manual-approval `production` environment in CI.
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 2
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
