@@ -45,3 +45,39 @@ export function requireRole(
 export function requireSignOff(ctx: AuthedCtx): void {
   requireRole(ctx, ["executive"]);
 }
+
+/* ------------------------------------------------------------------ */
+/* Jurisdiction-scoped authorization (ABAC)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Assert the actor may operate within `jurisdictionId`.
+ * platform_admin and executive are jurisdiction-global; every other role
+ * needs a row in user_jurisdictions (access level >= `minLevel`).
+ * Throws FORBIDDEN with the standard error envelope otherwise.
+ */
+export async function assertJurisdictionAccess(
+  ctx: AuthedCtx,
+  jurisdictionId: string,
+  minLevel: "read" | "write" | "admin" = "read",
+): Promise<void> {
+  const role = resolveRole(ctx.user);
+  if (role === "platform_admin" || role === "executive") return;
+  const { jurisdictionsForUser } = await import("../queries/users");
+  const grants = await jurisdictionsForUser(ctx.user.id);
+  const grant = grants.find((g) => g.jurisdictionId === jurisdictionId);
+  const rank = { read: 0, write: 1, admin: 2 } as const;
+  if (!grant || rank[grant.accessLevel] < rank[minLevel]) {
+    throw apiError(ctx, {
+      http: "FORBIDDEN",
+      code: "JURISDICTION_ACCESS_DENIED",
+      message: `No ${minLevel} access to jurisdiction ${jurisdictionId}`,
+      retryable: false,
+      details: {
+        jurisdiction_id: jurisdictionId,
+        required: minLevel,
+        granted: grant?.accessLevel ?? null,
+      },
+    });
+  }
+}
