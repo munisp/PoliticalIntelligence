@@ -1,0 +1,28 @@
+{
+  "name": "Meridian Policy Twin",
+  "short_name": "Policy Twin",
+  "description": "Jurisdiction economic intelligence and policy digital twin. Evidence before policy.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0B1220",
+  "background_color": "#0B1220",
+  "lang": "en",
+  "categories": ["government", "productivity", "business"],
+  "icons": [
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
