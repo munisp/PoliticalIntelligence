@@ -83,3 +83,4 @@ export async function adminUnitTree(jurisdictionId: string) {
     .filter((u) => rootSet.has(u.adminUnitId))
     .map((u) => ({ ...u, children: build(u.adminUnitId) }));
 }
+
