@@ -1,10 +1,10 @@
 import { Hono, type Context } from "hono";
 import { TRPCError } from "@trpc/server";
-import { nanoid } from "nanoid";
 import { appRouter } from "./router";
 import type { TrpcContext } from "./context";
 import { authenticateRequest } from "./kimi/auth";
 import type { ErrorEnvelope } from "@contracts/entities";
+import { envelope } from "./utils/envelope";
 
 /**
  * Canonical REST /v1 facade (docs/API.md) over the same procedures the tRPC
@@ -69,12 +69,16 @@ function toRestError(c: Context, err: unknown): Response {
 
 /** Wrap a handler with REST error mapping. */
 function handle(
-  fn: (c: Context, caller: ReturnType<typeof callerFor>) => Promise<Response>,
+  fn: (
+    c: Context,
+    caller: ReturnType<typeof callerFor>,
+    ctx: TrpcContext,
+  ) => Promise<Response>,
 ) {
   return async (c: Context) => {
     try {
       const ctx = await buildCtx(c.req.raw);
-      return await fn(c, callerFor(ctx));
+      return await fn(c, callerFor(ctx), ctx);
     } catch (err) {
       return toRestError(c, err);
     }
@@ -82,6 +86,44 @@ function handle(
 }
 
 const num = (v: string | undefined) => (v === undefined ? undefined : Number(v));
+
+/**
+ * Uniform Idempotency-Key enforcement for ALL mutating REST routes (API-5).
+ * Returns the key when present (>= 8 chars); otherwise the standard error
+ * envelope. Call sites:
+ *   const idk = requireIdempotencyKey(c);
+ *   if (!idk.key) return c.json({ error: idk.error }, 400);
+ */
+function requireIdempotencyKey(c: Context): {
+  key: string | null;
+  error: ErrorEnvelope | null;
+} {
+  const key = c.req.header("Idempotency-Key");
+  if (!key || key.length < 8) {
+    return {
+      key: null,
+      error: {
+        code: "IDEMPOTENCY_KEY_REQUIRED",
+        message: "Idempotency-Key header (>= 8 chars) is required",
+        request_id: "unknown",
+        retryable: false,
+      },
+    };
+  }
+  return { key, error: null };
+}
+
+/* Auth (spec §7) ------------------------------------------------------------ */
+
+rest.get("/auth/me", handle(async (c, caller, ctx) => {
+  const user = await caller.auth.me();
+  return c.json(envelope(user, ctx), 200);
+}));
+
+rest.get("/auth/permissions", handle(async (c, caller) => {
+  const data = await caller.auth.permissions();
+  return c.json(data, 200);
+}));
 
 rest.get("/jurisdictions", handle(async (c, caller) => {
   const data = await caller.jurisdictions.list({
@@ -115,25 +157,12 @@ rest.get("/opportunities/rankings", handle(async (c, caller) => {
 }));
 
 rest.post("/opportunities/generate", handle(async (c, caller) => {
+  const idk = requireIdempotencyKey(c);
+  if (!idk.key) return c.json({ error: idk.error }, 400);
   const body = await c.req.json().catch(() => ({}));
-  const idempotencyKey =
-    c.req.header("Idempotency-Key") ?? (body.idempotency_key as string | undefined);
-  if (!idempotencyKey || idempotencyKey.length < 8) {
-    return c.json(
-      {
-        error: {
-          code: "IDEMPOTENCY_KEY_REQUIRED",
-          message: "Idempotency-Key header (>= 8 chars) is required",
-          request_id: "unknown",
-          retryable: false,
-        } satisfies ErrorEnvelope,
-      },
-      400,
-    );
-  }
   const data = await caller.opportunities.generate({
     opportunity_id: body.opportunity_id,
-    idempotency_key: idempotencyKey,
+    idempotency_key: idk.key,
   });
   return c.json(data, 202);
 }));
@@ -144,18 +173,21 @@ rest.get("/jobs/:id", handle(async (c, caller) => {
 }));
 
 rest.post("/scenarios", handle(async (c, caller) => {
+  const idk = requireIdempotencyKey(c);
+  if (!idk.key) return c.json({ error: idk.error }, 400);
   const body = await c.req.json().catch(() => ({}));
-  const data = await caller.scenarios.create(body);
+  const data = await caller.scenarios.create({ ...body, idempotency_key: idk.key });
   return c.json(data, 202);
 }));
 
 rest.post("/scenarios/:id/runs", handle(async (c, caller) => {
+  const idk = requireIdempotencyKey(c);
+  if (!idk.key) return c.json({ error: idk.error }, 400);
   const body = await c.req.json().catch(() => ({}));
   const data = await caller.scenarios.addRun({
     ...body,
     scenario_id: c.req.param("id")!,
-    idempotency_key:
-      c.req.header("Idempotency-Key") ?? body.idempotency_key ?? `rest_${nanoid(24)}`,
+    idempotency_key: idk.key,
   });
   return c.json(data, 202);
 }));
@@ -181,6 +213,16 @@ rest.post("/legislation/graph-query", handle(async (c, caller) => {
   return c.json(data, 200);
 }));
 
+// SR-8: clause-level law comparison (deterministic alignment engine).
+rest.post("/legislation/compare", handle(async (c, caller) => {
+  const body = await c.req.json().catch(() => ({}));
+  const data = await caller.legislation.compare({
+    law_id_a: body.law_id_a,
+    law_id_b: body.law_id_b,
+  });
+  return c.json(data, 200);
+}));
+
 rest.get("/search", handle(async (c, caller) => {
   const data = await caller.search.query({
     q: c.req.query("q") ?? "-",
@@ -190,12 +232,23 @@ rest.get("/search", handle(async (c, caller) => {
   return c.json(data, 200);
 }));
 
+rest.get("/sectors", handle(async (c, caller) => {
+  const data = await caller.sectors.list();
+  return c.json(data, 200);
+}));
+
+rest.get("/briefs/:id", handle(async (c, caller) => {
+  const data = await caller.briefs.get({ brief_id: c.req.param("id")! });
+  return c.json(data, 200);
+}));
+
 rest.post("/briefs", handle(async (c, caller) => {
+  const idk = requireIdempotencyKey(c);
+  if (!idk.key) return c.json({ error: idk.error }, 400);
   const body = await c.req.json().catch(() => ({}));
   const data = await caller.briefs.generate({
     ...body,
-    idempotency_key:
-      c.req.header("Idempotency-Key") ?? body.idempotency_key ?? `rest_${nanoid(24)}`,
+    idempotency_key: idk.key,
   });
   return c.json(data, 202);
 }));

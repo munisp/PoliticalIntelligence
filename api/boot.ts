@@ -25,10 +25,19 @@ app.use("*", async (c, next) => {
   );
 });
 
-// Liveness/readiness probe (compose healthcheck target).
-app.get("/healthz", (c) =>
-  c.json({ status: "ok", api_version: "v1", ts: new Date().toISOString() }),
-);
+// Liveness/readiness probe (compose healthcheck target). Readiness is real:
+// a DB probe (SELECT 1) decides 200 vs 503 (API-6).
+app.get("/healthz", async (c) => {
+  const base = { api_version: "v1", ts: new Date().toISOString() };
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { sql } = await import("drizzle-orm");
+    await getDb().execute(sql`select 1`);
+    return c.json({ status: "ok", db: "up", ...base }, 200);
+  } catch {
+    return c.json({ status: "degraded", db: "down", ...base }, 503);
+  }
+});
 
 // Prometheus scrape endpoint.
 app.get("/metrics", async (c) => {

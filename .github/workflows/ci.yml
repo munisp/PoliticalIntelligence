@@ -213,6 +213,12 @@ jobs:
           - name: ai
             context: services/ai
             dockerfile: services/ai/Dockerfile
+          - name: ingestion
+            context: services/ingestion
+            dockerfile: services/ingestion/Dockerfile
+          - name: documents
+            context: services/documents
+            dockerfile: services/documents/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -242,7 +248,7 @@ jobs:
           echo "  [x] python tests: simulation, ai, ingestion, documents"
           echo "  [x] e2e API suite + NFR perf smoke against MySQL"
           echo "  [x] security: npm audit (high) + gitleaks"
-          echo "  [x] docker images build (app, simulation, ai)"
+          echo "  [x] docker images build (app, simulation, ai, ingestion, documents)"
           echo "Pre-release evidence still required outside CI (docs/TESTING.md gates):"
           echo "  [ ] k6 full profiles on staging (tests/k6/)"
           echo "  [ ] dbt data contracts on staging data"

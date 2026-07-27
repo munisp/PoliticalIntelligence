@@ -20,6 +20,7 @@ import {
   updateClauseReviewState,
 } from "./queries/legislation";
 import { findDocument } from "./queries/admin";
+import { computePolicyDiff } from "./lib/policy-diff";
 import {
   CLAUSE_REVIEW_CONFIDENCE,
   type ClauseArtifact,
@@ -143,6 +144,32 @@ export const legislationRouter = createRouter({
         }),
         ctx,
       );
+    }),
+
+  /**
+   * Clause-level comparison of two laws (SR-8). Reuses the deterministic
+   * clause-alignment engine from the innovations policyDiff surface
+   * (api/lib/policy-diff.ts) — identical inputs yield identical outputs.
+   */
+  compare: publicQuery
+    .input(
+      z.object({
+        law_id_a: z.string().min(1),
+        law_id_b: z.string().min(1),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { result, missingLawId } = await computePolicyDiff(
+        input.law_id_a,
+        input.law_id_b,
+      );
+      if (!result)
+        throw apiError(ctx, {
+          http: "NOT_FOUND",
+          code: "LAW_NOT_FOUND",
+          message: `Law ${missingLawId} not found`,
+        });
+      return envelope(result, ctx);
     }),
 
   reviewQueue: authedQuery
