@@ -123,7 +123,15 @@ export const jurisdictionsRouter = createRouter({
             metrics_covered: latest.length,
           },
           scores,
-          metrics,
+          // Additive provenance per metric (feat-ingestion).
+          metrics: metrics.map((m) => ({
+            ...m,
+            provenance: {
+              origin: m.origin,
+              source_url: m.sourceUrl,
+              fetched_at: m.fetchedAt,
+            },
+          })),
           evidence_sources: evidenceSources,
           data_sources: dataSourcesUsed,
         },

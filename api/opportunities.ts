@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { confidenceTier } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit, requestMeta } from "./utils/envelope";
-import { requireRole } from "./utils/rbac";
+import { requireRole, assertJurisdictionAccess } from "./utils/rbac";
 import {
   evidenceByIds,
   findOpportunitiesByIds,
@@ -28,6 +28,11 @@ export const opportunitiesRouter = createRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      const jur = input.jurisdiction_id ?? input.geography;
+      // ABAC: authenticated actors are restricted to assigned jurisdictions.
+      if (ctx.user && jur) {
+        await assertJurisdictionAccess(ctx as never, jur, "read");
+      }
       const page = await opportunityRankings({
         jurisdictionId: input.jurisdiction_id ?? input.geography,
         sectorCode: input.sector_code,
@@ -42,6 +47,12 @@ export const opportunitiesRouter = createRouter({
           items: page.items.map((o) => ({
             ...o,
             confidence_tier: confidenceTier(o.confidence),
+            // Additive provenance label (feat-ingestion): live/derived/seed.
+            provenance: {
+              origin: o.origin,
+              source_url: o.sourceUrl,
+              fetched_at: o.fetchedAt,
+            },
           })),
         },
         ctx,
@@ -152,6 +163,7 @@ export const opportunitiesRouter = createRouter({
           code: "OPPORTUNITY_NOT_FOUND",
           message: `Opportunity ${input.opportunity_id} not found`,
         });
+      await assertJurisdictionAccess(ctx, opp.jurisdictionId, "write");
       const jobId = `job:${nanoid(16)}`;
       await insertJob({
         jobId,

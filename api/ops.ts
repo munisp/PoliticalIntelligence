@@ -92,4 +92,30 @@ export const opsRouter = createRouter({
       ctx,
     );
   }),
+
+  /**
+   * Ingestion service reports processed-record counts here so the
+   * ingestion_records_total metric has data on every pipeline completion.
+   */
+  recordIngestion: authedQuery
+    .input(
+      z.object({
+        source_id: z.string().min(1),
+        records: z.number().int().min(0),
+        pipeline_id: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const role = resolveRole(ctx.user);
+      if (role !== "data_steward" && role !== "platform_admin" && ctx.user.role !== "admin")
+        throw apiError(ctx, {
+          http: "FORBIDDEN",
+          code: "FORBIDDEN",
+          message: "Recording ingestion requires data_steward role",
+          details: { actual: role },
+        });
+      const { ingestionRecordsTotal } = await import("./utils/metrics");
+      ingestionRecordsTotal.inc({ source: input.source_id }, input.records);
+      return envelope({ source_id: input.source_id, recorded: input.records }, ctx);
+    }),
 });

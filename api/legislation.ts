@@ -6,7 +6,7 @@ import {
 } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit } from "./utils/envelope";
-import { requireRole } from "./utils/rbac";
+import { requireRole, assertJurisdictionAccess } from "./utils/rbac";
 import {
   approvalEventsFor,
   citationTrace,
@@ -151,6 +151,11 @@ export const legislationRouter = createRouter({
           code: "CLAUSE_NOT_FOUND",
           message: `Clause ${input.clause_id} not found`,
         });
+      const law = await findLaw(clause.lawId);
+      if (law) {
+        // ABAC: legal review is jurisdiction-scoped like other domains.
+        await assertJurisdictionAccess(ctx, law.jurisdictionId, "write");
+      }
       const from = clause.reviewState;
       const allowed = TRANSITIONS[from] ?? [];
       if (!allowed.includes(input.to_state))
