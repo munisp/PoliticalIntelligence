@@ -521,7 +521,7 @@ function SpecialistBuilder({
         }
       }}
     >
-      {/* ---------------------- Form --------------------------- */}
+      {/* --------------------------- Form --------------------------- */}
       <motion.div
         className="space-y-3 lg:col-span-7"
         initial="hidden"
@@ -917,3 +917,4 @@ function shortLabel(runId: string): string {
   const raw = runId.replace(/^sim:/, "");
   return `#${raw.slice(0, 6).toUpperCase()}`;
 }
+
