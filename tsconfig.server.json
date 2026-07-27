@@ -7,6 +7,12 @@
     "moduleResolution": "bundler",
     "types": ["node"],
     "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@contracts/*": ["./contracts/*"],
+      "@db/*": ["./db/*"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
@@ -15,11 +21,8 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
-    "paths": {
-      "@contracts/*": ["./contracts/*"],
-      "@db/*": ["./db/*"]
-    }
+    "resolveJsonModule": true,
+    "esModuleInterop": true
   },
-  "include": ["api", "contracts", "db"]
+  "include": ["api", "db", "contracts", "drizzle.config.ts", "vitest.config.ts"]
 }

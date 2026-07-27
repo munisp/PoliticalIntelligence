@@ -34,3 +34,21 @@ export async function upsertUser(data: InsertUser) {
     .values(values)
     .onDuplicateKeyUpdate({ set: updateSet });
 }
+
+/* ---------------------- user jurisdictions (ABAC) -------------------- */
+
+export async function jurisdictionsForUser(userId: number) {
+  return getDb()
+    .select()
+    .from(schema.userJurisdictions)
+    .where(eq(schema.userJurisdictions.userId, userId));
+}
+
+export async function grantJurisdiction(
+  row: typeof schema.userJurisdictions.$inferInsert,
+) {
+  await getDb()
+    .insert(schema.userJurisdictions)
+    .values(row)
+    .onDuplicateKeyUpdate({ set: { accessLevel: row.accessLevel } });
+}

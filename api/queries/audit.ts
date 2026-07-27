@@ -2,10 +2,24 @@ import { desc, lt, and, eq, like } from "drizzle-orm";
 import * as schema from "@db/schema";
 import { getDb } from "./connection";
 
+/**
+ * Append a hash-chained audit event (tamper-evident, see utils/auditchain).
+ * Serialized in-process so prev_hash always links the true predecessor.
+ */
 export async function insertAuditEvent(
   row: typeof schema.auditEvents.$inferInsert,
 ) {
-  await getDb().insert(schema.auditEvents).values(row);
+  const { appendChained } = await import("../utils/auditchain");
+  await appendChained({
+    actorId: row.actorId ?? null,
+    action: row.action,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    scopes: row.scopes ?? null,
+    requestId: row.requestId ?? null,
+    correlationId: row.correlationId ?? null,
+    payload: row.payload ?? null,
+  });
 }
 
 /** Cursor = last seen eventId (keyset, newest first). Append-only table. */

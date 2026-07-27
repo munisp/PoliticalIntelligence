@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import type { SimulationEngine } from "@contracts/entities";
 import { EventTopics } from "@contracts/entities";
-import { createJobRunner, type JobRunner } from "./utils/jobs";
+import { createJobRunner, type JobHandler, type JobRunner } from "./utils/jobs";
 import { dbJobStore, findJob } from "./queries/admin";
 import { insertAuditEvent } from "./queries/audit";
 import {
@@ -19,7 +19,14 @@ import { findBrief, updateBrief } from "./queries/briefs";
 import { findDocument } from "./queries/admin";
 import { updateDocumentState } from "./queries/documents";
 import { generateRecommendation } from "./bridges/ai";
-import { executeScenarioRun } from "./bridges/simulation";
+import { executeScenarioRun, runFallbackEngine } from "./bridges/simulation";
+import { emitEvent, emitJobLifecycle } from "./utils/events";
+import {
+  jobsTotal,
+  jobsFailedTotal,
+  simulationRunsTotal,
+} from "./utils/metrics";
+import { metricsForJurisdiction, twinStatesFor, upsertTwinState } from "./queries/innovations";
 
 async function auditBackground(
   actorId: number | null,
@@ -50,6 +57,27 @@ async function auditBackground(
  * and emit audit events. Status polling reads the `jobs` table.
  */
 export const jobRunner: JobRunner = createJobRunner(dbJobStore);
+
+/**
+ * Register with instrumentation: jobs_total / jobs_failed_total counters and
+ * job-lifecycle domain events (queued→running→succeeded/failed).
+ */
+const baseRegister = jobRunner.register.bind(jobRunner);
+jobRunner.register = (type: string, handler: JobHandler) => {
+  baseRegister(type, async (jobCtx) => {
+    jobsTotal.inc({ type });
+    await emitJobLifecycle("running", { jobId: jobCtx.jobId, type });
+    try {
+      const result = await handler(jobCtx);
+      await emitJobLifecycle("succeeded", { jobId: jobCtx.jobId, type });
+      return result;
+    } catch (err) {
+      jobsFailedTotal.inc({ type });
+      await emitJobLifecycle("failed", { jobId: jobCtx.jobId, type });
+      throw err;
+    }
+  });
+};
 
 /* ------------------------- opportunities.generate ------------------------ */
 
@@ -153,6 +181,18 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
     execution_profile: (run.executionProfile as Record<string, unknown>) ?? {},
   });
   await reportProgress(75);
+  simulationRunsTotal.inc({ engine: run.engine, bridge });
+  await emitEvent(
+    EventTopics.simulationsRunCompleted,
+    {
+      simulation_run_id,
+      scenario_id: run.scenarioId,
+      engine: run.engine,
+      bridge,
+      seed: run.seed,
+    },
+    run.scenarioId,
+  );
 
   await updateSimulationRunResult(simulation_run_id, {
     status: "succeeded",
@@ -180,6 +220,45 @@ jobRunner.register("briefs.generate", async ({ input, reportProgress }) => {
   };
   const brief = await findBrief(brief_id);
   if (!brief) throw new Error(`Brief ${brief_id} not found`);
+  await reportProgress(20);
+
+  // Citations rail: assemble the evidence bundle from DB evidence_sources
+  // linked to the brief's jurisdiction/opportunities (never left empty).
+  const opportunityIds = Array.isArray((input as { opportunity_ids?: string[] }).opportunity_ids)
+    ? ((input as { opportunity_ids?: string[] }).opportunity_ids as string[])
+    : [];
+  const linkedEvidenceIds = new Set<string>();
+  for (const oppId of opportunityIds) {
+    const opp = await findOpportunity(oppId);
+    if (opp && Array.isArray(opp.evidenceRefs)) {
+      for (const id of opp.evidenceRefs as string[]) linkedEvidenceIds.add(id);
+    }
+  }
+  let evidence = await evidenceByIds([...linkedEvidenceIds]);
+  if (evidence.length < 3) {
+    // Supplement with evidence sources linked to this jurisdiction's
+    // opportunities so the rail always cites real sources.
+    const { searchLike } = await import("./queries/admin");
+    const jurOpps = await searchLike({ q: "", jurisdictionId: brief.jurisdictionId, limit: 12 });
+    const extraIds = jurOpps.opportunities.flatMap((o) =>
+      Array.isArray(o.evidenceRefs) ? (o.evidenceRefs as string[]) : [],
+    );
+    const extra = await evidenceByIds(
+      extraIds.filter((id) => !linkedEvidenceIds.has(id)).slice(0, 8),
+    );
+    evidence = [...evidence, ...extra];
+  }
+  if (evidence.length < 3) {
+    const { allEvidenceSources } = await import("./queries/innovations");
+    const fallback = await allEvidenceSources(8);
+    const known = new Set(evidence.map((e) => e.evidenceSourceId));
+    evidence = [...evidence, ...fallback.filter((e) => !known.has(e.evidenceSourceId))];
+  }
+  const citationsRail = evidence.slice(0, 10).map((e) => ({
+    evidence_source_id: e.evidenceSourceId,
+    citation: e.citation,
+    confidence: e.confidence,
+  }));
   await reportProgress(40);
 
   // Structured, IBM-Plex-Serif-ready brief content with a citations rail.
@@ -204,7 +283,7 @@ jobRunner.register("briefs.generate", async ({ input, reportProgress }) => {
         body: "Proceed with the top-ranked option under phased procurement, subject to executive sign-off.",
       },
     ],
-    citations_rail: [] as { evidence_source_id: string; citation: string }[],
+    citations_rail: citationsRail,
     approval: { state: "in_review", handoff: "executive" },
   };
   await reportProgress(75);
@@ -238,6 +317,141 @@ jobRunner.register("documents.register", async ({ input, reportProgress }) => {
     routed_to_review: needsReview,
   });
   return { document_id, routed_to_review: needsReview };
+});
+
+/* -------------------------- innovations.backtest ----------------------- */
+
+jobRunner.register("innovations.backtest", async ({ input, reportProgress }) => {
+  const { scenario_id, engine, cutoff_month } = input as {
+    scenario_id: string;
+    engine: SimulationEngine;
+    cutoff_month: number;
+  };
+  const scenario = await findScenario(scenario_id);
+  if (!scenario) throw new Error(`Scenario ${scenario_id} not found`);
+  await reportProgress(25);
+
+  // "Actuals": full-horizon deterministic series (the twin's record).
+  const base = {
+    scenario_id,
+    engine,
+    seed: 42,
+    baseline_employment: 3_600_000,
+    intervention_strength: 0.5,
+  };
+  const actual = runFallbackEngine({ ...base, horizon_months: 36 });
+  await reportProgress(55);
+  // "Trained on pre-cutoff": fit on months <= cutoff, project the remainder.
+  const trained = runFallbackEngine({ ...base, horizon_months: cutoff_month });
+  const lastTrained = trained.series[trained.series.length - 1];
+  const prevTrained = trained.series[trained.series.length - 2] ?? lastTrained;
+  const growth = lastTrained.mean - prevTrained.mean;
+  const series: { month: number; actual: number; projected: number }[] = [];
+  let apeSum = 0;
+  let apeN = 0;
+  for (let m = cutoff_month + 1; m <= 36; m++) {
+    const projected = lastTrained.mean + growth * (m - cutoff_month);
+    const actualMean = actual.series[m]?.mean ?? 0;
+    series.push({ month: m, actual: actualMean, projected: Math.round(projected) });
+    if (actualMean !== 0) {
+      apeSum += Math.abs((actualMean - projected) / actualMean);
+      apeN += 1;
+    }
+  }
+  await reportProgress(85);
+  const mape = apeN > 0 ? (apeSum / apeN) * 100 : 0;
+  const result = {
+    scenario_id,
+    engine,
+    cutoff_month,
+    mape: Math.round(mape * 100) / 100,
+    skill_score: Math.max(0, Math.round((1 - mape / 100) * 1000) / 1000),
+    series,
+  };
+  await emitEvent(
+    EventTopics.simulationsRunCompleted,
+    { backtest: true, scenario_id, engine, mape: result.mape },
+    scenario_id,
+  );
+  return result;
+});
+
+/* ------------------------- innovations.recalibrate --------------------- */
+
+jobRunner.register("innovations.recalibrate", async ({ input, reportProgress }) => {
+  const { jurisdiction_id } = input as { jurisdiction_id: string };
+  await reportProgress(20);
+  const metrics = await metricsForJurisdiction(jurisdiction_id);
+  const existing = await twinStatesFor(jurisdiction_id);
+  const byLayer = new Map(existing.map((t) => [t.layer, t]));
+  await reportProgress(45);
+
+  // Latest observation per (sector, metric).
+  const latest = new Map<string, { value: number; period: string }>();
+  for (const m of metrics) {
+    latest.set(`${m.sectorCode}|${m.metricKey}`, { value: m.value, period: m.period });
+  }
+  const driftReport: {
+    layer: string;
+    prior: Record<string, number>;
+    updated: Record<string, number>;
+    moved: { metric: string; from: number; to: number; rel_change: number }[];
+  }[] = [];
+  const bySector = new Map<string, Map<string, number>>();
+  for (const [key, obs] of latest) {
+    const [sector, metric] = key.split("|");
+    if (!bySector.has(sector)) bySector.set(sector, new Map());
+    bySector.get(sector)!.set(metric, obs.value);
+  }
+  let i = 0;
+  for (const [sector, observed] of bySector) {
+    i += 1;
+    const prior = (byLayer.get(sector)?.state ?? null) as {
+      priors?: Record<string, number>;
+    } | null;
+    const priors = prior?.priors ?? {};
+    const updated: Record<string, number> = {};
+    const moved: { metric: string; from: number; to: number; rel_change: number }[] = [];
+    for (const [metric, value] of observed) {
+      const old = priors[metric];
+      // Bayesian-ish nudge: 70% prior / 30% observation (first obs = prior).
+      const next = old === undefined ? value : 0.7 * old + 0.3 * value;
+      updated[metric] = Math.round(next * 1000) / 1000;
+      if (old !== undefined && old !== 0) {
+        const rel = Math.abs(next - old) / Math.abs(old);
+        if (rel > 0.05) {
+          moved.push({
+            metric,
+            from: Math.round(old * 1000) / 1000,
+            to: updated[metric],
+            rel_change: Math.round(rel * 1000) / 1000,
+          });
+        }
+      }
+    }
+    const version = (byLayer.get(sector)?.version ?? 0) + 1;
+    await upsertTwinState({
+      jurisdictionId: jurisdiction_id,
+      layer: sector,
+      state: { priors: updated, calibrated_from: "sector_metrics" },
+      version,
+      calibratedAt: new Date(),
+    });
+    driftReport.push({ layer: sector, prior: priors, updated, moved });
+    await reportProgress(45 + Math.round((50 * i) / bySector.size));
+  }
+  const result = {
+    jurisdiction_id,
+    layers_calibrated: bySector.size,
+    drift: driftReport.filter((d) => d.moved.length > 0),
+    calibrated_at: new Date().toISOString(),
+  };
+  await emitEvent(
+    EventTopics.featuresMaterialized,
+    { recalibration: true, jurisdiction_id, layers: bySector.size },
+    jurisdiction_id,
+  );
+  return result;
 });
 
 /** Helper for routers: enqueue an already-persisted job row. */
