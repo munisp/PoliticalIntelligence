@@ -10,7 +10,14 @@ build/
 .env
 .env.*
 !.env.example
+.env.local
+.env.*.local
 *.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # Python
 __pycache__/
@@ -18,9 +25,15 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Platform artifacts
+# Platform artifacts (runs, exports, parsed docs)
 artifacts/
+
+# Test coverage
+coverage/
+.nyc_output/
 
 # OS / editor
 .DS_Store
