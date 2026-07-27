@@ -18,6 +18,7 @@ import MapPanel, {
   type MapMarker,
 } from "@/components/shared/MapPanel";
 import { isProcedureMissing } from "@/lib/innovations-client";
+import { useT } from "@/lib/LocaleContext";
 import EvidenceDrawer, {
   type EvidenceSource,
 } from "@/components/shared/EvidenceDrawer";
@@ -145,6 +146,7 @@ function freshnessFor(updatedAt: string | Date): {
 export default function Opportunities() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
+  const t = useT();
 
   /* ------------------------------ state ------------------------------ */
   const [filters, setFilters] = useState<FilterBarValue>(DEFAULT_FILTERS);
@@ -611,13 +613,13 @@ export default function Opportunities() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="caption-label text-ink-muted">
-            Kaduna State · Opportunity Explorer
+            {t.opportunities.caption}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
-            Sector Opportunity Explorer
+            {t.opportunities.title}
           </h1>
           <p className="mt-1 text-[13px] text-ink-secondary">
-            {allItems.length} ranked opportunities · Scoring model v2.4
+            {t.opportunities.subtitle.replace("{count}", String(allItems.length))}
             {generatedDate ? ` · Generated ${formatDate(new Date(generatedDate))}` : ""}
           </p>
           {/* Live async job status (aria-live per design.md §6) */}
@@ -651,7 +653,7 @@ export default function Opportunities() {
             className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle bg-ink-surface px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors hover:border-ink-strong hover:text-ink-primary"
           >
             <GitCompareArrows aria-hidden className="h-4 w-4" />
-            Compare ({compareIds.length}/3)
+            {t.opportunities.compare} ({compareIds.length}/3)
           </button>
           <button
             type="button"
@@ -659,7 +661,7 @@ export default function Opportunities() {
             className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3.5 py-1.5 text-sm font-medium text-ink-base transition-transform hover:bg-civic-strong active:scale-[0.98]"
           >
             <Sparkles aria-hidden className="h-4 w-4" />
-            Generate opportunities
+            {t.opportunities.generate}
           </button>
         </div>
       </header>
