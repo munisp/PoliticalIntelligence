@@ -1,0 +1,64 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: policy-twin
+resources:
+  - ../../base
+  - networkpolicy.yaml
+nameSuffix: -prod
+images:
+  - name: ghcr.io/munisp/politicalintelligence/app
+    newTag: stable
+  - name: ghcr.io/munisp/politicalintelligence/simulation
+    newTag: stable
+  - name: ghcr.io/munisp/politicalintelligence/ai
+    newTag: stable
+patches:
+  # Prod: hardened — 3 app replicas, premium-capable model tier, production data,
+  # isolated queue brokers per workload domain.
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: Deployment
+      name: app
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: simulation
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+    target:
+      kind: Deployment
+      name: ai
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: platform-config
+      data:
+        LOG_LEVEL: "warn"
+        DATA_MODE: "production"
+        MODEL_DEFAULT_TIER: "qwen3-32b"
+        # Isolated brokers per workload domain (ingest vs simulation vs AI)
+        # so a consumer stall in one domain cannot backpressure the others.
+        KAFKA_BROKERS_INGEST: "redpanda-ingest.eventing.svc.cluster.local:9092"
+        KAFKA_BROKERS_SIMULATION: "redpanda-sim.eventing.svc.cluster.local:9092"
+        KAFKA_BROKERS_AI: "redpanda-ai.eventing.svc.cluster.local:9092"
+    target:
+      kind: ConfigMap
+      name: platform-config
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: policy-twin.example.gov.ng
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: policy-twin.example.gov.ng
+    target:
+      kind: Ingress

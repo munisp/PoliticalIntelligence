@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: policy-twin
+resources:
+  - ../../base
+nameSuffix: -dev
+images:
+  - name: ghcr.io/munisp/politicalintelligence/app
+    newTag: dev
+  - name: ghcr.io/munisp/politicalintelligence/simulation
+    newTag: dev
+  - name: ghcr.io/munisp/politicalintelligence/ai
+    newTag: dev
+patches:
+  # Dev: single replica everywhere; synthetic data + small (Qwen3 dev) model tier.
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: platform-config
+      data:
+        LOG_LEVEL: "debug"
+        DATA_MODE: "synthetic"
+        MODEL_DEFAULT_TIER: "qwen3-dev"
+    target:
+      kind: ConfigMap
+      name: platform-config
+  - patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: policy-twin.dev.example.gov.ng
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: policy-twin.dev.example.gov.ng
+    target:
+      kind: Ingress
