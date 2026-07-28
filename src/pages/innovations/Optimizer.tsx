@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { EmptyState, SkeletonCard } from "@/components/shared";
 import InnovationPage, { InnovationError } from "@/components/innovations/InnovationPage";
+import { useT } from "@/lib/LocaleContext";
 import {
   useOptimizePortfolio,
   type OptimizePortfolioResult,
@@ -27,6 +28,7 @@ const RISK_OPTIONS = [
 const SECTOR_CAP_OPTIONS = [20, 30, 40, 50] as const;
 
 export default function Optimizer() {
+  const t = useT();
   const [budget, setBudget] = useState<string>("500000000");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [maxRisk, setMaxRisk] = useState<string>("medium");
@@ -66,7 +68,7 @@ export default function Optimizer() {
 
   return (
     <InnovationPage
-      title="Budget Portfolio Optimizer"
+      title={t.innovations.optimizerTitle}
       description="Allocate a capital budget across candidate interventions under risk and sector-cap constraints. The solver returns the selected portfolio, totals, and the constraints that bound the solution."
       Icon={Wallet}
       actions={
