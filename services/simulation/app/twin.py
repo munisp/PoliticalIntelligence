@@ -106,6 +106,40 @@ class TwinRegistry:
                     twin.model_dump(mode="json"))
             return twin
 
+    def recalibrate(self, jurisdiction_id: str,
+                    adjustments: dict[str, float],
+                    bounds: dict[str, tuple[float, float]],
+                    note: str = "") -> TwinState:
+        """SIM-5 recalibration hook: multiply behavioral priors by
+        backtest-derived adjustment factors (clamped to ``bounds``) and
+        persist the new twin state version."""
+        with self._lock:
+            twin = self._twins[jurisdiction_id]
+            twin.version += 1
+            for prior, factor in adjustments.items():
+                if not hasattr(twin.behavioral, prior):
+                    continue
+                lo, hi = bounds.get(prior, (0.0, float("inf")))
+                current = float(getattr(twin.behavioral, prior))
+                setattr(twin.behavioral, prior,
+                        round(min(max(current * factor, lo), hi), 6))
+            twin.adaptive.last_updated = datetime.now(timezone.utc).isoformat()
+            twin.adaptive.calibration_drift = round(
+                twin.adaptive.calibration_drift * 0.9
+                + sum(abs(f - 1.0) for f in adjustments.values()), 6)
+            if note:
+                twin.adaptive.notes.append(f"recalibrate: {note}"[:400])
+                twin.adaptive.notes = twin.adaptive.notes[-20:]
+            if self._store is not None:
+                self._store.put_json(
+                    f"twins/{jurisdiction_id}/twin-state-v{twin.version}.json",
+                    twin.model_dump(mode="json"))
+            log.info("twin recalibrated",
+                     extra={"jurisdiction_id": jurisdiction_id,
+                            "adjustments": adjustments,
+                            "version": twin.version})
+            return twin
+
     def snapshot(self, jurisdiction_id: str) -> TwinState | None:
         with self._lock:
             return self._twins.get(jurisdiction_id)
