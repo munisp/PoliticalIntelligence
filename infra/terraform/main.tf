@@ -1,85 +1,56 @@
-# Foundational infrastructure for the Policy Twin platform.
-# Stub modules — no real provider credentials. Select a cloud by setting
-# `cloud_provider` and filling in the matching provider block + module source.
-terraform {
-  required_version = ">= 1.7"
+provider "aws" {
+  region = var.region
 
-  # Remote state (example: S3 + DynamoDB lock). Configure per environment
-  # via backend config files — never commit credentials.
-  # backend "s3" {
-  #   bucket         = "policy-twin-tfstate"
-  #   key            = "foundation/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "policy-twin-tflock"
-  # }
-}
-
-# ── Network ──────────────────────────────────────────────────
-# One VPC/VNet with public (ingress) and private (workloads + data) subnets.
-module "network" {
-  source = "./modules/network"
-
-  name_prefix        = local.name_prefix
-  cidr_block         = var.vpc_cidr_block
-  availability_zones = var.availability_zones
-  tags               = local.common_tags
-}
-
-# ── Object storage ───────────────────────────────────────────
-# Bucket/container for raw documents, lakehouse (Iceberg) data, and backups.
-module "object_storage" {
-  source = "./modules/object_storage"
-
-  name_prefix          = local.name_prefix
-  bucket_name          = var.object_storage_bucket_name
-  versioning_enabled   = true
-  encryption_at_rest   = true
-  block_public_access  = true
-  tags                 = local.common_tags
-}
-
-# ── Kubernetes cluster ───────────────────────────────────────
-# Managed K8s (EKS/AKS/GKE depending on cloud_provider). Placeholder: the
-# module exposes node group sizing inputs; GPU node pools for model serving
-# are defined separately per docs/MODEL_STRATEGY.md.
-module "kubernetes" {
-  source = "./modules/kubernetes"
-
-  name_prefix        = local.name_prefix
-  cluster_version    = var.kubernetes_version
-  vpc_id             = module.network.vpc_id
-  private_subnet_ids = module.network.private_subnet_ids
-  node_groups = {
-    system = {
-      instance_types = var.system_node_instance_types
-      min_size       = 2
-      max_size       = 4
-      desired_size   = 2
-    }
-    workers = {
-      instance_types = var.worker_node_instance_types
-      min_size       = var.worker_node_min
-      max_size       = var.worker_node_max
-      desired_size   = var.worker_node_desired
-    }
-    # GPU pool placeholder for vLLM / Ray Serve (interactive + batch tiers).
-    gpu = {
-      instance_types = var.gpu_node_instance_types
-      min_size       = 0
-      max_size       = var.gpu_node_max
-      desired_size   = 0
-      taints         = ["workload=gpu:NoSchedule"]
-    }
+  default_tags {
+    tags = local.common_tags
   }
-  tags = local.common_tags
 }
 
 locals {
   name_prefix = "${var.project}-${var.environment}"
-  common_tags = {
-    Project     = var.project
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    CostCenter  = var.cost_center
-  }
+  common_tags = merge(
+    {
+      Project     = var.project
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    },
+    var.tags,
+  )
+}
+
+# Network: one VPC, public subnets (ingress/NAT) + private subnets (EKS
+# nodes, data services).
+module "vpc" {
+  source = "./modules/vpc"
+
+  name_prefix          = local.name_prefix
+  vpc_cidr             = var.vpc_cidr
+  availability_zones   = var.availability_zones
+  private_subnet_cidrs = var.private_subnet_cidrs
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  cluster_name         = local.name_prefix
+}
+
+# Kubernetes: EKS with managed node groups — a general-purpose pool plus a
+# tainted GPU pool (g5.xlarge) for AI inference, all on private subnets.
+module "eks" {
+  source = "./modules/eks"
+
+  name_prefix           = local.name_prefix
+  cluster_version       = var.eks_cluster_version
+  private_subnet_ids    = module.vpc.private_subnet_ids
+  node_instance_types   = var.node_instance_types
+  node_desired_size     = var.node_desired_size
+  enable_gpu_node_group = var.enable_gpu_node_group
+  gpu_instance_types    = var.gpu_instance_types
+}
+
+# Artifacts: versioned, encrypted, Object-Locked (compliance mode, default
+# 7-year retention) bucket for documents, lakehouse data, backups and WORM
+# audit exports.
+module "s3" {
+  source = "./modules/s3"
+
+  bucket_name                 = var.artifacts_bucket_name
+  object_lock_retention_years = var.object_lock_retention_years
 }
