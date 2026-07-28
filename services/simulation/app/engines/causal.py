@@ -39,27 +39,75 @@ def _normal_cdf(x: float) -> float:
     return 0.5 * (1.0 + erf(x / sqrt(2.0)))
 
 
+def _realized_arrays(panel: list[dict]) -> tuple[np.ndarray, np.ndarray, list[np.ndarray], str]:
+    """Build (outcome, treated, covariates, note) from a REALIZED panel.
+
+    Two shapes are supported:
+      * unit records — dicts with ``treated`` + ``outcome`` keys; every
+        other numeric key (except period) is used as a covariate.
+      * aggregated outcome observations — dicts with ``period`` +
+        ``value`` (optionally ``indicator``). The longest indicator series
+        is used; treatment is the deterministic post-median-period split
+        (level shift), adjusted for a linear time trend covariate.
+    """
+    if panel and "outcome" in panel[0]:
+        keys = sorted(
+            k for k in panel[0]
+            if k not in ("treated", "outcome", "period")
+            and isinstance(panel[0].get(k), (int, float))
+        )
+        y = np.array([float(r["outcome"]) for r in panel])
+        treated = np.array([float(r["treated"]) for r in panel])
+        covars = [np.array([float(r[k]) for r in panel]) for k in keys]
+        return y, treated, covars, f"unit records, covariates={keys}"
+    # Aggregated observations: pick the indicator with the most records
+    # (ties broken by indicator code for determinism).
+    by_indicator: dict[str, list[dict]] = {}
+    for r in panel:
+        by_indicator.setdefault(str(r.get("indicator", "-")), []).append(r)
+    indicator = sorted(by_indicator, key=lambda k: (-len(by_indicator[k]), k))[0]
+    obs = sorted(by_indicator[indicator], key=lambda r: str(r["period"]))
+    y = np.array([float(r["value"]) for r in obs])
+    n = len(obs)
+    split = n // 2
+    treated = np.array([0.0] * split + [1.0] * (n - split))
+    trend = np.arange(n, dtype=float)
+    return y, treated, [trend], (
+        f"aggregated observations, indicator={indicator}, "
+        f"treatment=post-{obs[split - 1]['period'] if split else 'start'} split"
+    )
+
+
 def run(ctx: EngineContext) -> EngineResult:
     rng = ctx.rng
     params = ctx.plan.parameters
     n_units = int(params.get("n_units", 2000))
     scale = intervention_scale(ctx)
 
-    # Synthetic observational panel: units with covariates, treatment assignment
-    # confounded by baseline income and education, true effect tied to intensity.
-    income = rng.lognormal(mean=11.3, sigma=0.5, size=n_units)
-    education = rng.normal(10.0, 3.0, size=n_units)
-    age = rng.normal(35.0, 10.0, size=n_units)
-    propensity = 1.0 / (1.0 + np.exp(-(-6.0 + 0.00001 * income + 0.15 * education)))
-    treated = rng.random(n_units) < np.clip(propensity, 0.02, 0.98)
-    true_effect = 0.06 * scale * (1.0 + 0.2 * education / 10.0)
-    noise = rng.normal(0.0, 0.05, size=n_units)
-    outcome = (0.3 + 0.000005 * income + 0.01 * education - 0.001 * age
-               + true_effect * treated + noise)
+    panel = ctx.panel if ctx.panel is not None else params.get("panel")
+    data_mode = "realized" if panel else "synthetic"
 
-    X = np.column_stack([
-        np.ones(n_units), treated.astype(float), income, education, age,
-    ])
+    if panel:
+        # G2: estimate on the REALIZED panel (same OLS + placebo refutation).
+        outcome, treated, covars, panel_note = _realized_arrays(list(panel))
+        n_units = len(outcome)
+    else:
+        # Synthetic observational panel: units with covariates, treatment
+        # assignment confounded by baseline income and education, true
+        # effect tied to intensity.
+        income = rng.lognormal(mean=11.3, sigma=0.5, size=n_units)
+        education = rng.normal(10.0, 3.0, size=n_units)
+        age = rng.normal(35.0, 10.0, size=n_units)
+        propensity = 1.0 / (1.0 + np.exp(-(-6.0 + 0.00001 * income + 0.15 * education)))
+        treated = rng.random(n_units) < np.clip(propensity, 0.02, 0.98)
+        true_effect = 0.06 * scale * (1.0 + 0.2 * education / 10.0)
+        noise = rng.normal(0.0, 0.05, size=n_units)
+        outcome = (0.3 + 0.000005 * income + 0.01 * education - 0.001 * age
+                   + true_effect * treated + noise)
+        covars = [income, education, age]
+        panel_note = "synthetic panel"
+
+    X = np.column_stack([np.ones(n_units), treated.astype(float), *covars])
     beta, se = _ols(outcome, X)
     ate = float(beta[1])
     ate_se = float(se[1])
@@ -76,7 +124,7 @@ def run(ctx: EngineContext) -> EngineResult:
     # Sensitivity / refutation: placebo outcome where treatment is randomly
     # reassigned — the estimated effect should collapse toward zero.
     placebo_treated = rng.permutation(treated.astype(float))
-    Xp = np.column_stack([np.ones(n_units), placebo_treated, income, education, age])
+    Xp = np.column_stack([np.ones(n_units), placebo_treated, *covars])
     placebo_beta, placebo_se = _ols(outcome, Xp)
     placebo_ate = float(placebo_beta[1])
 
@@ -116,6 +164,8 @@ def run(ctx: EngineContext) -> EngineResult:
             "placebo_ate": round(placebo_ate, 6),
             "dowhy_available": _HAS_DOWHY,
             "identification": "backdoor: {income, education, age}",
+            "data_mode": data_mode,
+            "panel": panel_note,
         },
         reproducibility=build_reproducibility(ENGINE_VERSION, ctx.random_seed),
     )
