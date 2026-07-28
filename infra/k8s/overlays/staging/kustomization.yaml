@@ -4,6 +4,7 @@ namespace: policy-twin
 resources:
   - ../../base
   - canary.yaml
+  - canary-ingress.yaml
 nameSuffix: -stg
 images:
   - name: ghcr.io/munisp/politicalintelligence/app
