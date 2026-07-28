@@ -628,6 +628,8 @@ services:
       # Model tier endpoints (vLLM / Ray Serve). Defaults point at in-process dev stubs.
       MODEL_DEFAULT_TIER: ${MODEL_DEFAULT_TIER:-qwen3-dev}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+      # AI-7: set LLM_TRANSPORT=ray to route via Ray Serve (RAY_SERVE_URL)
+      LLM_TRANSPORT: ${LLM_TRANSPORT:-vllm}
       RAY_SERVE_URL: ${RAY_SERVE_URL:-http://localhost:8001}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       LOG_LEVEL: ${LOG_LEVEL:-info}

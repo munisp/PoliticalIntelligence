@@ -1,0 +1,160 @@
+# AI-7 (ADR-004): Ray Serve LLM tier on KubeRay.
+# Requires the KubeRay operator (kubectl apply -k
+# github.com/ray-project/kuberay/ray-operator/config/default). GPU workers
+# land on the AI-9 GPU node pool (infra/k8s/base/gpu-nodepool.yaml):
+# nodeSelector role=gpu-inference + matching toleration.
+#
+# Overlay wiring: add `rayserve.yaml` to base/kustomization.yaml resources
+# when the cluster has GPUs (dev overlay keeps it out — see
+# infra/k8s/overlays). The ai service switches transport with
+# LLM_TRANSPORT=ray + RAY_SERVE_URL=http://policy-twin-ray-serve:8000.
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: policy-twin-ray
+  namespace: policy-twin
+  labels:
+    app: policy-twin-ray
+spec:
+  rayVersion: "2.44.0"
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: 0.0.0.0
+    template:
+      metadata:
+        labels:
+          app: policy-twin-ray-head
+      spec:
+        containers:
+          - name: ray-head
+            image: rayproject/ray-ml:2.44.0-py311-gpu
+            ports:
+              - containerPort: 6379
+                name: gcs
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 8000
+                name: serve
+            resources:
+              requests: {cpu: "2", memory: 8Gi}
+              limits: {cpu: "4", memory: 16Gi}
+            env:
+              - name: RAY_SERVE_URL
+                value: "http://localhost:8000"
+  workerGroupSpecs:
+    # Interactive tier (qwen3-32b) — autoscales 1..4 (see ray_serve.py
+    # TIER_DEPLOYMENTS["DEFAULT"]).
+    - groupName: gpu-interactive
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 4
+      rayStartParams: {}
+      template:
+        metadata:
+          labels:
+            app: policy-twin-ray-worker
+            ray.io/group: gpu-interactive
+        spec:
+          nodeSelector:
+            role: gpu-inference
+          tolerations:
+            - key: role
+              operator: Equal
+              value: gpu-inference
+              effect: NoSchedule
+          containers:
+            - name: ray-worker
+              image: rayproject/ray-ml:2.44.0-py311-gpu
+              resources:
+                requests:
+                  cpu: "8"
+                  memory: 32Gi
+                  nvidia.com/gpu: "1"
+                limits:
+                  cpu: "16"
+                  memory: 64Gi
+                  nvidia.com/gpu: "1"
+              env:
+                - name: VLLM_GPU_MEM_UTIL
+                  value: "0.90"
+                - name: VLLM_MAX_MODEL_LEN
+                  value: "8192"
+---
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: policy-twin-ray-serve
+  namespace: policy-twin
+spec:
+  # OpenAI-compatible chat completions per tier, all under /v1/llm; tier
+  # selection by model name in the request body (serving.py TIER_ENV).
+  serveConfigV2: |
+    applications:
+      - name: llm-tiers
+        import_path: app.llm.ray_serve:serve_app
+        route_prefix: /v1/llm
+        runtime_env:
+          pip:
+            - vllm>=0.8
+            - fastapi>=0.115
+          env_vars:
+            HF_TOKEN: ""
+        deployments: []  # constructed by build_deployments() per tier
+  rayClusterConfig:
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: 0.0.0.0
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              image: rayproject/ray-ml:2.44.0-py311-gpu
+              ports:
+                - containerPort: 8000
+                  name: serve
+              resources:
+                requests: {cpu: "2", memory: 8Gi}
+                limits: {cpu: "4", memory: 16Gi}
+    workerGroupSpecs:
+      - groupName: gpu-interactive
+        replicas: 1
+        minReplicas: 1
+        maxReplicas: 4
+        rayStartParams: {}
+        template:
+          spec:
+            nodeSelector:
+              role: gpu-inference
+            tolerations:
+              - key: role
+                operator: Equal
+                value: gpu-inference
+                effect: NoSchedule
+            containers:
+              - name: ray-worker
+                image: rayproject/ray-ml:2.44.0-py311-gpu
+                resources:
+                  requests:
+                    cpu: "8"
+                    memory: 32Gi
+                    nvidia.com/gpu: "1"
+                  limits:
+                    cpu: "16"
+                    memory: 64Gi
+                    nvidia.com/gpu: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-twin-ray-serve
+  namespace: policy-twin
+spec:
+  selector:
+    app: policy-twin-ray-head
+  ports:
+    - name: serve
+      port: 8000
+      targetPort: 8000
+    - name: dashboard
+      port: 8265
+      targetPort: 8265

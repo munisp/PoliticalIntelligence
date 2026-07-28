@@ -141,3 +141,22 @@ The mock-endpoint integration suite (`tests/test_serving_live.py`) exercises
 this exact path without a GPU: tier routing, breaker-on-5xx-storm → fallback
 chain → offline synthesizer, SSE streaming, and §9.2 contract validation of
 served JSON.
+
+## Ray Serve transport (AI-7, ADR-004)
+
+The serving layer supports two transports selected by `LLM_TRANSPORT`:
+
+- `vllm` (default): direct vLLM OpenAI servers (`VLLM_BASE_URL[_TIER]`).
+- `ray`: Ray Serve deployments on KubeRay (`RAY_SERVE_URL[_TIER]`), same
+  OpenAI chat-completions schema mounted at route prefix `/v1/llm`
+  (`app/llm/ray_serve.py`). Per-tier autoscaling/actor config (replicas,
+  GPUs per replica, queue separation: interactive/premium/specialist) lives
+  in `TIER_DEPLOYMENTS`. Client interface, circuit breakers and router
+  fallback are identical across transports (tested in
+  `services/ai/tests/test_ray_transport.py` against a mock endpoint).
+
+Kubernetes manifests: `infra/k8s/base/rayserve.yaml` (RayCluster +
+RayService + Service; GPU workers pinned to the AI-9 node pool via
+`nodeSelector role=gpu-inference` + toleration). Requires the KubeRay
+operator; add `rayserve.yaml` to `base/kustomization.yaml` resources on
+GPU-enabled clusters (kept out of the dev overlay).

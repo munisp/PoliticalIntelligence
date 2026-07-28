@@ -8,3 +8,8 @@ boto3>=1.35,<2
 opentelemetry-sdk>=1.29,<2
 opentelemetry-exporter-otlp-proto-http>=1.29,<2
 opentelemetry-instrumentation-fastapi>=0.50b0
+# AI-7: Ray Serve orchestration (app/llm/ray_serve.py). Optional — the ai
+# service runs fine without it (LLM_TRANSPORT=vllm default); required only
+# inside the Ray runtime (infra/k8s/base/rayserve.yaml) or a local Ray cluster.
+ray[serve]>=2.40,<3
+vllm>=0.8

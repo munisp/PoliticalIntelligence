@@ -36,6 +36,9 @@ from app.models import ModelTier
 log = get_logger("llm.serving")
 
 CHAT_PATH = "/v1/chat/completions"
+# AI-7: Ray Serve deployments mount the OpenAI schema at /v1/llm
+# (route prefix, see app/llm/ray_serve.py) — no extra /v1 segment.
+RAY_CHAT_PATH = "/v1/llm/chat/completions"
 
 # Model tier -> environment tier name for endpoint resolution.
 TIER_ENV: dict[ModelTier, str] = {
@@ -111,22 +114,39 @@ class ServingConfig:
     hedge_after_s: float = 0.0       # 0 disables hedging
     breaker_failures: int = 3
     breaker_reset_s: float = 30.0
+    # AI-7: serving transport. "vllm" (default): direct vLLM OpenAI servers
+    # (VLLM_BASE_URL[_TIER]). "ray": Ray Serve deployments (RAY_SERVE_URL
+    # [_TIER]) exposing the same OpenAI schema at route prefix /v1/llm.
+    # Identical client interface either way; breakers/fallback unchanged.
+    transport: str = "vllm"
+
+    @property
+    def chat_path(self) -> str:
+        return RAY_CHAT_PATH if self.transport == "ray" else CHAT_PATH
 
     @classmethod
     def from_env(cls) -> "ServingConfig":
+        transport = os.getenv("LLM_TRANSPORT", "vllm").strip().lower()
+        if transport not in ("vllm", "ray"):
+            raise ValueError(
+                f"LLM_TRANSPORT must be 'vllm' or 'ray', got {transport!r}"
+            )
+        prefix = "RAY_SERVE_URL" if transport == "ray" else "VLLM_BASE_URL"
+        key_var = "RAY_SERVE_API_KEY" if transport == "ray" else "VLLM_API_KEY"
         urls: dict[str, str] = {}
-        default = os.getenv("VLLM_BASE_URL")
+        default = os.getenv(prefix)
         for tier in ("DEFAULT", "PREMIUM", "SPECIALIST"):
-            url = os.getenv(f"VLLM_BASE_URL_{tier}") or default
+            url = os.getenv(f"{prefix}_{tier}") or default
             if url:
                 urls[tier] = url.rstrip("/")
         return cls(
             base_urls=urls,
-            api_key=os.getenv("VLLM_API_KEY"),
+            api_key=os.getenv(key_var),
             timeout_s=float(os.getenv("LLM_TIMEOUT_SECONDS", "30")),
             hedge_after_s=float(os.getenv("LLM_HEDGE_AFTER_MS", "0")) / 1000.0,
             breaker_failures=int(os.getenv("LLM_BREAKER_FAILURES", "3")),
             breaker_reset_s=float(os.getenv("LLM_BREAKER_RESET_SECONDS", "30")),
+            transport=transport,
         )
 
 
@@ -228,7 +248,7 @@ class ServingClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        url = f"{base}{CHAT_PATH}"
+        url = f"{base}{self.config.chat_path}"
         started = time.monotonic()
         try:
             if self.config.hedge_after_s > 0:
@@ -284,7 +304,7 @@ class ServingClient:
                 "temperature": 0.1, "max_tokens": max_tokens, "stream": True}
         started = time.monotonic()
         try:
-            with self._http().stream("POST", f"{base}{CHAT_PATH}", json=body,
+            with self._http().stream("POST", f"{base}{self.config.chat_path}", json=body,
                                      headers=self._headers()) as resp:
                 resp.raise_for_status()
                 for line in resp.iter_lines():
