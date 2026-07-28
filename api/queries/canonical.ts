@@ -328,6 +328,9 @@ export async function upsertBudgets(
           appropriatedNgn:
             data.amount_ngn !== undefined ? Number(data.amount_ngn) : null,
           source: [
+            // Optional budget tier (state / development_partner) from
+            // feat-conn-subnat-firms connectors; absent for federal lines.
+            data.tier ?? "",
             data.appropriation_type ?? "capital",
             data.program_code ?? "",
           ]
@@ -402,6 +405,121 @@ export async function upsertPolicyDocuments(
 }
 
 /* ------------------------------------------------------------------ */
+/* business_registrations (CAC — feat-conn-subnat-firms)                */
+/* ------------------------------------------------------------------ */
+
+export async function upsertBusinessRegistrations(
+  rows: { data: Record<string, unknown>; provenance: Provenance }[],
+): Promise<EntityCounts> {
+  const db = getDb();
+  const counts = empty();
+  for (const { data, provenance } of rows) {
+    try {
+      const registrationId = String(
+        data.registration_id ??
+          `cac:${data.rc_number ?? data.name}`,
+      );
+      const existing = await db
+        .select({
+          registrationId: schema.businessRegistrations.registrationId,
+        })
+        .from(schema.businessRegistrations)
+        .where(
+          eq(schema.businessRegistrations.registrationId, registrationId),
+        )
+        .limit(1);
+      if (existing.length > 0) {
+        // Update status only — preserve original provenance.
+        await db
+          .update(schema.businessRegistrations)
+          .set({ status: String(data.status ?? "active") })
+          .where(
+            eq(schema.businessRegistrations.registrationId, registrationId),
+          );
+        counts.updated++;
+      } else {
+        await db.insert(schema.businessRegistrations).values({
+          registrationId,
+          jurisdictionId: String(data.jurisdiction_id),
+          name: String(data.name ?? registrationId),
+          rcNumber: (data.rc_number as string) ?? null,
+          entityType: (data.entity_type as string) ?? null,
+          registeredAt: (data.registered_at as string) ?? null,
+          status: String(data.status ?? "active"),
+          lga: (data.lga as string) ?? null,
+          source: (data.sector as string) ?? null,
+          origin: provenance.origin,
+          sourceUrl: provenance.url ?? null,
+          fetchedAt: toDate(provenance.fetched_at),
+        });
+        counts.inserted++;
+      }
+    } catch (err) {
+      counts.errors.push(
+        `business_registration ${data.registration_id ?? data.name}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  return counts;
+}
+
+/* ------------------------------------------------------------------ */
+/* evidence_sources (development-partner evidence — feat-conn-subnat-firms) */
+/* ------------------------------------------------------------------ */
+
+export async function upsertEvidenceSources(
+  rows: { data: Record<string, unknown>; provenance: Provenance }[],
+): Promise<EntityCounts> {
+  const db = getDb();
+  const counts = empty();
+  for (const { data, provenance } of rows) {
+    try {
+      const evidenceSourceId = String(data.evidence_source_id);
+      const existing = await db
+        .select({
+          evidenceSourceId: schema.evidenceSources.evidenceSourceId,
+        })
+        .from(schema.evidenceSources)
+        .where(eq(schema.evidenceSources.evidenceSourceId, evidenceSourceId))
+        .limit(1);
+      if (existing.length > 0) {
+        // Update excerpt/confidence only — preserve original provenance.
+        await db
+          .update(schema.evidenceSources)
+          .set({
+            contentExcerpt: (data.content_excerpt as string) ?? null,
+            confidence:
+              data.confidence !== undefined ? Number(data.confidence) : 0.5,
+          })
+          .where(eq(schema.evidenceSources.evidenceSourceId, evidenceSourceId));
+        counts.updated++;
+      } else {
+        await db.insert(schema.evidenceSources).values({
+          evidenceSourceId,
+          sourceType: "document",
+          citation: String(data.citation ?? evidenceSourceId),
+          retrievalPath:
+            (data.source_url as string) ?? provenance.url ?? null,
+          confidence:
+            data.confidence !== undefined ? Number(data.confidence) : 0.5,
+          contentExcerpt: (data.content_excerpt as string) ?? null,
+          linkedEntityIds: (data.linked_entity_ids as object) ?? null,
+          origin: provenance.origin,
+          sourceUrl: provenance.url ?? null,
+          fetchedAt: toDate(provenance.fetched_at),
+        });
+        counts.inserted++;
+      }
+    } catch (err) {
+      counts.errors.push(
+        `evidence_source ${data.evidence_source_id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  return counts;
+}
+
+/* ------------------------------------------------------------------ */
 /* Batch dispatch                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -418,6 +536,14 @@ export type CanonicalBatch = {
     data: Record<string, unknown>;
     provenance: Provenance;
   }[];
+  business_registrations?: {
+    data: Record<string, unknown>;
+    provenance: Provenance;
+  }[];
+  evidence_sources?: {
+    data: Record<string, unknown>;
+    provenance: Provenance;
+  }[];
 };
 
 export type LoaderCounts = Record<
@@ -426,7 +552,9 @@ export type LoaderCounts = Record<
   | "procurement_records"
   | "data_sources"
   | "budgets"
-  | "policy_documents",
+  | "policy_documents"
+  | "business_registrations"
+  | "evidence_sources",
   { inserted: number; updated: number; errors: number }
 > & { error_messages: string[] };
 
@@ -440,6 +568,8 @@ export async function loadCanonicalBatch(
     data_sources: { inserted: 0, updated: 0, errors: 0 },
     budgets: { inserted: 0, updated: 0, errors: 0 },
     policy_documents: { inserted: 0, updated: 0, errors: 0 },
+    business_registrations: { inserted: 0, updated: 0, errors: 0 },
+    evidence_sources: { inserted: 0, updated: 0, errors: 0 },
     error_messages: [] as string[],
   };
   const run = async (
@@ -462,6 +592,8 @@ export async function loadCanonicalBatch(
   await run("data_sources", upsertDataSources);
   await run("budgets", upsertBudgets);
   await run("policy_documents", upsertPolicyDocuments);
+  await run("business_registrations", upsertBusinessRegistrations);
+  await run("evidence_sources", upsertEvidenceSources);
   return result;
 }
 
