@@ -73,3 +73,40 @@ artifacts; see `docs/NFR-EVIDENCE.md` for the per-NFR mapping and commands:
 Still pending (honest gaps): full 5-minute k6 runs against staging, the first
 timed DR drill, object-lock enforcement on the backup bucket, and a production
 uptime window for the availability SLI.
+
+## Backtesting & calibration (SIM-5)
+
+Engine-level backtesting lives in `services/simulation/app/backtest.py` and is
+exercised by `services/simulation/tests/test_backtest.py` (18 tests) plus the
+API-surface tests in `api/tests/backtest-calibration.test.ts` (5 tests).
+
+* **Walk-forward validation.** Every engine is evaluated over multiple
+  expanding cutoff windows (default grid derived from history length, ≥3
+  windows, ≥3 held-out months each). At each cutoff the engine is hindcast
+  using only pre-cutoff data — the forecast engine genuinely refits its Holt
+  state-space model on the truncated window — and scored against the realized
+  post-cutoff segment. Tests assert no train/test leakage per window.
+* **Calibration metrics.** Per window and aggregated per engine: MAPE, RMSE,
+  `coverage_80` (share of realized points inside the engine's 80% uncertainty
+  band) and `skill_vs_naive` (1 − RMSE/RMSE_naive, naive = persistence of the
+  last training value). Metric functions are unit-tested on synthetic arrays
+  with known values (exact MAPE/RMSE/coverage/skill expectations).
+* **Reproducibility.** All stochastic components derive from `random_seed`
+  via SHA-256 stable hashing; each report carries a content `report_hash`.
+  Determinism tests assert identical reports/hashes across repeated runs and
+  differing hashes across seeds/jurisdictions.
+* **Artifacts & recalibration.** `persist_report` writes
+  `backtests/{jurisdiction_id}/{metric}-calibration-{hash}.json`;
+  `recalibrate_from_backtest` maps per-engine residual bias onto twin
+  behavioral priors (hiring elasticity, subsidy take-up, firm birth rate),
+  clamps them, persists a new twin-state version, and records the event in
+  the twin's adaptive layer. Tests verify direction, bounds, and persistence.
+* **Endpoints.** `POST /v1/backtests` (simulation service) and the tRPC
+  `innovations.calibrationReport` query (`api/bridges/backtest.ts`) expose
+  the walk-forward windows and per-engine calibration table in the standard
+  envelope.
+
+```bash
+cd services/simulation && pytest tests/test_backtest.py
+npx vitest run api/tests/backtest-calibration.test.ts
+```
