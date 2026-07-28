@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { asc, desc } from "drizzle-orm";
 import * as schema from "@db/schema";
 import { getDb } from "../queries/connection";
+import { env } from "../lib/env";
 
 /**
  * Hash-chained tamper-evident audit log.
@@ -53,6 +54,41 @@ export function computeEntryHash(event: ChainableEvent, prevHash: string): strin
 
 let appendQueue: Promise<unknown> = Promise.resolve();
 
+/**
+ * Cross-process append serialization.
+ *
+ * The in-process promise chain above is not enough when several node
+ * processes (API server, workers, parallel test runners) share one database:
+ * two processes can read the same tail hash and fork the chain. MySQL/TiDB
+ * named locks (GET_LOCK) give us a cluster-wide mutex around the
+ * read-tail + insert critical section. When the server does not support
+ * named locks we degrade to in-process serialization (documented).
+ */
+const LOCK_NAME = "policy_twin_audit_chain";
+let lockConn: import("mysql2/promise").Connection | null | undefined;
+
+async function withChainLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (lockConn === undefined) {
+    try {
+      const mysql = await import("mysql2/promise");
+      lockConn = await mysql.createConnection(env.databaseUrl);
+    } catch {
+      lockConn = null; // no driver / unreachable: in-process only
+    }
+  }
+  if (!lockConn) return fn();
+  try {
+    await lockConn.query(`SELECT GET_LOCK('${LOCK_NAME}', 30)`);
+  } catch {
+    return fn(); // named locks unsupported: degrade gracefully
+  }
+  try {
+    return await fn();
+  } finally {
+    await lockConn.query(`SELECT RELEASE_LOCK('${LOCK_NAME}')`).catch(() => {});
+  }
+}
+
 async function lastHash(): Promise<string> {
   const rows = await getDb()
     .select({ entryHash: schema.auditEvents.entryHash })
@@ -69,14 +105,14 @@ async function lastHash(): Promise<string> {
 export function appendChained<T extends ChainableEvent>(
   event: T,
 ): Promise<{ prevHash: string; entryHash: string }> {
-  const task = appendQueue.then(async () => {
+  const task = appendQueue.then(() => withChainLock(async () => {
     const prevHash = await lastHash();
     const entryHash = computeEntryHash(event, prevHash);
     await getDb()
       .insert(schema.auditEvents)
       .values({ ...event, prevHash, entryHash } as never);
     return { prevHash, entryHash };
-  });
+  }));
   appendQueue = task.catch(() => undefined);
   return task;
 }
