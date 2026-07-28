@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, FileText, Database, ExternalLink, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StatusDot, { type StatusKind } from "./StatusDot";
+import { useT } from "@/lib/LocaleContext";
+import { useFocusReturn } from "@/hooks/use-focus-return";
 
 export interface EvidenceSource {
   id: string;
@@ -42,7 +44,10 @@ export default function EvidenceDrawer({
   requestId,
   onOpenDocument,
 }: EvidenceDrawerProps) {
+  const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
+  // a11y: restore focus to the triggering element when the drawer closes.
+  useFocusReturn(open);
 
   useEffect(() => {
     if (open) closeRef.current?.focus();
@@ -85,7 +90,7 @@ export default function EvidenceDrawer({
           >
             <header className="flex items-start justify-between gap-3 border-b border-ink-subtle p-4">
               <div>
-                <p className="caption-label text-ink-muted">Evidence & provenance</p>
+                <p className="caption-label text-ink-muted">{t.evidence.caption}</p>
                 <h2 className="mt-1 text-lg font-semibold text-ink-primary">
                   {title}
                 </h2>
@@ -94,7 +99,7 @@ export default function EvidenceDrawer({
                 ref={closeRef}
                 type="button"
                 onClick={onClose}
-                aria-label="Close evidence drawer"
+                aria-label={t.evidence.close}
                 className="rounded-md p-1.5 text-ink-secondary hover:bg-ink-surface hover:text-ink-primary"
               >
                 <X aria-hidden className="h-5 w-5" />
@@ -108,7 +113,7 @@ export default function EvidenceDrawer({
                   className="caption-label flex items-center gap-1.5 text-ink-muted"
                 >
                   <FileText aria-hidden className="h-3.5 w-3.5" />
-                  Cited sources ({sources.length})
+                  {t.evidence.citedSources.replace("{count}", String(sources.length))}
                 </h3>
                 <ul className="mt-2 space-y-2">
                   {sources.map((s) => (
@@ -144,7 +149,7 @@ export default function EvidenceDrawer({
                             className="inline-flex items-center gap-1 text-xs font-medium text-civic hover:text-civic-strong"
                           >
                             <ExternalLink aria-hidden className="h-3 w-3" />
-                            Open full document
+                            {t.evidence.openDocument}
                           </button>
                         )}
                       </div>
@@ -159,7 +164,7 @@ export default function EvidenceDrawer({
                     id="evidence-excerpts"
                     className="caption-label text-ink-muted"
                   >
-                    Clause excerpts
+                    {t.evidence.excerpts}
                   </h3>
                   <div className="mt-2 space-y-2">
                     {excerpts.map((ex, i) => (
@@ -180,10 +185,10 @@ export default function EvidenceDrawer({
                   className="caption-label flex items-center gap-1.5 text-ink-muted"
                 >
                   <GitBranch aria-hidden className="h-3.5 w-3.5" />
-                  Lineage
+                  {t.evidence.lineage}
                 </h3>
                 <div className="mt-2 flex items-center gap-1.5 overflow-x-auto rounded-md border border-ink-subtle bg-ink-inset p-3">
-                  {["Source", "Ingest", "Model", "Review", "Output"].map(
+                  {[t.evidence.stepSource, t.evidence.stepIngest, t.evidence.stepModel, t.evidence.stepReview, t.evidence.stepOutput].map(
                     (step, i, arr) => (
                       <span key={step} className="flex items-center gap-1.5">
                         <span className="whitespace-nowrap rounded-full border border-ink-strong px-2 py-0.5 font-mono text-[11px] text-ink-secondary">
@@ -207,7 +212,7 @@ export default function EvidenceDrawer({
                     className="caption-label flex items-center gap-1.5 text-ink-muted"
                   >
                     <Database aria-hidden className="h-3.5 w-3.5" />
-                    Dataset freshness
+                    {t.evidence.freshness}
                   </h3>
                   <div className="mt-2 flex items-center justify-between rounded-md border border-ink-subtle bg-ink-surface p-3">
                     <span className="text-sm text-ink-secondary">
@@ -222,7 +227,7 @@ export default function EvidenceDrawer({
             {requestId && (
               <footer className="border-t border-ink-subtle p-3">
                 <p className="font-mono text-xs text-ink-muted">
-                  Request ID {requestId}
+                  {t.evidence.requestId} {requestId}
                 </p>
               </footer>
             )}
