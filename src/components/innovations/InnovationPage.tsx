@@ -4,6 +4,7 @@ import { ArrowLeft, CloudOff, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared";
 import { isProcedureMissing } from "@/lib/innovations-client";
+import { useT } from "@/lib/LocaleContext";
 
 /**
  * Shared page scaffold for the innovations section: back link, title,
@@ -24,6 +25,7 @@ export default function InnovationPage({
   children: ReactNode;
   className?: string;
 }) {
+  const t = useT();
   return (
     <div className={cn("space-y-5 pb-24", className)}>
       <Link
@@ -31,7 +33,7 @@ export default function InnovationPage({
         className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted hover:text-civic"
       >
         <ArrowLeft aria-hidden className="h-3.5 w-3.5" />
-        Platform Innovations
+        {t.innovations.backToHub}
       </Link>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
@@ -68,22 +70,23 @@ export function InnovationError({
   error: { message: string };
   onRetry?: () => void;
 }) {
+  const t = useT();
   if (isProcedureMissing(error)) {
     return (
       <EmptyState
         Icon={CloudOff}
         showSpotArt={false}
-        title="Service not deployed yet"
-        guidance="This innovation's backend service is still being rolled out. The page is ready — check back once the API ships."
+        title={t.innovations.serviceNotDeployed}
+        guidance={t.innovations.serviceNotDeployedDesc}
       />
     );
   }
   return (
     <EmptyState
       showSpotArt={false}
-      title="Failed to load"
+      title={t.innovations.failedToLoad}
       guidance={error.message}
-      action={onRetry ? { label: "Retry", onClick: onRetry } : undefined}
+      action={onRetry ? { label: t.action.retry, onClick: onRetry } : undefined}
     />
   );
 }

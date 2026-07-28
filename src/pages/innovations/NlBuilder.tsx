@@ -3,6 +3,7 @@ import { MessageSquareText, Copy, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConfidenceChip, EmptyState } from "@/components/shared";
 import InnovationPage, { InnovationError } from "@/components/innovations/InnovationPage";
+import { useT } from "@/lib/LocaleContext";
 import {
   useParseScenarioText,
   type ParseScenarioResult,
@@ -51,6 +52,7 @@ function fieldValue(result: ParseScenarioResult, field: string): string {
 }
 
 export default function NlBuilder() {
+  const t = useT();
   const [text, setText] = useState("");
   const [result, setResult] = useState<ParseScenarioResult | null>(null);
   const [copied, setCopied] = useState(false);
@@ -80,7 +82,7 @@ export default function NlBuilder() {
 
   return (
     <InnovationPage
-      title="Natural-Language Scenario Builder"
+      title={t.innovations.nlBuilderTitle}
       description="Describe a policy scenario in plain language. The parser extracts a structured scenario config — review every field's confidence before using it."
       Icon={MessageSquareText}
     >

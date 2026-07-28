@@ -15,6 +15,7 @@ import { nanoid } from "nanoid";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { envelopeMeta, unwrap } from "@/lib/trpc-data";
+import { useT } from "@/lib/LocaleContext";
 import { cn } from "@/lib/utils";
 import EmptyState from "@/components/shared/EmptyState";
 import { SkeletonCard, SkeletonTable } from "@/components/shared/Skeleton";
@@ -50,6 +51,7 @@ type Range = "24h" | "7d" | "30d";
 const RANGE_DAYS: Record<Range, number> = { "24h": 1, "7d": 7, "30d": 30 };
 
 export default function DataHealth() {
+  const t = useT();
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const role = user
@@ -123,7 +125,7 @@ export default function DataHealth() {
       await utils.admin.reviewTasks.invalidate();
     },
     onError: (err) => {
-      toast.error("Triage failed", { description: err.message });
+      toast.error(t.common.errorGeneric, { description: err.message });
       setTriagingId(null);
     },
   });
@@ -144,7 +146,7 @@ export default function DataHealth() {
       ]);
     },
     onError: (err) => {
-      toast.error("Update failed", { description: err.message });
+      toast.error(t.common.errorGeneric, { description: err.message });
       setSigningOffId(null);
     },
   });
@@ -212,16 +214,16 @@ export default function DataHealth() {
       navigate("/legislation");
     } else {
       document.getElementById("source-registry")?.scrollIntoView({ behavior: "smooth" });
-      toast.info("Issue located in the source registry below.");
+      toast.info(t.dataHealth.issueLocated);
     }
   };
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${label} copied to clipboard.`);
+      toast.success(t.dataHealth.copiedToClipboard.replace("{label}", label));
     } catch {
-      toast.error("Clipboard unavailable", { description: text });
+      toast.error(t.dataHealth.clipboardUnavailable, { description: text });
     }
   };
 
@@ -252,14 +254,18 @@ export default function DataHealth() {
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3" data-print-hidden>
         <div>
-          <p className="caption-label text-ink-muted">Platform · Data operations</p>
+          <p className="caption-label text-ink-muted">{t.dataHealth.caption}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
-            Data Source Health
+            {t.dataHealth.title}
           </h1>
           <p className="mt-1 text-[13px] text-ink-secondary">
             {isLoading
-              ? "Loading sources…"
-              : `${sources.length} registered sources · ${healthy} healthy · ${stale} stale · ${failing} failing · Last full sync 02:00 WAT`}
+              ? t.dataHealth.loading
+              : t.dataHealth.summary
+                  .replace("{total}", String(sources.length))
+                  .replace("{healthy}", String(healthy))
+                  .replace("{stale}", String(stale))
+                  .replace("{failing}", String(failing))}
             {freshness?.label && (
               <span className="ml-2 text-ink-muted">· {freshness.label}</span>
             )}
@@ -268,7 +274,7 @@ export default function DataHealth() {
         <div className="flex items-center gap-2">
           <div
             role="group"
-            aria-label="Time range"
+            aria-label={t.dataHealth.timeRange}
             className="flex rounded-md border border-ink-subtle bg-ink-surface p-0.5"
           >
             {(["24h", "7d", "30d"] as Range[]).map((r) => (
@@ -294,9 +300,9 @@ export default function DataHealth() {
             className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle bg-ink-surface px-3 py-1.5 text-sm font-medium text-ink-secondary hover:border-ink-strong hover:text-ink-primary"
           >
             <ScrollText aria-hidden className="h-4 w-4" />
-            Pipeline runs
+            {t.dataHealth.pipelineRuns}
           </button>
-          <span title={canSteward ? undefined : "Requires the data steward or platform admin role"}>
+          <span title={canSteward ? undefined : t.dataHealth.stewardRoleRequired}>
             <button
               type="button"
               disabled={!canSteward}
@@ -309,7 +315,7 @@ export default function DataHealth() {
               )}
             >
               <Plus aria-hidden className="h-4 w-4" />
-              Register source
+              {t.dataHealth.registerSource}
             </button>
           </span>
         </div>
@@ -328,7 +334,7 @@ export default function DataHealth() {
           >
             <AlertTriangle aria-hidden className="h-4 w-4 shrink-0 text-status-danger" />
             <span className="font-medium text-status-danger">
-              {breaches.length} source{breaches.length === 1 ? "" : "s"} breached freshness SLA
+              {t.dataHealth.breachBanner.replace("{count}", String(breaches.length))}
             </span>
             <span className="text-ink-secondary">
               —{" "}
@@ -344,7 +350,7 @@ export default function DataHealth() {
                 }
                 className="rounded border border-status-danger/40 px-2 py-0.5 text-xs text-status-danger hover:bg-status-danger/10"
               >
-                View
+                {t.dataHealth.view}
               </button>
               {canSteward && (
                 <button
@@ -352,7 +358,7 @@ export default function DataHealth() {
                   onClick={() => breaches.forEach(acknowledgeBreach)}
                   className="rounded bg-status-danger/20 px-2 py-0.5 text-xs font-medium text-status-danger hover:bg-status-danger/30"
                 >
-                  Acknowledge (audit)
+                  {t.dataHealth.acknowledge}
                 </button>
               )}
             </span>
@@ -364,11 +370,11 @@ export default function DataHealth() {
       {!isAuthenticated || forbidden ? (
         <div className="mt-5">
           <EmptyState
-            title="Data steward access required"
+            title={t.dataHealth.accessTitle}
             guidance={
               isAuthenticated
-                ? "The Data Source Health console is restricted to data stewards and platform administrators. Your current role does not include pipeline administration."
-                : "Sign in with a data steward account to view pipeline status, freshness and contract compliance."
+                ? t.dataHealth.accessGuidanceRole
+                : t.dataHealth.accessGuidanceSignIn
             }
           />
         </div>
@@ -384,9 +390,9 @@ export default function DataHealth() {
       ) : sourcesQ.isError ? (
         <div className="mt-5">
           <EmptyState
-            title="Data sources could not be loaded"
+            title={t.dataHealth.errorSources}
             guidance={sourcesQ.error.message}
-            action={{ label: "Retry", onClick: () => void sourcesQ.refetch() }}
+            action={{ label: t.action.retry, onClick: () => void sourcesQ.refetch() }}
           />
         </div>
       ) : (
@@ -449,9 +455,9 @@ export default function DataHealth() {
               >
                 <span className="caption-label inline-flex items-center gap-1.5 text-ink-muted">
                   <ListChecks aria-hidden className="h-3.5 w-3.5" />
-                  Recent data-source audit events
+                  {t.dataHealth.auditEvents}
                 </span>
-                <span className="text-xs text-ink-secondary">{auditOpen ? "Hide" : "Show"}</span>
+                <span className="text-xs text-ink-secondary">{auditOpen ? t.dataHealth.hide : t.dataHealth.show}</span>
               </button>
               <AnimatePresence initial={false}>
                 {auditOpen && (
@@ -467,7 +473,7 @@ export default function DataHealth() {
                         <SkeletonTable rows={4} columns={3} />
                       ) : auditQ.isError ? (
                         <p className="py-2 text-xs text-ink-muted">
-                          Audit log unavailable: {auditQ.error.message}
+                          {t.dataHealth.auditUnavailable.replace("{message}", auditQ.error.message)}
                         </p>
                       ) : (
                         <AuditList payload={auditQ.data} />
@@ -499,7 +505,7 @@ export default function DataHealth() {
               key="runs-drawer"
               role="dialog"
               aria-modal="true"
-              aria-label="Pipeline run history"
+              aria-label={t.dataHealth.pipelineRuns}
               initial={{ x: 480 }}
               animate={{ x: 0 }}
               exit={{ x: 480 }}
@@ -508,13 +514,13 @@ export default function DataHealth() {
             >
               <div className="flex items-center justify-between border-b border-ink-subtle px-4 py-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-ink-primary">Pipeline runs</h2>
+                  <h2 className="text-sm font-semibold text-ink-primary">{t.dataHealth.pipelineRuns}</h2>
                   <p className="font-mono text-[11px] text-ink-muted">{runsFor}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setRunsFor(null)}
-                  aria-label="Close run history"
+                  aria-label={t.dataHealth.closeRunHistory}
                   className="rounded p-1 text-ink-muted hover:text-ink-primary"
                 >
                   <X aria-hidden className="h-4 w-4" />
@@ -548,7 +554,7 @@ export default function DataHealth() {
                           </span>
                         </div>
                         <p className="mt-1 font-mono text-[10px] text-ink-muted">
-                          {r.pipelineId} · {r.rowsProcessed.toLocaleString()} rows
+                          {r.pipelineId} · {r.rowsProcessed.toLocaleString()} {t.dataHealth.rows}
                         </p>
                         {r.error && (
                           <pre className="mt-1.5 overflow-x-auto rounded border border-status-danger/30 bg-ink-inset p-1.5 font-mono text-[10px] text-status-danger">
@@ -560,7 +566,7 @@ export default function DataHealth() {
                     {((unwrap(sourceRunsQ.data) as PipelineRunRow[] | undefined) ?? []).length ===
                       0 && (
                       <li className="rounded-md border border-dashed border-ink-subtle p-6 text-center text-xs text-ink-muted">
-                        No runs recorded for this source.
+                        {t.dataHealth.noRuns}
                       </li>
                     )}
                   </ul>
@@ -575,20 +581,18 @@ export default function DataHealth() {
       <Dialog open={reRunRow !== null} onOpenChange={(o) => !o && setReRunRow(null)}>
         <DialogContent className="border-ink-subtle bg-ink-elevated text-ink-primary">
           <DialogHeader>
-            <DialogTitle>Re-run pipeline</DialogTitle>
+            <DialogTitle>{t.dataHealth.rerunTitle}</DialogTitle>
             <DialogDescription className="text-ink-secondary">
-              {reRunRow?.source.name} — re-run requests are idempotent.
+              {t.dataHealth.rerunDesc.replace("{name}", reRunRow?.source.name ?? "")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 text-[13px] text-ink-secondary">
             <p>
-              Idempotency key:{" "}
+              {t.dataHealth.idempotencyKey}{" "}
               <span className="font-mono text-xs text-civic">{idempotencyKey.current}</span>
             </p>
             <p className="rounded-md border border-status-warning/40 bg-status-warning/10 p-2 text-xs text-status-warning">
-              Pipeline re-runs execute on the orchestration service. This deployment does not
-              expose a re-run API endpoint, so the request cannot be dispatched from the console —
-              copy the signed request for the orchestrator operator instead.
+              {t.dataHealth.rerunNote}
             </p>
           </div>
           <DialogFooter>
@@ -597,7 +601,7 @@ export default function DataHealth() {
               onClick={() => setReRunRow(null)}
               className="rounded-md border border-ink-subtle px-3 py-1.5 text-sm text-ink-secondary hover:text-ink-primary"
             >
-              Cancel
+              {t.action.cancel}
             </button>
             <button
               type="button"
@@ -614,14 +618,14 @@ export default function DataHealth() {
                     null,
                     2,
                   ),
-                  "Re-run request",
+                  t.dataHealth.rerunTitle,
                 );
                 setReRunRow(null);
               }}
               className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base hover:bg-civic-strong"
             >
               <Copy aria-hidden className="h-4 w-4" />
-              Copy re-run request
+              {t.dataHealth.copyRerun}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -631,15 +635,14 @@ export default function DataHealth() {
       <Dialog open={triageRow !== null} onOpenChange={(o) => !o && setTriageRow(null)}>
         <DialogContent className="border-ink-subtle bg-ink-elevated text-ink-primary">
           <DialogHeader>
-            <DialogTitle>Create triage task</DialogTitle>
+            <DialogTitle>{t.dataHealth.triageTitle}</DialogTitle>
             <DialogDescription className="text-ink-secondary">
-              Assign failure triage for {triageRow?.source.name} to a data steward.
+              {t.dataHealth.triageDesc.replace("{name}", triageRow?.source.name ?? "")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 text-[13px] text-ink-secondary">
             <p className="rounded-md border border-status-warning/40 bg-status-warning/10 p-2 text-xs text-status-warning">
-              Task creation is not exposed by the review API in this deployment — only existing
-              tasks can be triaged. Copy the pre-filled task request for the steward on duty.
+              {t.dataHealth.triageNote}
             </p>
             {triageRow?.latestRun?.error && (
               <pre className="overflow-x-auto rounded-md border border-status-danger/30 bg-ink-inset p-2 font-mono text-xs text-status-danger">
@@ -653,7 +656,7 @@ export default function DataHealth() {
               onClick={() => setTriageRow(null)}
               className="rounded-md border border-ink-subtle px-3 py-1.5 text-sm text-ink-secondary hover:text-ink-primary"
             >
-              Cancel
+              {t.action.cancel}
             </button>
             <button
               type="button"
@@ -671,14 +674,14 @@ export default function DataHealth() {
                     null,
                     2,
                   ),
-                  "Triage task request",
+                  t.dataHealth.triageTitle,
                 );
                 setTriageRow(null);
               }}
               className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base hover:bg-civic-strong"
             >
               <Copy aria-hidden className="h-4 w-4" />
-              Copy task request
+              {t.dataHealth.copyTask}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -688,20 +691,19 @@ export default function DataHealth() {
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
         <DialogContent className="border-ink-subtle bg-ink-elevated text-ink-primary">
           <DialogHeader>
-            <DialogTitle>Register a data source</DialogTitle>
+            <DialogTitle>{t.dataHealth.registerTitle}</DialogTitle>
             <DialogDescription className="text-ink-secondary">
-              New sources are onboarded through the source-contract pipeline.
+              {t.dataHealth.registerDesc}
             </DialogDescription>
           </DialogHeader>
           <ol className="list-decimal space-y-1.5 pl-5 text-[13px] text-ink-secondary">
-            <li>Draft the source contract (schema, delivery SLA, licence).</li>
-            <li>Submit for contract approval in the review queue.</li>
-            <li>Connect the ingestion endpoint and run the first sync.</li>
-            <li>Verify schema conformance and freshness SLA on this console.</li>
+            <li>{t.dataHealth.registerStep1}</li>
+            <li>{t.dataHealth.registerStep2}</li>
+            <li>{t.dataHealth.registerStep3}</li>
+            <li>{t.dataHealth.registerStep4}</li>
           </ol>
           <p className="rounded-md border border-status-warning/40 bg-status-warning/10 p-2 text-xs text-status-warning">
-            The registration API is not exposed in this deployment — copy the registration request
-            and hand it to the platform operator to complete onboarding.
+            {t.dataHealth.registerNote}
           </p>
           <DialogFooter>
             <button
@@ -709,7 +711,7 @@ export default function DataHealth() {
               onClick={() => setRegisterOpen(false)}
               className="rounded-md border border-ink-subtle px-3 py-1.5 text-sm text-ink-secondary hover:text-ink-primary"
             >
-              Close
+              {t.action.close}
             </button>
             <button
               type="button"
@@ -726,14 +728,14 @@ export default function DataHealth() {
                     null,
                     2,
                   ),
-                  "Registration request",
+                  t.dataHealth.registerTitle,
                 );
                 setRegisterOpen(false);
               }}
               className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base hover:bg-civic-strong"
             >
               <Copy aria-hidden className="h-4 w-4" />
-              Copy registration request
+              {t.dataHealth.copyRegistration}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -743,6 +745,7 @@ export default function DataHealth() {
 }
 
 function AuditList({ payload }: { payload: unknown }) {
+  const t = useT();
   const rows = (unwrap(payload) as
     | { items?: { eventId: number; action: string; entityId: string; actorId: number | null; createdAt: Date | string }[] }
     | { eventId: number; action: string; entityId: string; actorId: number | null; createdAt: Date | string }[]
@@ -752,7 +755,7 @@ function AuditList({ payload }: { payload: unknown }) {
     | undefined;
   const items = Array.isArray(rows) ? rows : (rows?.items ?? []);
   if (items.length === 0) {
-    return <p className="py-2 text-xs text-ink-muted">No data-source audit events recorded.</p>;
+    return <p className="py-2 text-xs text-ink-muted">{t.dataHealth.noAuditEvents}</p>;
   }
   return (
     <ul className="divide-y divide-ink-subtle/60">
@@ -761,7 +764,7 @@ function AuditList({ payload }: { payload: unknown }) {
           <span className="font-mono text-[10px] text-ink-muted">{formatDateTime(e.createdAt)}</span>
           <span className="font-medium text-ink-primary">{e.action}</span>
           <span className="font-mono text-[10px] text-ink-secondary">{e.entityId}</span>
-          <span className="text-ink-muted">actor #{e.actorId ?? "system"}</span>
+          <span className="text-ink-muted">actor #{e.actorId ?? t.dataHealth.actorSystem}</span>
         </li>
       ))}
     </ul>

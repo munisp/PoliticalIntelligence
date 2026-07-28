@@ -10,7 +10,8 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { LocaleProvider } from "@/lib/LocaleContext";
+import { LocaleProvider, useT } from "@/lib/LocaleContext";
+import type { Dict } from "@/i18n";
 import { cn } from "@/lib/utils";
 import Onboarding from "./Onboarding";
 import Optimizer from "./Optimizer";
@@ -22,88 +23,38 @@ import LegalQa from "./LegalQa";
 
 interface InnovationCard {
   path: string;
-  title: string;
-  description: string;
+  titleKey: keyof Dict["innovations"];
+  descKey: keyof Dict["innovations"];
   Icon: LucideIcon;
-  tag: string;
+  tagKey: keyof Dict["innovations"];
 }
 
 const CARDS: InnovationCard[] = [
-  {
-    path: "onboarding",
-    title: "Jurisdiction Onboarding",
-    description:
-      "Import a new jurisdiction from a config pack — real data from live sources where available, the rest honestly labeled as seed.",
-    Icon: Compass,
-    tag: "Data",
-  },
-  {
-    path: "optimizer",
-    title: "Budget Portfolio Optimizer",
-    description:
-      "Allocate a budget across interventions under risk and sector-cap constraints; see binding constraints and expected jobs.",
-    Icon: Wallet,
-    tag: "Planning",
-  },
-  {
-    path: "marketplace",
-    title: "Scenario Marketplace",
-    description:
-      "Install reviewed scenario templates from other jurisdictions, or publish your own through the human-review gate.",
-    Icon: Store,
-    tag: "Collaboration",
-  },
-  {
-    path: "nl-builder",
-    title: "Natural-Language Scenario Builder",
-    description:
-      "Describe a policy scenario in plain language; review the extracted config field-by-field before opening it in the studio.",
-    Icon: MessageSquareText,
-    tag: "AI",
-  },
-  {
-    path: "field-data",
-    title: "Field Data Collection",
-    description:
-      "Offline-first facility surveys for field officers — queue submissions without connectivity, auto-sync on reconnect.",
-    Icon: ClipboardList,
-    tag: "Data",
-  },
-  {
-    path: "audit",
-    title: "Audit Explorer",
-    description:
-      "Immutable event timeline with cursor pagination, filters, hash-chain verification, and JSON export of audit slices.",
-    Icon: ScrollText,
-    tag: "Governance",
-  },
-  {
-    path: "legal-qa",
-    title: "Legal QA / IAA Board",
-    description:
-      "Legislation review queue with two-annotator agreement scoring, confidence heat bars, and reassignment.",
-    Icon: Scale,
-    tag: "Governance",
-  },
+  { path: "onboarding", titleKey: "onboardingTitle", descKey: "onboardingDesc", Icon: Compass, tagKey: "tagData" },
+  { path: "optimizer", titleKey: "optimizerTitle", descKey: "optimizerDesc", Icon: Wallet, tagKey: "tagPlanning" },
+  { path: "marketplace", titleKey: "marketplaceTitle", descKey: "marketplaceDesc", Icon: Store, tagKey: "tagCollaboration" },
+  { path: "nl-builder", titleKey: "nlBuilderTitle", descKey: "nlBuilderDesc", Icon: MessageSquareText, tagKey: "tagAi" },
+  { path: "field-data", titleKey: "fieldDataTitle", descKey: "fieldDataDesc", Icon: ClipboardList, tagKey: "tagData" },
+  { path: "audit", titleKey: "auditTitle", descKey: "auditDesc", Icon: ScrollText, tagKey: "tagGovernance" },
+  { path: "legal-qa", titleKey: "legalQaTitle", descKey: "legalQaDesc", Icon: Scale, tagKey: "tagGovernance" },
 ];
 
 function Gallery() {
+  const t = useT();
   return (
     <div className="space-y-5 pb-24">
       <header>
-        <p className="caption-label text-ink-muted">Meridian Policy Twin</p>
+        <p className="caption-label text-ink-muted">{t.innovations.hubCaption}</p>
         <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
           <Sparkles aria-hidden className="h-5 w-5 text-civic" />
-          Platform Innovations
+          {t.innovations.hubTitle}
         </h1>
         <p className="mt-1 max-w-2xl text-[13px] leading-5 text-ink-secondary">
-          New capabilities under active rollout. Pages degrade gracefully while
-          their backend services ship — provenance labels always distinguish
-          live, derived, and seed data.
+          {t.innovations.hubSubtitle}
         </p>
       </header>
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {CARDS.map(({ path, title, description, Icon, tag }) => (
+        {CARDS.map(({ path, titleKey, descKey, Icon, tagKey }) => (
           <li key={path}>
             <Link
               to={path}
@@ -120,13 +71,13 @@ function Gallery() {
                   <Icon className="h-4 w-4 text-civic" strokeWidth={1.5} />
                 </span>
                 <span className="rounded-full border border-ink-subtle bg-ink-elevated px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
-                  {tag}
+                  {t.innovations[tagKey]}
                 </span>
               </span>
               <span className="text-sm font-semibold text-ink-primary group-hover:text-civic">
-                {title}
+                {t.innovations[titleKey]}
               </span>
-              <span className="text-[12px] leading-4 text-ink-secondary">{description}</span>
+              <span className="text-[12px] leading-4 text-ink-secondary">{t.innovations[descKey]}</span>
             </Link>
           </li>
         ))}
