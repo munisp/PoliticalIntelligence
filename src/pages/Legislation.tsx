@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
+import { useT } from "@/lib/LocaleContext";
 import {
   unwrapData,
   payloadMeta,
@@ -40,13 +41,17 @@ import ContextPanel, {
 import CitationTraceModal from "@/components/legislation/CitationTraceModal";
 import { indexHealth, toApprovalState, type GraphData } from "@/components/legislation/types";
 
-const DRAFT_TYPES = ["Amendment memo", "Regulation impact note", "Model clause"];
+const DRAFT_TYPE_IDS = ["amendment", "regulation", "model"] as const;
 
 function roleCanReview(platformRole?: string | null): boolean {
   return platformRole === "legal_analyst" || platformRole === "platform_admin";
 }
 
 export default function Legislation() {
+  const t = useT();
+  const DRAFT_TYPES = DRAFT_TYPE_IDS.map((id) =>
+    id === "amendment" ? t.legislation.draftAmendment : id === "regulation" ? t.legislation.draftRegulation : t.legislation.draftModelClause,
+  );
   const navigate = useNavigate();
   const { user } = useAuth();
   const utils = trpc.useUtils();
@@ -181,7 +186,7 @@ export default function Legislation() {
     ? unwrapData<ReviewQueueItem[]>(reviewQueueQuery.data)
     : null;
   const reviewError = reviewQueueQuery.isError
-    ? "Clause review queue requires a signed-in legal analyst role."
+    ? t.legislation.reviewQueueError
     : null;
 
   const ocrQueueQuery = trpc.documents.ocrReviewQueue.useQuery(
@@ -190,7 +195,7 @@ export default function Legislation() {
   );
   const ocrTasks = ocrQueueQuery.data ? unwrapData<OcrReviewTask[]>(ocrQueueQuery.data) : null;
   const ocrError = ocrQueueQuery.isError
-    ? "OCR document queue requires a data steward or legal analyst role."
+    ? t.legislation.ocrQueueError
     : null;
 
   // Platform citations for the Citations tab (fused search on the instrument).
@@ -471,22 +476,22 @@ ${body}
         className="mb-4"
       >
         <p className="caption-label text-ink-muted">
-          Kaduna State · Legal corpus
+          {t.legislation.caption}
         </p>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-[-0.01em] text-ink-primary md:text-[32px] md:leading-10">
-              Policy &amp; Legislation Workbench
+              {t.legislation.title}
             </h1>
             <p className="mt-1 text-[13px] text-ink-secondary">
-              <span className="font-mono">{laws.length}</span> instruments indexed
+              <span className="font-mono">{laws.length}</span> {t.legislation.instrumentsIndexed}
               {law && (
                 <>
-                  {" "}· active instrument{" "}
-                  <span className="font-mono">{law.clause_count}</span> clauses
+                  {" "}· {t.legislation.activeInstrument}{" "}
+                  <span className="font-mono">{law.clause_count}</span> {t.legislation.clauses}
                 </>
               )}
-              {" "}· review workflow enforced — legal outputs are never auto-published
+              {" "}· {t.legislation.workflowNote}
             </p>
           </div>
 
@@ -500,7 +505,7 @@ ${body}
               className="inline-flex items-center gap-2 rounded-md border border-ink-subtle bg-ink-inset px-3 py-1.5 text-[13px] text-ink-muted hover:border-civic/50 hover:text-ink-primary"
             >
               <Search aria-hidden className="h-3.5 w-3.5" />
-              Search corpus…
+              {t.legislation.searchCorpus}
               <kbd className="rounded border border-ink-subtle px-1 font-mono text-[10px]">⌘K</kbd>
             </motion.button>
 
@@ -513,7 +518,7 @@ ${body}
               className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle px-3 py-1.5 text-[13px] font-medium text-ink-secondary hover:border-civic/50 hover:text-civic"
             >
               <GitBranch aria-hidden className="h-3.5 w-3.5" />
-              Citation trace
+              {t.legislation.citationTrace}
             </motion.button>
 
             <motion.div
@@ -530,7 +535,7 @@ ${body}
                 className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle px-3 py-1.5 text-[13px] font-medium text-ink-secondary hover:border-civic/50 hover:text-civic"
               >
                 <FilePlus2 aria-hidden className="h-3.5 w-3.5" />
-                New draft
+                {t.legislation.newDraft}
                 <ChevronDown aria-hidden className="h-3 w-3" />
               </button>
               <AnimatePresence>
@@ -543,26 +548,26 @@ ${body}
                     transition={{ duration: 0.16 }}
                     className="absolute right-0 z-30 mt-1.5 w-56 rounded-md border border-ink-subtle bg-ink-elevated p-1 shadow-overlay"
                   >
-                    {DRAFT_TYPES.map((t) => (
-                      <li key={t}>
+                    {DRAFT_TYPES.map((dt) => (
+                      <li key={dt}>
                         <button
                           role="menuitem"
                           type="button"
                           onClick={() => {
-                            setDraftType(t);
+                            setDraftType(dt);
                             setDraftMenuOpen(false);
                             setPaneCCollapsed(false);
                             setActiveTab("drafts");
-                            setNotice(`${t} started — add clauses with “Add to draft” (D).`);
+                            setNotice(t.legislation.draftStarted.replace("{type}", dt));
                           }}
                           className={cn(
                             "w-full rounded px-2.5 py-1.5 text-left text-[13px] hover:bg-ink-surface",
-                            draftType === t
+                            draftType === dt
                               ? "text-civic"
                               : "text-ink-secondary hover:text-ink-primary",
                           )}
                         >
-                          {t}
+                          {dt}
                         </button>
                       </li>
                     ))}
@@ -577,11 +582,11 @@ ${body}
               transition={{ delay: 0.16 }}
               title={
                 !clause
-                  ? "Select a clause first"
+                  ? t.legislation.selectClauseFirst
                   : !forwardTransition
-                    ? "Clause is already past the submission stage"
+                    ? t.legislation.pastSubmission
                     : !canReview
-                      ? "Sign in as a legal analyst to submit"
+                      ? t.legislation.signInLegal
                       : undefined
               }
             >
@@ -597,7 +602,7 @@ ${body}
                 )}
               >
                 <Send aria-hidden className="h-3.5 w-3.5" />
-                Submit for review
+                {t.legislation.submitForReview}
               </button>
             </motion.span>
           </div>
@@ -612,7 +617,7 @@ ${body}
             loading={lawsQuery.isLoading}
             error={
               lawsQuery.isError
-                ? "The legal corpus could not be loaded. Check connectivity and retry."
+                ? t.legislation.corpusError
                 : null
             }
             selectedLawId={selectedLawId}
@@ -682,10 +687,10 @@ ${body}
       {/* Keyboard hint */}
       <p className="mt-3 hidden items-center gap-2 text-[11px] text-ink-muted lg:flex">
         <Keyboard aria-hidden className="h-3.5 w-3.5" />
-        <span className="font-mono">J/K</span> move between clauses ·
-        <span className="font-mono">T</span> trace dependencies ·
-        <span className="font-mono">C</span> copy citation ·
-        <span className="font-mono">D</span> add to draft
+        <span className="font-mono">J/K</span> {t.legislation.hintMove} ·
+        <span className="font-mono">T</span> {t.legislation.hintTrace} ·
+        <span className="font-mono">C</span> {t.legislation.hintCopy} ·
+        <span className="font-mono">D</span> {t.legislation.hintDraft}
       </p>
 
       {/* Citation trace modal */}
@@ -713,7 +718,7 @@ ${body}
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-label="Submit for review"
+              aria-label={t.legislation.submitForReview}
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
@@ -722,9 +727,9 @@ ${body}
             >
               <div className="mb-3 flex items-start justify-between">
                 <div>
-                  <p className="caption-label text-ink-muted">Review handoff</p>
+                  <p className="caption-label text-ink-muted">{t.legislation.reviewHandoff}</p>
                   <h2 className="mt-1 text-lg font-semibold text-ink-primary">
-                    Submit extraction for legal review
+                    {t.legislation.submitExtraction}
                   </h2>
                 </div>
                 <button
@@ -742,7 +747,7 @@ ${body}
                 state={toApprovalState(clause.reviewState)}
                 nextApprover={{ name: "Legal review panel", role: "Legal analyst" }}
                 canAct={canReview}
-                disabledReason="Sign in as a legal analyst to submit."
+                disabledReason={t.legislation.signInLegal}
                 onApprove={(comment) => {
                   if (forwardTransition) onTransition(forwardTransition, comment);
                   setSubmitOpen(false);

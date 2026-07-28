@@ -8,6 +8,7 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnlineStatus } from "@/hooks/use-pwa";
 import { approvalStateLabel, envelopeMeta, unwrap } from "@/lib/trpc-data";
+import { useT } from "@/lib/LocaleContext";
 import EmptyState from "@/components/shared/EmptyState";
 import { SkeletonCard, SkeletonTable } from "@/components/shared/Skeleton";
 import type { ExportKind } from "@/components/shared/ExportMenu";
@@ -46,6 +47,7 @@ interface JobWatch {
 }
 
 export default function Briefs() {
+  const t = useT();
   const { user, isAuthenticated } = useAuth();
   const isOnline = useOnlineStatus();
   const role = user
@@ -108,44 +110,44 @@ export default function Briefs() {
     onSuccess: (payload, vars) => {
       const data = unwrap(payload) as { brief_id: string; job_id: string };
       setJob({ jobId: data.job_id, briefId: data.brief_id, title: vars.title });
-      toast.info("Brief generation queued", { description: "Assembling evidence…" });
+      toast.info(t.briefs.toastQueued, { description: t.briefs.toastQueuedDesc });
     },
     onError: (err) => {
-      toast.error("Generation could not be started", { description: err.message });
+      toast.error(t.briefs.toastGenStartError, { description: err.message });
       setJob(null);
     },
   });
 
   const approveM = trpc.briefs.approve.useMutation({
     onSuccess: async () => {
-      toast.success("Brief approved — handed to the Governor for sign-off.");
+      toast.success(t.briefs.toastApproved);
       setPendingAction(null);
       await invalidateBriefs();
     },
     onError: (err) => {
-      toast.error("Approval failed", { description: err.message });
+      toast.error(t.briefs.toastApprovalFailed, { description: err.message });
       setPendingAction(null);
     },
   });
   const returnM = trpc.briefs.return.useMutation({
     onSuccess: async () => {
-      toast.success("Brief returned to the analyst with comments.");
+      toast.success(t.briefs.toastReturned);
       setPendingAction(null);
       await invalidateBriefs();
     },
     onError: (err) => {
-      toast.error("Return failed", { description: err.message });
+      toast.error(t.briefs.toastReturnFailed, { description: err.message });
       setPendingAction(null);
     },
   });
   const signOffM = trpc.briefs.signOff.useMutation({
     onSuccess: async () => {
-      toast.success("Signed off — the executive gold seal is applied.");
+      toast.success(t.briefs.toastSignedOff);
       setPendingAction(null);
       await invalidateBriefs();
     },
     onError: (err) => {
-      toast.error("Sign-off failed", { description: err.message });
+      toast.error(t.briefs.toastSignoffFailed, { description: err.message });
       setPendingAction(null);
     },
   });
@@ -164,7 +166,7 @@ export default function Briefs() {
       setExportingPptx(false);
     },
     onError: (err) => {
-      toast.error("Export could not be recorded", { description: err.message });
+      toast.error(t.briefs.toastExportError, { description: err.message });
       setExportingPptx(false);
     },
   });
@@ -188,8 +190,8 @@ export default function Briefs() {
     if (!job || !watchedJob || handledJobs.current.has(job.jobId)) return;
     if (watchedJob.status === "succeeded") {
       handledJobs.current.add(job.jobId);
-      toast.success("Brief generated", {
-        description: `“${job.title}” is ready — state: In review.`,
+      toast.success(t.briefs.toastGenerated, {
+        description: t.briefs.toastGeneratedDesc.replace("{title}", job.title),
       });
       setJob(null);
       setComposing(false);
@@ -198,8 +200,8 @@ export default function Briefs() {
       void utils.briefs.get.invalidate({ brief_id: job.briefId });
     } else if (watchedJob.status === "failed" || watchedJob.status === "canceled") {
       handledJobs.current.add(job.jobId);
-      toast.error("Brief generation failed", {
-        description: watchedJob.error ?? "The generation job did not complete.",
+      toast.error(t.briefs.toastGenFailed, {
+        description: watchedJob.error ?? t.briefs.toastGenFailedDesc,
       });
       setJob(null);
     }
@@ -263,7 +265,7 @@ export default function Briefs() {
   const handleReturn = (comment: string) => {
     if (!brief) return;
     if (!comment.trim()) {
-      toast.error("A comment is required to return a brief.");
+      toast.error(t.briefs.commentRequired);
       return;
     }
     setPendingAction("return");
@@ -297,13 +299,13 @@ export default function Briefs() {
   const handleExport = (kind: ExportKind) => {
     if (!brief) return;
     if (!isAuthenticated) {
-      toast.error("Sign in to record exports.");
+      toast.error(t.briefs.signInToExport);
       return;
     }
     exportM.mutate({ brief_id: brief.briefId, format: EXPORT_FORMAT[kind] });
     if (kind !== "print") {
-      toast.success(`Export recorded: ${EXPORT_FORMAT[kind]}`, {
-        description: "Audit event written with request id.",
+      toast.success(t.briefs.exportRecorded.replace("{format}", EXPORT_FORMAT[kind]), {
+        description: t.briefs.exportRecordedDesc,
       });
     }
   };
@@ -331,14 +333,16 @@ export default function Briefs() {
       {/* Page header */}
       <div className="flex flex-wrap items-end justify-between gap-3" data-print-hidden>
         <div>
-          <p className="caption-label text-ink-muted">Kaduna State · Executive briefs</p>
+          <p className="caption-label text-ink-muted">{t.briefs.caption}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
-            Executive Brief Generator
+            {t.briefs.title}
           </h1>
           <p className="mt-1 text-[13px] text-ink-secondary">
             {listQ.isLoading
-              ? "Loading briefs…"
-              : `${briefs.length} brief${briefs.length === 1 ? "" : "s"} · ${awaiting} awaiting approval · Templates v1.6`}
+              ? t.briefs.loading
+              : t.briefs.countLine
+                  .replace("{count}", String(briefs.length))
+                  .replace("{awaiting}", String(awaiting))}
             {listMeta && (
               <span className="ml-2 font-mono text-[11px] text-ink-muted">
                 req {listMeta.request_id}
@@ -356,7 +360,7 @@ export default function Briefs() {
             className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle bg-ink-surface px-3 py-1.5 text-sm font-medium text-ink-secondary hover:border-ink-strong hover:text-ink-primary"
           >
             <Library aria-hidden className="h-4 w-4" />
-            Template library
+            {t.briefs.templateLibrary}
           </motion.button>
           <motion.button
             type="button"
@@ -367,7 +371,7 @@ export default function Briefs() {
             className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base transition-transform hover:bg-civic-strong active:scale-[0.98]"
           >
             <Plus aria-hidden className="h-4 w-4" />
-            New brief
+            {t.briefs.newBrief}
           </motion.button>
         </div>
       </div>
@@ -377,7 +381,7 @@ export default function Briefs() {
         {/* Rail — dropdown selector on <xl */}
         <div className="xl:hidden" data-print-hidden>
           <label className="block">
-            <span className="caption-label text-ink-muted">Select brief</span>
+            <span className="caption-label text-ink-muted">{t.briefs.selectBrief}</span>
             <select
               value={selectedId ?? ""}
               onChange={(e) => {
@@ -420,15 +424,15 @@ export default function Briefs() {
             </div>
           ) : listQ.isError ? (
             <EmptyState
-              title="Briefs could not be loaded"
+              title={t.briefs.errorList}
               guidance={listQ.error.message}
-              action={{ label: "Retry", onClick: () => void listQ.refetch() }}
+              action={{ label: t.action.retry, onClick: () => void listQ.refetch() }}
             />
           ) : briefs.length === 0 && !composing ? (
             <EmptyState
-              title="No briefs yet"
-              guidance="Generate your first decision brief from a template — evidence, citations and the approval chain are attached automatically."
-              action={{ label: "New brief", onClick: () => setComposing(true) }}
+              title={t.briefs.emptyTitle}
+              guidance={t.briefs.emptyGuidance}
+              action={{ label: t.briefs.newBrief, onClick: () => setComposing(true) }}
             />
           ) : composing ? (
             <BriefComposer
@@ -438,8 +442,8 @@ export default function Briefs() {
               canGenerate={canGenerate}
               disabledReason={
                 isAuthenticated
-                  ? "Generation requires the policy analyst role."
-                  : "Sign in to generate briefs."
+                  ? t.briefs.generateRoleReason
+                  : t.briefs.generateSignInReason
               }
               offlineFallback={offlineFallback}
             />
@@ -450,9 +454,9 @@ export default function Briefs() {
             </div>
           ) : getQ.isError ? (
             <EmptyState
-              title="Brief could not be loaded"
+              title={t.briefs.errorGet}
               guidance={getQ.error.message}
-              action={{ label: "Retry", onClick: () => void getQ.refetch() }}
+              action={{ label: t.action.retry, onClick: () => void getQ.refetch() }}
             />
           ) : brief ? (
             view === "slides" ? (
@@ -481,9 +485,9 @@ export default function Briefs() {
             )
           ) : (
             <EmptyState
-              title="Select a brief"
-              guidance="Choose a brief from the list, or generate a new one from a template."
-              action={{ label: "New brief", onClick: () => setComposing(true) }}
+              title={t.briefs.pickTitle}
+              guidance={t.briefs.pickGuidance}
+              action={{ label: t.briefs.newBrief, onClick: () => setComposing(true) }}
             />
           )}
         </div>
@@ -500,12 +504,13 @@ function BriefViewToggle({
   view: "document" | "slides";
   onViewChange: (v: "document" | "slides") => void;
 }) {
+  const t = useT();
   return (
-    <div className="inline-flex rounded-md border border-ink-subtle bg-ink-surface p-0.5" role="group" aria-label="Preview mode">
+    <div className="inline-flex rounded-md border border-ink-subtle bg-ink-surface p-0.5" role="group" aria-label={t.briefs.previewMode}>
       {(
         [
-          { id: "document", label: "Document" },
-          { id: "slides", label: "Presentation" },
+          { id: "document", label: t.briefs.viewDocument },
+          { id: "slides", label: t.briefs.viewSlides },
         ] as const
       ).map(({ id, label }) => (
         <button
