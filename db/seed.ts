@@ -1077,6 +1077,34 @@ async function seed() {
   console.log("  job_heartbeats: 1 upserted (demo)");
   // === end feat-llm-events seed ===
 
+  // === feat-dataset-abac seed (SEC-3, additive) ===
+  // One dataset policy per classification class. Exact-dataset policies for
+  // tests live in api/tests/dataset-abac.test.ts; these are the platform
+  // defaults (entity-type wildcard "*").
+  const DATASET_POLICIES: (typeof schema.datasetPolicies.$inferInsert)[] = [
+    { policyId: "pol:sector:public", datasetId: "*", entityType: "sector",
+      classification: "public", allowedRoles: null, jurisdictionId: null },
+    { policyId: "pol:data-source:internal", datasetId: "*", entityType: "data_source",
+      classification: "internal", allowedRoles: null, jurisdictionId: null },
+    { policyId: "pol:audit-event:restricted", datasetId: "*", entityType: "audit_event",
+      classification: "restricted",
+      allowedRoles: ["platform_admin", "data_steward"], jurisdictionId: null },
+  ];
+  for (const p of DATASET_POLICIES) {
+    await db
+      .insert(schema.datasetPolicies)
+      .values(p)
+      .onDuplicateKeyUpdate({
+        set: {
+          classification: p.classification,
+          allowedRoles: p.allowedRoles,
+          jurisdictionId: p.jurisdictionId ?? null,
+        },
+      });
+  }
+  console.log(`  dataset_policies: ${DATASET_POLICIES.length} upserted`);
+  // === end feat-dataset-abac seed ===
+
   console.log("Done.");
   process.exit(0);
 }

@@ -10,6 +10,7 @@ import {
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit } from "./utils/envelope";
 import { requireRole } from "./utils/rbac";
+import { assertDatasetRead, filterDatasets } from "./utils/datasets";
 import {
   findDocument,
   insertDocument,
@@ -40,19 +41,23 @@ export const documentsRouter = createRouter({
         limit: z.number().int().min(1).max(100).default(25),
       }),
     )
-    .query(async ({ ctx, input }) =>
-      envelope(
-        await listDocuments({
-          jurisdictionId: input.jurisdiction_id,
-          reviewState: input.review_state,
-          language: input.language,
-          confidenceBelow: input.confidence_below,
-          cursor: input.cursor,
-          limit: input.limit,
-        }),
-        ctx,
-      ),
-    ),
+    .query(async ({ ctx, input }) => {
+      const page = await listDocuments({
+        jurisdictionId: input.jurisdiction_id,
+        reviewState: input.review_state,
+        language: input.language,
+        confidenceBelow: input.confidence_below,
+        cursor: input.cursor,
+        limit: input.limit,
+      });
+      // SEC-3: dataset-level ABAC — restricted documents are hidden.
+      const { visible, hidden } = await filterDatasets(ctx, page.items, (d) => ({
+        entityType: "document",
+        datasetId: d.documentId,
+        jurisdictionId: d.jurisdictionId,
+      }));
+      return envelope({ ...page, items: visible, restricted_hidden: hidden }, ctx);
+    }),
 
   get: publicQuery
     .input(z.object({ document_id: z.string().min(1) }))
@@ -64,6 +69,12 @@ export const documentsRouter = createRouter({
           code: "DOCUMENT_NOT_FOUND",
           message: `Document ${input.document_id} not found`,
         });
+      // SEC-3: dataset-level ABAC — restricted documents are forbidden.
+      await assertDatasetRead(ctx, {
+        entityType: "document",
+        datasetId: doc.documentId,
+        jurisdictionId: doc.jurisdictionId,
+      });
       return envelope(doc, ctx);
     }),
 

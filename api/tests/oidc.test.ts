@@ -18,7 +18,7 @@ import {
 
 let server: Server;
 let issuer: string;
-let privateKey: jose.KeyLike;
+let privateKey: Awaited<ReturnType<typeof jose.generateKeyPair>>["privateKey"];
 let publicJwk: jose.JWK;
 
 const CLIENT_ID = "policy-twin-web";

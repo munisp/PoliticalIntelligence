@@ -3,6 +3,7 @@ import { SOURCE_HEALTH, REVIEW_TASK_TYPES, JOB_STATUSES } from "@contracts/entit
 import { createRouter, authedQuery } from "./middleware";
 import { envelope, apiError, audit } from "./utils/envelope";
 import { requireRole, filterReadable } from "./utils/rbac";
+import { filterDatasets } from "./utils/datasets";
 import {
   findDataSource,
   listDataSources,
@@ -33,12 +34,24 @@ export const adminRouter = createRouter({
         category: z.string().optional(),
       }),
     )
-    .query(async ({ ctx, input }) =>
-      envelope(
-        await listDataSources({ health: input.health, category: input.category }),
-        ctx,
-      ),
-    ),
+    .query(async ({ ctx, input }) => {
+      const sources = await listDataSources({
+        health: input.health,
+        category: input.category,
+      });
+      // SEC-3: dataset-level ABAC — restricted sources hidden by policy
+      // (array shape preserved; hidden count surfaced in meta).
+      const { visible, hidden } = await filterDatasets(ctx, sources, (s) => ({
+        entityType: "data_source",
+        datasetId: s.sourceId,
+        jurisdictionId: s.geographyScope ?? null,
+      }));
+      const env = envelope(visible, ctx);
+      return {
+        ...env,
+        meta: { ...env.meta, restricted_hidden: hidden },
+      };
+    }),
 
   updateDataSource: steward
     .input(

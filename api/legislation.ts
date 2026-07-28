@@ -7,6 +7,7 @@ import {
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit } from "./utils/envelope";
 import { requireRole, assertJurisdictionAccess, assertJurisdictionRead, resolveReadScope } from "./utils/rbac";
+import { assertDatasetRead } from "./utils/datasets";
 import {
   approvalEventsFor,
   citationTrace,
@@ -88,6 +89,13 @@ export const legislationRouter = createRouter({
     .query(async ({ ctx, input }) => {
       const law = await findLaw(input.law_id);
       if (law) await assertJurisdictionRead(ctx, law.jurisdictionId);
+      // SEC-3: dataset-level ABAC — a restricted instrument's clauses are
+      // forbidden to actors outside the policy's roles/jurisdiction.
+      await assertDatasetRead(ctx, {
+        entityType: "clause",
+        datasetId: input.law_id,
+        jurisdictionId: law?.jurisdictionId ?? null,
+      });
       return envelope(await clausesForLaw(input.law_id), ctx);
     }),
 

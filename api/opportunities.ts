@@ -4,6 +4,7 @@ import { confidenceTier } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit, requestMeta } from "./utils/envelope";
 import { requireRole, assertJurisdictionAccess, assertJurisdictionRead, resolveReadScope } from "./utils/rbac";
+import { assertDatasetRead } from "./utils/datasets";
 import {
   evidenceByIds,
   findOpportunitiesByIds,
@@ -69,6 +70,12 @@ export const opportunitiesRouter = createRouter({
           message: `Opportunity ${input.opportunity_id} not found`,
         });
       await assertJurisdictionRead(ctx, opp.jurisdictionId);
+      // SEC-3: dataset-level ABAC — restricted opportunity datasets 403.
+      await assertDatasetRead(ctx, {
+        entityType: "opportunity",
+        datasetId: opp.opportunityId,
+        jurisdictionId: opp.jurisdictionId,
+      });
       const evidenceIds = Array.isArray(opp.evidenceRefs)
         ? (opp.evidenceRefs as string[])
         : [];

@@ -1004,3 +1004,41 @@ export const auditWormExports = mysqlTable("audit_worm_exports", {
 });
 
 export type AuditWormExport = typeof auditWormExports.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* ADDITIVE (SEC-3): dataset-level ABAC policies.                      */
+/* One row per protected dataset: a concrete dataset key (document id, */
+/* law id, opportunity id, source id) or the entity-type wildcard "*". */
+/* Resolution at read time: exact dataset_id match wins over "*".      */
+/* ------------------------------------------------------------------ */
+export const datasetPolicies = mysqlTable(
+  "dataset_policies",
+  {
+    policyId: varchar("policy_id", { length: 64 }).primaryKey(),
+    /** Concrete dataset key or "*" (entity-type default). */
+    datasetId: varchar("dataset_id", { length: 128 }).notNull(),
+    /** document | clause | opportunity | data_source | ... */
+    entityType: varchar("entity_type", { length: 64 }).notNull(),
+    classification: mysqlEnum("classification", [
+      "public",
+      "internal",
+      "restricted",
+    ])
+      .notNull()
+      .default("internal"),
+    /** Platform roles allowed when classification = restricted (json array). */
+    allowedRoles: json("allowed_roles"),
+    /** Optional: policy only applies within this jurisdiction. */
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    datasetEntity: uniqueIndex("dataset_policies_dataset_entity").on(
+      t.datasetId,
+      t.entityType,
+    ),
+  }),
+);
+
+export type DatasetPolicy = typeof datasetPolicies.$inferSelect;
