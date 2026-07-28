@@ -61,7 +61,7 @@ Legend: ✅ fully implemented (works end-to-end, cited) · 🟡 partial/scaffold
 | API-5 | Idempotency-Key on mutating POSTs | ✅ | unchanged | `api/rest.ts requireIdempotencyKey`, tested | tRPC surface uses body field | — |
 | API-6 | Health/readiness endpoint | ✅ | unchanged | `api/boot.ts GET /healthz` (real DB probe), up/down tests | — | — |
 | API-7 | §9.2 Recommendation output contract | ✅ | unchanged | `contracts/entities.ts`, `services/ai/app/models.py`, `api/tests/reco-contract.test.ts` | — | — |
-| API-8 | Event schema pack (§40) | 🟡 | unchanged | `api/utils/events.ts` (DomainEvent envelope, outbox, DLQ), `services/ingestion/app/events.py` | No per-topic zod/JSON schema validation, no schema registry | Per-topic payload schemas validated on emit |
+| API-8 | Event schema pack (§40) | ✅ | improved | `contracts/events.ts` (`EventPayloadSchemas`: zod schema per catalog topic + `registerEventSchema` registry), validated in `api/utils/events.ts emitEvent` (invalid payloads/unregistered topics dropped + logged pre-publish), `api/tests/event-schemas.test.ts` (4 tests pass: catalog completeness, producer fixtures, malformed rejection, outbox drop proof), docs/EVENTS.md | TS gateway enforced; Python services validate shape via their own models but not this zod pack | Mirror JSON-Schema export for Python producers |
 | API-9 | Service decomposition (§14, 19 services) | ❌ | unchanged | 5 deployables (app, simulation, ai, ingestion, documents) + in-process consumers | ~14 spec services (feature materializer, audit writer, DLQ replayer…) absent as separate services | Implement or re-scope §14 |
 | API-10 | Auth endpoints `GET /v1/auth/me`, `/permissions` | ✅ | unchanged | `api/auth-router.ts`, `api/rest.ts`, scope/jurisdiction tests | — | — |
 

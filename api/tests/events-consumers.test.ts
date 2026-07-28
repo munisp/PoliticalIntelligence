@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import * as schema from "@db/schema";
+import { registerEventSchema } from "@contracts/events";
 import { getDb } from "../queries/connection";
 import {
   createConsumer,
@@ -62,7 +64,9 @@ describe("event consumers", () => {
 
   it("outbox fallback: emitted event is consumed from event_outbox", async () => {
     // Unique topic -> no shared backlog (outbox consumer polls per-topic).
+    // API-8: extension topics must register a payload schema before emit.
     const topic = `test.outbox.${Date.now()}`;
+    registerEventSchema(topic, z.looseObject({ marker: z.string() }));
     const received: string[] = [];
     const consumer = createConsumer(
       topic,

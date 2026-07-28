@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { eq, isNull, asc } from "drizzle-orm";
 import * as schema from "@db/schema";
 import { EventTopics, type EventTopic } from "@contracts/entities";
+import { validateEventPayload } from "@contracts/events";
 import { getDb } from "../queries/connection";
 import { eventsEmittedTotal } from "./metrics";
 
@@ -90,6 +91,16 @@ export async function emitEvent(
   payload: unknown,
   partitionKey?: string,
 ): Promise<void> {
+  // §40 schema pack (API-8): payloads are validated against the per-topic
+  // zod schema before they may leave the process. Invalid payloads are
+  // dropped (never published to Kafka/outbox/webhooks) and logged.
+  const validation = validateEventPayload(topic, payload);
+  if (!validation.ok) {
+    console.error(
+      `[events] schema validation failed for ${topic}, event dropped: ${validation.error}`,
+    );
+    return;
+  }
   const event: DomainEvent = {
     event_id: `evt_${randomUUID()}`,
     topic,
