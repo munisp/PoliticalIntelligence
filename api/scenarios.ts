@@ -15,7 +15,12 @@ import {
   listScenarios,
   runsForScenario,
 } from "./queries/scenarios";
-import { insertJob } from "./queries/admin";
+import { findDocument, insertJob } from "./queries/admin";
+import { findLaw, clausesForLaw } from "./queries/legislation";
+import { fetchClausesArtifact } from "./queries/documents";
+import { mapClausesToParameters } from "./bridges/paramMapper";
+import { mapBillToParametersInput } from "@contracts/param-mapper";
+import { obligationSchema, type ClauseArtifact } from "@contracts/documents";
 import { enqueuePersistedJob } from "./runner";
 
 export const scenariosRouter = createRouter({
@@ -288,6 +293,74 @@ export const scenariosRouter = createRouter({
         }
       }
       return envelope({ runs: aligned, divergence }, ctx);
+    }),
+
+  /**
+   * G3: one-click "simulate this bill" — map a law's extracted legal
+   * constructs to ranked candidate assumption sets for analyst review.
+   * Deterministic rules (no LLM); every candidate requires analyst review.
+   */
+  mapBillToParameters: authedQuery
+    .input(mapBillToParametersInput)
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, ["simulation_specialist", "policy_analyst"]);
+      let clauses: ClauseArtifact[];
+      if (input.document_id) {
+        const doc = await findDocument(input.document_id);
+        if (!doc)
+          throw apiError(ctx, {
+            http: "NOT_FOUND",
+            code: "DOCUMENT_NOT_FOUND",
+            message: `Document ${input.document_id} not found`,
+          });
+        await assertJurisdictionAccess(ctx, doc.jurisdictionId, "read");
+        clauses = await fetchClausesArtifact(input.document_id);
+      } else {
+        const law = await findLaw(input.law_id!);
+        if (!law)
+          throw apiError(ctx, {
+            http: "NOT_FOUND",
+            code: "LAW_NOT_FOUND",
+            message: `Law ${input.law_id} not found`,
+          });
+        await assertJurisdictionAccess(ctx, law.jurisdictionId, "read");
+        const rows = await clausesForLaw(law.lawId);
+        clauses = rows.map((r) => ({
+          clause_id: r.clauseId,
+          section_path: r.sectionPath,
+          text: r.text,
+          kind: "section" as const,
+          confidence: r.confidence ?? 0.9,
+          // Registry obligations are analyst-authored hints; keep only
+          // entries that satisfy the documents-service artifact schema.
+          obligations: ((r.obligations ?? []) as unknown[])
+            .map((o: unknown) => obligationSchema.safeParse(o))
+            .filter((p) => p.success)
+            .map((p) => p.data) as ClauseArtifact["obligations"],
+          defined_terms: [],
+          citations: [],
+        }));
+      }
+      const result = await mapClausesToParameters(clauses, input.top_k);
+      audit(ctx, "scenarios.bill_mapped_to_parameters", {
+        type: input.document_id ? "document" : "law",
+        id: input.document_id ?? input.law_id!,
+        scopes: ["scenarios:write"],
+        payload: {
+          candidate_count: result.candidates.length,
+          clause_count: result.clause_count,
+          mapper_source: result.source,
+        },
+      });
+      return envelope(
+        {
+          law_id: input.law_id ?? null,
+          document_id: input.document_id ?? null,
+          mapper_source: result.source,
+          ...result,
+        },
+        ctx,
+      );
     }),
 
   listArtifacts: publicQuery
