@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import app from "../boot";
 import { getDb } from "../queries/connection";
 import * as schema from "@db/schema";
@@ -149,7 +149,7 @@ describe("outcomes loader endpoint", () => {
       }),
     });
     expect(res.status).toBe(200);
-    const payload = await res.json();
+    const payload = (await res.json()) as any;
     const data = payload.result.data.json?.data ?? payload.result.data.data;
     expect(data.records).toBe(1);
     expect(data.counts.observations.inserted).toBe(1);
