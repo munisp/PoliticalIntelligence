@@ -200,13 +200,21 @@ export async function deliverWebhooks(event: DomainEvent): Promise<number> {
     return topics.includes(event.topic) || topics.includes("*");
   });
   let delivered = 0;
-  for (const sub of matching) {
+  // Deliver to subscriptions concurrently: with many active subscriptions a
+  // sequential loop multiplies worst-case latency by subscription count.
+  // Each subscription still gets its own bounded 3-attempt backoff.
+  await Promise.all(matching.map(async (sub) => {
     const body = JSON.stringify(event);
     const signature = signWebhookPayload(sub.secret, body);
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const resp = await fetch(sub.url, {
           method: "POST",
+          // Bound delivery latency: an unreachable endpoint must fail fast so
+          // retries/backoff (and callers like the ping-test procedure) return.
+          signal: AbortSignal.timeout(
+            Number(process.env.WEBHOOK_TIMEOUT_MS ?? 5_000),
+          ),
           headers: {
             "Content-Type": "application/json",
             "X-PolicyTwin-Signature": signature,
@@ -231,7 +239,7 @@ export async function deliverWebhooks(event: DomainEvent): Promise<number> {
         }
       }
     }
-  }
+  }));
   return delivered;
 }
 
