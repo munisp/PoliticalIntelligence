@@ -1,0 +1,19 @@
+{
+  "source": "Office of the Accountant-General of the Federation — budget implementation (fixture)",
+  "executions": [
+    {"period": "2024-Q1", "mda": "Federal Ministry of Health", "sector": "health",
+     "appropriated_ngn": 345000000000.0, "executed_ngn": 198750000000.0, "fiscal_year": 2024},
+    {"period": "2024-Q1", "mda": "Federal Ministry of Education", "sector": "education",
+     "appropriated_ngn": 290000000000.0, "executed_ngn": 152250000000.0, "fiscal_year": 2024},
+    {"period": "2024-Q1", "mda": "Federal Ministry of Works", "sector": "infrastructure",
+     "appropriated_ngn": 510000000000.0, "executed_ngn": 306000000000.0, "fiscal_year": 2024},
+    {"period": "2024-Q2", "mda": "Federal Ministry of Health", "sector": "health",
+     "appropriated_ngn": 345000000000.0, "executed_ngn": 431250000000.0, "fiscal_year": 2024},
+    {"period": "2024-Q2", "mda": "Federal Ministry of Education", "sector": "education",
+     "appropriated_ngn": 290000000000.0, "executed_ngn": 304500000000.0, "fiscal_year": 2024},
+    {"period": "2024-Q2", "mda": "Federal Ministry of Works", "sector": "infrastructure",
+     "appropriated_ngn": 510000000000.0, "executed_ngn": 612000000000.0, "fiscal_year": 2024},
+    {"period": "2024-Q2", "mda": "", "sector": "general",
+     "appropriated_ngn": 1000000.0, "executed_ngn": 500000.0, "fiscal_year": 2024}
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "source": "Central Bank of Nigeria — monetary & credit statistics (fixture)",
+  "series": [
+    {
+      "indicator": "CBN_MPR",
+      "points": [
+        {"period": "2024-01", "value": 18.75},
+        {"period": "2024-03", "value": 24.75},
+        {"period": "2024-05", "value": 26.25},
+        {"period": "2024-07", "value": 26.75},
+        {"period": "2024-09", "value": 27.25},
+        {"period": "2024-11", "value": 27.50}
+      ]
+    },
+    {
+      "indicator": "CBN_FX_RATE_OFFICIAL",
+      "points": [
+        {"period": "2024-01", "value": 899.39},
+        {"period": "2024-03", "value": 1330.26},
+        {"period": "2024-05", "value": 1469.97},
+        {"period": "2024-07", "value": 1570.00},
+        {"period": "2024-09", "value": 1655.50},
+        {"period": "2024-11", "value": 1685.23}
+      ]
+    },
+    {
+      "indicator": "CBN_CREDIT_PRIVATE_SECTOR",
+      "points": [
+        {"period": "2024-01", "value": 72011.4},
+        {"period": "2024-03", "value": 73469.2},
+        {"period": "2024-05", "value": 74310.8},
+        {"period": "2024-07", "value": 75128.6},
+        {"period": "2024-09", "value": 76045.1},
+        {"period": "2024-11", "value": 77482.9}
+      ]
+    },
+    {
+      "indicator": "CBN_UNKNOWN_SERIES",
+      "points": [
+        {"period": "2024-01", "value": 1.0}
+      ]
+    }
+  ]
+}

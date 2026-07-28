@@ -1,0 +1,58 @@
+{
+  "publication": "NCAA regulations and advisory circulars (sample)",
+  "source_portal": "https://ncaa.gov.ng",
+  "note": "Offline fixture mirroring the NCAA regulations/advisory-circulars listing; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "instruments": [
+    {
+      "title": "Nigeria Civil Aviation Regulations (NigCARs) 2023",
+      "instrument_type": "regulations",
+      "subject_sectors": ["aviation", "safety"],
+      "reference": "NigCARs 2023",
+      "issued_date": "2023-12-01",
+      "source_url": "https://ncaa.gov.ng/regulations/nigcars-2023"
+    },
+    {
+      "title": "Advisory Circular on Remotely Piloted Aircraft Systems (RPAS) Operations in Nigeria",
+      "instrument_type": "advisory_circular",
+      "subject_sectors": ["aviation", "drones", "rpas"],
+      "reference": "NCAA-AC-AGA021",
+      "issued_date": "2021-06-15",
+      "source_url": "https://ncaa.gov.ng/advisory-circulars/rpas-operations",
+      "metrics": [
+        {"metric_key": "registered_rpas_operators", "sector_code": "aviation", "value": 340, "period": "2024", "unit": "count"}
+      ]
+    },
+    {
+      "title": "Guidelines for the Certification and Licensing of Aerodromes in Nigeria",
+      "instrument_type": "licensing_guidelines",
+      "subject_sectors": ["aviation", "aerodromes", "infrastructure"],
+      "reference": "NCAA/AGA/AEROCERT/2020",
+      "issued_date": "2020-09-08",
+      "source_url": "https://ncaa.gov.ng/guidelines/aerodrome-certification"
+    },
+    {
+      "title": "Regulations on Unmanned Aircraft (Drone) Registration and Operator Permits",
+      "instrument_type": "regulations",
+      "subject_sectors": ["aviation", "drones", "rpas"],
+      "reference": "NigCARs Part 21 (UAS)",
+      "issued_date": "2022-03-17",
+      "source_url": "https://ncaa.gov.ng/regulations/uas-registration-permits"
+    },
+    {
+      "title": "Guidelines for Heliport Operations and Certification",
+      "instrument_type": "guidelines",
+      "subject_sectors": ["aviation", "heliports", "oil_and_gas_aviation"],
+      "reference": "NCAA/AGA/HELI/2019",
+      "issued_date": "2019-07-29",
+      "source_url": "https://ncaa.gov.ng/guidelines/heliport-operations"
+    },
+    {
+      "title": "Advisory Circular on Consumer Protection Rights of Air Passengers",
+      "instrument_type": "advisory_circular",
+      "subject_sectors": ["aviation", "consumer_protection"],
+      "reference": "NCAA-AC-CPD001",
+      "issued_date": "2023-04-11",
+      "source_url": "https://ncaa.gov.ng/advisory-circulars/passenger-rights"
+    }
+  ]
+}

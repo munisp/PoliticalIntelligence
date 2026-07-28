@@ -1,0 +1,38 @@
+{
+  "source": "National Bureau of Statistics — headline indicator series (fixture)",
+  "series": [
+    {
+      "indicator": "NBS_CPI_INFLATION",
+      "points": [
+        {"period": "2024-01", "value": 29.90},
+        {"period": "2024-02", "value": 31.70},
+        {"period": "2024-03", "value": 33.20},
+        {"period": "2024-04", "value": 33.69},
+        {"period": "2024-05", "value": 33.95},
+        {"period": "2024-06", "value": 34.19}
+      ]
+    },
+    {
+      "indicator": "NBS_GDP_GROWTH",
+      "points": [
+        {"period": "2023-Q1", "value": 2.31},
+        {"period": "2023-Q2", "value": 2.51},
+        {"period": "2023-Q3", "value": 2.54},
+        {"period": "2023-Q4", "value": 3.46},
+        {"period": "2024-Q1", "value": 2.98},
+        {"period": "2024-Q2", "value": 3.19}
+      ]
+    },
+    {
+      "indicator": "NBS_UNEMPLOYMENT",
+      "points": [
+        {"period": "2022-Q4", "value": 4.1},
+        {"period": "2023-Q1", "value": 4.1},
+        {"period": "2023-Q2", "value": 4.2},
+        {"period": "2023-Q3", "value": 5.0},
+        {"period": "2024-Q1", "value": 5.3},
+        {"period": "2024-Q2", "value": 5.2}
+      ]
+    }
+  ]
+}

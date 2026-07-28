@@ -26,6 +26,7 @@ import {
   MoreHorizontal,
   Sparkles,
   Globe2,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -260,6 +261,8 @@ const PRIMARY_NAV: NavItem[] = [
   { label: "Policy & Legislation", tKey: "policyWorkbench", href: "/legislation", Icon: Scale },
   { label: "Simulation Studio", tKey: "simulationStudio", href: "/simulation", Icon: FlaskConical },
   { label: "Executive Briefs", tKey: "executiveBriefs", href: "/briefs", Icon: FileText },
+  /* ADVOCACY-NAV */
+  { label: "Advocacy Pathway", tKey: "advocacy", href: "/advocacy", Icon: Megaphone },
   { label: "Data Source Health", tKey: "dataHealth", href: "/data-health", Icon: HeartPulse },
   { label: "Copilot", tKey: "copilot", href: "/copilot", Icon: MessageSquareText, dot: true },
 ];
@@ -284,6 +287,7 @@ const PAGE_TITLES: Record<string, { title: string; crumb: string }> = {
   "/data-health": { title: "Data Source Health", crumb: "Platform / Pipelines" },
   "/copilot": { title: "Copilot", crumb: "Kaduna State / Assistant" },
   "/geo3d": { title: "3D Geospatial", crumb: "Kaduna State / LGA extrusion" },
+  "/advocacy": { title: "Advocacy Pathway", crumb: "Kaduna State / Engagement" },
 };
 
 const DEMO_ROLES = [

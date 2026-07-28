@@ -1,0 +1,55 @@
+{
+  "publication": "NAFDAC guidelines and regulations (sample)",
+  "source_portal": "https://www.nafdac.gov.ng",
+  "note": "Offline fixture mirroring the NAFDAC regulations/guidelines listing; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "instruments": [
+    {
+      "title": "Guidelines for Registration of Processed Food Products in Nigeria",
+      "instrument_type": "registration_guidelines",
+      "subject_sectors": ["food_safety", "manufacturing"],
+      "reference": "NAFDAC/RR/FOOD/2023",
+      "issued_date": "2023-02-10",
+      "source_url": "https://www.nafdac.gov.ng/guidelines/registration-processed-food-products"
+    },
+    {
+      "title": "Guidelines for Registration of Imported Drug Products in Nigeria",
+      "instrument_type": "registration_guidelines",
+      "subject_sectors": ["pharmaceuticals", "imports"],
+      "reference": "NAFDAC/RR/DRUG-IMP/2022",
+      "issued_date": "2022-08-01",
+      "source_url": "https://www.nafdac.gov.ng/guidelines/registration-imported-drugs"
+    },
+    {
+      "title": "Cosmetic Products Regulations 2021",
+      "instrument_type": "regulations",
+      "subject_sectors": ["cosmetics", "consumer_safety"],
+      "reference": "NAFDAC/REG/COS/2021",
+      "issued_date": "2021-05-19",
+      "source_url": "https://www.nafdac.gov.ng/regulations/cosmetic-products-regulations-2021"
+    },
+    {
+      "title": "Guidelines for Registration of Herbal Medicines and Related Products",
+      "instrument_type": "registration_guidelines",
+      "subject_sectors": ["pharmaceuticals", "herbal_medicine"],
+      "reference": "NAFDAC/RR/HERB/2020",
+      "issued_date": "2020-11-25",
+      "source_url": "https://www.nafdac.gov.ng/guidelines/registration-herbal-medicines"
+    },
+    {
+      "title": "Food Grade Packaging Materials Regulations 2019",
+      "instrument_type": "regulations",
+      "subject_sectors": ["food_safety", "packaging"],
+      "reference": "NAFDAC/REG/PACK/2019",
+      "issued_date": "2019-09-12",
+      "source_url": "https://www.nafdac.gov.ng/regulations/food-grade-packaging-2019"
+    },
+    {
+      "title": "Guidelines for Inspection of Manufacturing Facilities (Good Manufacturing Practice)",
+      "instrument_type": "guidelines",
+      "subject_sectors": ["manufacturing", "pharmaceuticals", "food_safety"],
+      "reference": "NAFDAC/INSP/GMP/2023",
+      "issued_date": "2023-06-30",
+      "source_url": "https://www.nafdac.gov.ng/guidelines/gmp-facility-inspection"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "publication": "NERC orders and regulations (sample)",
+  "source_portal": "https://nerc.gov.ng",
+  "note": "Offline fixture mirroring the NERC orders/regulations library; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "instruments": [
+    {
+      "title": "Multi-Year Tariff Order (MYTO) 2024 for Electricity Distribution Companies",
+      "instrument_type": "tariff_order",
+      "subject_sectors": ["power", "distribution"],
+      "reference": "NERC/ORDER/2024/MYTO",
+      "issued_date": "2024-01-05",
+      "source_url": "https://nerc.gov.ng/orders/myto-2024-disco",
+      "metrics": [
+        {"metric_key": "metering_rate_pct", "sector_code": "power", "value": 45.8, "period": "2024", "unit": "percent"}
+      ]
+    },
+    {
+      "title": "Mini-Grid Regulations 2023",
+      "instrument_type": "regulations",
+      "subject_sectors": ["power", "mini_grids", "rural_electrification"],
+      "reference": "NERC/REG/2023/MG",
+      "issued_date": "2023-12-20",
+      "source_url": "https://nerc.gov.ng/regulations/mini-grid-regulations-2023"
+    },
+    {
+      "title": "Meter Asset Provider and National Mass Metering Regulations 2021",
+      "instrument_type": "regulations",
+      "subject_sectors": ["power", "metering"],
+      "reference": "NERC/REG/2021/MAP-NMMP",
+      "issued_date": "2021-03-04",
+      "source_url": "https://nerc.gov.ng/regulations/map-nmmp-2021"
+    },
+    {
+      "title": "Embedded Generation Regulations",
+      "instrument_type": "regulations",
+      "subject_sectors": ["power", "embedded_generation", "renewables"],
+      "reference": "NERC/REG/2012/EG",
+      "issued_date": "2012-06-18",
+      "source_url": "https://nerc.gov.ng/regulations/embedded-generation"
+    },
+    {
+      "title": "Eligible Customer Regulations 2017",
+      "instrument_type": "regulations",
+      "subject_sectors": ["power", "market_competition"],
+      "reference": "NERC/REG/2017/EC",
+      "issued_date": "2017-05-15",
+      "source_url": "https://nerc.gov.ng/regulations/eligible-customer-2017"
+    },
+    {
+      "title": "Supplementary Order to MYTO-2024 on April 2024 Tariff Review for Band A Feeders",
+      "instrument_type": "tariff_order",
+      "subject_sectors": ["power", "distribution", "tariffs"],
+      "reference": "NERC/ORDER/2024/APR-SUPP",
+      "issued_date": "2024-04-03",
+      "source_url": "https://nerc.gov.ng/orders/april-2024-supplementary-order"
+    }
+  ]
+}

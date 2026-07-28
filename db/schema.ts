@@ -1134,3 +1134,128 @@ export const outcomeObservations = mysqlTable(
 
 export type OutcomeObservation = typeof outcomeObservations.$inferSelect;
 export type InsertOutcomeObservation = typeof outcomeObservations.$inferInsert;
+
+/* ------------------------------------------------------------------ */
+/* ADDITIVE (feat-advocacy-backend): Policy Advocacy Pathway.          */
+/* "idea → legislation" knowledge base: stakeholders, their relation   */
+/* graph, and regulatory pathways (licenses/constraints/steps).        */
+/* stakeholderId / pathwayId are natural keys (e.g. "stk:cbn-governor",*/
+/* "pw:ng-fintech-tourism-payments"); id serials are internal only.    */
+/* ------------------------------------------------------------------ */
+
+export const STAKEHOLDER_KINDS = [
+  "individual",
+  "committee",
+  "ministry",
+  "agency",
+  "association",
+  "state_body",
+  "development_partner",
+] as const;
+
+export const stakeholders = mysqlTable(
+  "stakeholders",
+  {
+    id: serial("id").primaryKey(),
+    /** Natural key, e.g. "stk:cbn-governor". */
+    stakeholderId: varchar("stakeholder_id", { length: 96 }).notNull().unique(),
+    kind: mysqlEnum("kind", STAKEHOLDER_KINDS).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** Role/title for individuals (nullable for orgs). */
+    title: varchar("title", { length: 255 }),
+    org: varchar("org", { length: 255 }),
+    /** State name for state-level stakeholders (e.g. "Lagos"). */
+    state: varchar("state", { length: 64 }),
+    /** "senate" | "house" | state assembly name, for committees. */
+    chamber: varchar("chamber", { length: 64 }),
+    /** string[] sector tags (e.g. ["fintech","payments","tourism"]). */
+    sectorTags: json("sector_tags"),
+    bio: text("bio"),
+    /** Why this stakeholder matters for the advocacy pathway. */
+    influenceArea: text("influence_area"),
+    /** How/why to engage (lobby angle). */
+    lobbyAngle: text("lobby_angle"),
+    /** Public channels only — no private contact data. */
+    contactNote: text("contact_note"),
+    /** string[] of adjacent sector codes. */
+    relatedSectors: json("related_sectors"),
+    /** Data currency label, e.g. "2025-12". */
+    asOf: varchar("as_of", { length: 10 }),
+    origin: mysqlEnum("origin", ["live", "derived", "seed"])
+      .default("derived")
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    kindIdx: index("stakeholders_kind_idx").on(t.kind),
+  }),
+);
+
+export type Stakeholder = typeof stakeholders.$inferSelect;
+export type InsertStakeholder = typeof stakeholders.$inferInsert;
+
+/** Directed stakeholder relation graph (oversees / lobbies / regulates...). */
+export const stakeholderEdges = mysqlTable(
+  "stakeholder_edges",
+  {
+    id: serial("id").primaryKey(),
+    /** stakeholders.stakeholder_id (natural key, not the serial). */
+    fromId: varchar("from_id", { length: 96 }).notNull(),
+    toId: varchar("to_id", { length: 96 }).notNull(),
+    /** e.g. 'oversees','member_of','chairs','lobbies','regulates','domesticates'. */
+    relation: varchar("relation", { length: 64 }).notNull(),
+    label: varchar("label", { length: 255 }),
+  },
+  (t) => ({
+    fromIdx: index("stakeholder_edges_from_idx").on(t.fromId),
+    toIdx: index("stakeholder_edges_to_idx").on(t.toId),
+  }),
+);
+
+export type StakeholderEdge = typeof stakeholderEdges.$inferSelect;
+export type InsertStakeholderEdge = typeof stakeholderEdges.$inferInsert;
+
+export const regulatoryPathways = mysqlTable(
+  "regulatory_pathways",
+  {
+    id: serial("id").primaryKey(),
+    /** Natural key, e.g. "pw:ng-fintech-tourism-payments". */
+    pathwayId: varchar("pathway_id", { length: 96 }).notNull().unique(),
+    sector: varchar("sector", { length: 64 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    summary: text("summary"),
+    jurisdictionScope: mysqlEnum("jurisdiction_scope", [
+      "federal",
+      "state",
+      "both",
+    ]).notNull(),
+    /** [{name, issuer, requirement, typical_timeline, cost_note}]. */
+    licenses: json("licenses"),
+    /** [{type, description, severity}]. */
+    constraints: json("constraints"),
+    /** [{ref, title, relevance}] — ref may be a laws.law_id or free ref. */
+    supportingLawRefs: json("supporting_law_refs"),
+    /** stakeholderId[] of associations/bodies to engage. */
+    associationRefs: json("association_refs"),
+    /** Ordered [{step, owner, description, est_duration}]. */
+    steps: json("steps"),
+    origin: mysqlEnum("origin", ["live", "derived", "seed"])
+      .default("derived")
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    sectorIdx: index("regulatory_pathways_sector_idx").on(t.sector),
+  }),
+);
+
+export type RegulatoryPathway = typeof regulatoryPathways.$inferSelect;
+export type InsertRegulatoryPathway = typeof regulatoryPathways.$inferInsert;

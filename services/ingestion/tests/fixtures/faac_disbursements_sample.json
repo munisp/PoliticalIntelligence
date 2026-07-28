@@ -1,0 +1,15 @@
+{
+  "source": "Federation Account Allocation Committee — monthly disbursements (fixture)",
+  "disbursements": [
+    {"period": "2024-01", "tier": "federal", "amount_ngn": 407267953400.55, "fiscal_year": 2024},
+    {"period": "2024-01", "tier": "state", "amount_ngn": 379482784900.12, "fiscal_year": 2024},
+    {"period": "2024-01", "tier": "local_government", "amount_ngn": 278042188600.33, "fiscal_year": 2024},
+    {"period": "2024-02", "tier": "federal", "amount_ngn": 352409286700.90, "fiscal_year": 2024},
+    {"period": "2024-02", "tier": "state", "amount_ngn": 336155019800.45, "fiscal_year": 2024},
+    {"period": "2024-02", "tier": "local_government", "amount_ngn": 251133755900.78, "fiscal_year": 2024},
+    {"period": "2024-03", "tier": "federal", "amount_ngn": 390624111200.10, "fiscal_year": 2024},
+    {"period": "2024-03", "tier": "state", "amount_ngn": 403543876550.60, "fiscal_year": 2024},
+    {"period": "2024-03", "tier": "local_government", "amount_ngn": 293946284700.25, "fiscal_year": 2024},
+    {"period": "2024-03", "tier": "ecological_fund", "amount_ngn": 12000000000.00, "fiscal_year": 2024}
+  ]
+}

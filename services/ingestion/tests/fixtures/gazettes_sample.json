@@ -1,0 +1,32 @@
+{
+  "source": "Federal + state gazettes (fixture)",
+  "gazettes": [
+    {"title": "Electricity Act 2023", "level": "federal", "gazette_no": "No. 71",
+     "volume": "Vol. 110", "published_on": "2023-06-09",
+     "source_url": "https://lawnigeria.com/gazettes/electricity-act-2023",
+     "subject_sectors": ["energy"]},
+    {"title": "Student Loans (Access to Higher Education) Act 2024", "level": "federal",
+     "gazette_no": "No. 15", "volume": "Vol. 111", "published_on": "2024-04-03",
+     "source_url": "https://lawnigeria.com/gazettes/student-loans-act-2024",
+     "subject_sectors": ["education"]},
+    {"title": "National Minimum Wage (Amendment) Act 2024", "level": "federal",
+     "gazette_no": "No. 92", "volume": "Vol. 111", "published_on": "2024-07-29",
+     "source_url": "https://lawnigeria.com/gazettes/minimum-wage-act-2024",
+     "subject_sectors": ["labor"]},
+    {"title": "Lagos State Electricity Law 2024", "level": "state", "state": "Lagos",
+     "gazette_no": "No. 24", "volume": "Vol. 57", "published_on": "2024-12-03",
+     "source_url": "https://gazette.lagosstate.gov.ng/electricity-law-2024",
+     "subject_sectors": ["energy"]},
+    {"title": "Kaduna State Public Procurement (Amendment) Law 2024", "level": "state",
+     "state": "Kaduna", "gazette_no": "No. 8", "volume": "Vol. 42",
+     "published_on": "2024-05-17",
+     "source_url": "https://kdsg.gov.ng/gazettes/procurement-amendment-2024",
+     "subject_sectors": ["procurement", "governance"]},
+    {"title": "Nigeria Data Protection Act 2023", "level": "federal",
+     "gazette_no": "No. 65", "volume": "Vol. 110", "published_on": "2023-06-12",
+     "source_url": "https://lawnigeria.com/gazettes/data-protection-act-2023",
+     "subject_sectors": ["technology", "justice"]},
+    {"title": "Row missing gazette_no", "level": "federal", "gazette_no": "",
+     "published_on": "2024-01-01", "subject_sectors": []}
+  ]
+}
