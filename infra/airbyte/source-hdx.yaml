@@ -1,0 +1,54 @@
+# Airbyte CDK low-code declarative source: HDX (CKAN) datasets (ING-8).
+version: "3.0.0"
+description: "Humanitarian Data Exchange — CKAN package_search"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "https://data.humdata.org/api/3/action/"
+    http_method: GET
+    request_headers:
+      User-Agent: "MeridianPolicyTwin-Ingestion/1.0"
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: ["result", "results"]
+    paginator:
+      type: DefaultPaginator
+      page_token_option:
+        type: RequestOption
+        inject_into: request_parameter
+        field_name: start
+      pagination_strategy:
+        type: OffsetIncrement
+        page_size: 100
+        inject_on_first_request: true
+  streams:
+    datasets:
+      type: DeclarativeStream
+      name: datasets
+      primary_key: ["id"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: package_search
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "hdx"
+streams:
+  - $ref: "#/definitions/streams/datasets"
+check:
+  type: CheckStream
+  stream_names: ["datasets"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    required: ["q"]
+    properties:
+      q: {type: string, examples: ["nigeria education"]}
