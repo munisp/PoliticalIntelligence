@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+// @ts-expect-error no bundled types for js-yaml (transitive dep)
 import yaml from "js-yaml";
 
 /**
@@ -34,15 +35,15 @@ describe("SEC-5: TLS in transit (cert-manager)", () => {
 
   it("cert-manager issuers: ACME + internal CA chain", () => {
     const docs = loadAll("infra/k8s/base/cert-manager.yaml");
-    const issuers = docs.filter((d) => d.kind === "ClusterIssuer");
+    const issuers = docs.filter((d) => d.kind === "ClusterIssuer")!;
     expect(issuers.map((i) => i.metadata.name).sort()).toEqual([
       "internal-ca",
       "letsencrypt-prod",
       "selfsigned",
     ]);
-    const acme = issuers.find((i) => i.metadata.name === "letsencrypt-prod");
+    const acme = issuers.find((i) => i.metadata.name === "letsencrypt-prod")!;
     expect(acme.spec.acme.server).toContain("letsencrypt.org");
-    const ca = docs.find((d) => d.kind === "Certificate");
+    const ca = docs.find((d) => d.kind === "Certificate")!;
     expect(ca.spec.isCA).toBe(true);
   });
 
@@ -56,14 +57,14 @@ describe("SEC-5: TLS in transit (cert-manager)", () => {
 describe("SEC-5: Vault secrets via External Secrets Operator", () => {
   it("ClusterSecretStore points at Vault with kubernetes auth", () => {
     const docs = loadAll("infra/k8s/base/external-secrets.yaml");
-    const store = docs.find((d) => d.kind === "ClusterSecretStore");
+    const store = docs.find((d) => d.kind === "ClusterSecretStore")!;
     expect(store.spec.provider.vault.server).toContain("vault");
     expect(store.spec.provider.vault.auth.kubernetes.role).toBe("policy-twin");
   });
 
   it("ExternalSecret materializes platform-secrets from Vault keys", () => {
     const docs = loadAll("infra/k8s/base/external-secrets.yaml");
-    const es = docs.find((d) => d.kind === "ExternalSecret");
+    const es = docs.find((d) => d.kind === "ExternalSecret")!;
     expect(es.spec.target.name).toBe("platform-secrets");
     const keys = es.spec.data.map((d: any) => d.secretKey);
     expect(keys).toContain("DATABASE_URL");
@@ -74,8 +75,8 @@ describe("SEC-5: Vault secrets via External Secrets Operator", () => {
 describe("ENV-2: weighted canary in staging", () => {
   it("canary Ingress carries nginx canary annotations and its own Service", () => {
     const docs = loadAll("infra/k8s/overlays/staging/canary-ingress.yaml");
-    const ing = docs.find((d) => d.kind === "Ingress");
-    const svc = docs.find((d) => d.kind === "Service");
+    const ing = docs.find((d) => d.kind === "Ingress")!;
+    const svc = docs.find((d) => d.kind === "Service")!;
     expect(ing.metadata.annotations["nginx.ingress.kubernetes.io/canary"]).toBe("true");
     const weight = Number(
       ing.metadata.annotations["nginx.ingress.kubernetes.io/canary-weight"],
