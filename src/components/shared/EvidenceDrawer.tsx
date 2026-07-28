@@ -4,6 +4,7 @@ import { X, FileText, Database, ExternalLink, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import StatusDot, { type StatusKind } from "./StatusDot";
 import { useT } from "@/lib/LocaleContext";
+import { useFocusReturn } from "@/hooks/use-focus-return";
 
 export interface EvidenceSource {
   id: string;
@@ -45,6 +46,8 @@ export default function EvidenceDrawer({
 }: EvidenceDrawerProps) {
   const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
+  // a11y: restore focus to the triggering element when the drawer closes.
+  useFocusReturn(open);
 
   useEffect(() => {
     if (open) closeRef.current?.focus();
