@@ -405,3 +405,17 @@ CREATE INDEX `scenarios_jur_idx` ON `scenarios` (`jurisdiction_id`);--> statemen
 CREATE INDEX `sector_metrics_jur_sector_idx` ON `sector_metrics` (`jurisdiction_id`,`sector_code`);--> statement-breakpoint
 CREATE INDEX `simulation_runs_scenario_idx` ON `simulation_runs` (`scenario_id`);--> statement-breakpoint
 CREATE INDEX `user_jurisdictions_jur_idx` ON `user_jurisdictions` (`jurisdiction_id`);
+-- ---------------------------------------------------------------------
+-- ADDITIVE (SEC-3): dataset-level ABAC policies
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `dataset_policies` (
+  `policy_id` varchar(64) PRIMARY KEY,
+  `dataset_id` varchar(128) NOT NULL,
+  `entity_type` varchar(64) NOT NULL,
+  `classification` enum('public','internal','restricted') NOT NULL DEFAULT 'internal',
+  `allowed_roles` json,
+  `jurisdiction_id` varchar(64),
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `dataset_policies_dataset_entity` (`dataset_id`, `entity_type`)
+);
