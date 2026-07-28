@@ -12,3 +12,8 @@ opentelemetry-instrumentation-fastapi>=0.50b0
 pyiceberg[sql-sqlite,pyarrow]>=0.8,<1
 # MySQL row source for `python -m app.lakehouse export` (default: --source-jsonl)
 PyMySQL>=1.1,<2
+
+# ING-8: Dagster orchestration (app/orchestration/dagster_defs.py).
+# Import-guarded — unit tests inject a fake dagster module and run WITHOUT it.
+dagster>=1.9,<2
+dagster-webserver>=1.9,<2

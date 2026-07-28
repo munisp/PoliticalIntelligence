@@ -1,0 +1,46 @@
+# Airbyte CDK low-code declarative source: OpenStreetMap Overpass (ING-8).
+version: "3.0.0"
+description: "Overpass API — OSM facilities (schools, clinics) per area"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "https://overpass-api.de/api/"
+    http_method: POST
+    request_body_data:
+      data: "{{ config['query'] }}"
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: ["elements"]
+  streams:
+    elements:
+      type: DeclarativeStream
+      name: elements
+      primary_key: ["type", "id"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: interpreter
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "overpass"
+streams:
+  - $ref: "#/definitions/streams/elements"
+check:
+  type: CheckStream
+  stream_names: ["elements"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    required: ["query"]
+    properties:
+      query:
+        type: string
+        examples: ['[out:json];area["name"="Kaduna"]->.a;node["amenity"="school"](area.a);out body;']

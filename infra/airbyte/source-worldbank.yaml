@@ -1,0 +1,61 @@
+# Airbyte CDK low-code declarative source: World Bank indicators (ING-8).
+# Mirrors services/ingestion/app/connectors/worldbank.py semantics.
+version: "3.0.0"
+description: "World Bank Open Data API — macro indicators per country"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "https://api.worldbank.org/v2/"
+    http_method: GET
+    request_parameters:
+      format: json
+      per_page: "500"
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: ["1"]
+    paginator:
+      type: DefaultPaginator
+      page_token_option:
+        type: RequestOption
+        inject_into: request_parameter
+        field_name: page
+      page_size_option:
+        type: RequestOption
+        inject_into: request_parameter
+        field_name: per_page
+      pagination_strategy:
+        type: CursorPagination
+        cursor_value: "{{ response[0]['page'] + 1 }}"
+        stop_condition: "{{ response[0]['page'] >= response[0]['pages'] }}"
+  streams:
+    indicators:
+      type: DeclarativeStream
+      name: indicators
+      primary_key: ["indicator_id", "country_id", "date"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: "country/{{ config['country_code'] }}/indicator/{{ config['indicator'] }}"
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "worldbank"
+streams:
+  - $ref: "#/definitions/streams/indicators"
+check:
+  type: CheckStream
+  stream_names: ["indicators"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    required: ["country_code", "indicator"]
+    properties:
+      country_code: {type: string, examples: ["NGA", "KEN"]}
+      indicator: {type: string, examples: ["SP.POP.TOTL"]}

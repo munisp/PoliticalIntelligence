@@ -1,0 +1,42 @@
+# Airbyte CDK low-code declarative source: NBS bulletin index (ING-8).
+version: "3.0.0"
+description: "National Bureau of Statistics bulletin/publication index pages"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "https://nigerianstat.gov.ng/"
+    http_method: GET
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: []
+  streams:
+    publications:
+      type: DeclarativeStream
+      name: publications
+      primary_key: ["url"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: "elibrary/read/{{ config['category_id'] }}"
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "nbs_bulletin"
+streams:
+  - $ref: "#/definitions/streams/publications"
+check:
+  type: CheckStream
+  stream_names: ["publications"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    required: ["category_id"]
+    properties:
+      category_id: {type: integer, examples: [2]}

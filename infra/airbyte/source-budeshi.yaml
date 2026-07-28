@@ -1,0 +1,52 @@
+# Airbyte CDK low-code declarative source: Budeshi procurement (OCDS) (ING-8).
+version: "3.0.0"
+description: "Budeshi.ng OCDS releases — public procurement records"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "https://budeshi.ng/api/"
+    http_method: GET
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: ["releases"]
+    paginator:
+      type: DefaultPaginator
+      page_token_option:
+        type: RequestOption
+        inject_into: request_parameter
+        field_name: page
+      pagination_strategy:
+        type: PageIncrement
+        page_size: 100
+        start_from_page: 1
+        inject_on_first_request: true
+  streams:
+    releases:
+      type: DeclarativeStream
+      name: releases
+      primary_key: ["ocid"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: releases
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "budeshi"
+streams:
+  - $ref: "#/definitions/streams/releases"
+check:
+  type: CheckStream
+  stream_names: ["releases"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    properties:
+      buyer: {type: string, title: "Buyer filter (optional)"}

@@ -941,6 +941,39 @@ services:
   # DM-4/DM-5: Trino analytical fabric over the Iceberg lakehouse (MinIO
   # warehouse). Catalogs mounted from infra/docker/trino/catalog. Smoke
   # query: docs/LAKEHOUSE.md.
+  # ING-8: Dagster orchestration control plane (optional profile). Wraps the
+  # 8 connectors as jobs with per-pack schedules + a new-source sensor
+  # (services/ingestion/app/orchestration/dagster_defs.py). Enable with:
+  #   docker compose --profile orchestration up dagster
+  # UI on http://localhost:8301
+  dagster:
+    build:
+      context: ../../services/ingestion
+    image: policy-twin/ingestion:local
+    profiles: ["orchestration"]
+    command: >
+      /bin/sh -c "pip install --no-cache-dir dagster dagster-webserver &&
+      DAGSTER_HOME=/app dagster dev -m app.orchestration.dagster_defs
+      -h 0.0.0.0 -p 8301"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      PLATFORM_API_URL: http://app:3000
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      INGESTION_ARTIFACTS_DIR: /srv/artifacts/ingestion
+      INGESTION_SOURCES_DIR: /srv/artifacts/ingestion/sources
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${DAGSTER_PORT:-8301}:8301"
+    volumes:
+      - ingestion-artifacts:/srv/artifacts/ingestion
+    depends_on:
+      api-gateway:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+    networks: [platform]
+    restart: unless-stopped
+
   trino:
     image: trinodb/trino:latest
     ports:
