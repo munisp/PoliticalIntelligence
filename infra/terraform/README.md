@@ -1,36 +1,52 @@
-# Terraform — Foundational Infrastructure (stubs)
+# Terraform — AWS foundational infrastructure
 
-Stub root module for the platform's foundational cloud resources:
+Working AWS root module for the Policy Twin platform. Provisions:
 
-| Module            | Purpose                                                          |
-| ----------------- | ---------------------------------------------------------------- |
-| `network`         | VPC/VNet with public (ingress) + private (workload/data) subnets |
-| `object_storage`  | Versioned, encrypted bucket for documents, Iceberg lakehouse, backups |
-| `kubernetes`      | Managed K8s cluster (system / worker / GPU node groups)          |
+| Module        | Purpose                                                                                      |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| `modules/vpc` | VPC with public subnets (ingress/NAT) and private subnets (EKS nodes, data services)         |
+| `modules/eks` | EKS cluster + managed node groups: general-purpose pool and a tainted GPU pool (`g5.xlarge`) |
+| `modules/s3`  | Artifacts bucket — versioning, encryption, public-access block, Object Lock (COMPLIANCE, default 7-year retention for the audit-retention NFR) |
 
-These modules are intentionally **provider-neutral stubs**: `./modules/*`
-directories are not vendored here. Before the first `terraform apply`,
-implement each module for the chosen cloud (`var.cloud_provider`) or swap
-`source` for a vetted registry module (e.g. `terraform-aws-modules/vpc/aws`,
-`terraform-aws-modules/eks/aws`).
+**Status: reviewed, not applied.** No `terraform apply` has been run from
+this repository yet; first apply is an ops action against a real account
+(state backend + credentials below).
 
-## Usage
+## Quickstart
 
 ```bash
 cd infra/terraform
-terraform init
-terraform plan -var="environment=dev" -var="region=<your-region>"
-terraform apply -var="environment=dev" -var="region=<your-region>"
+
+# 1. Init with remote state (S3 + DynamoDB lock — create them once by hand
+#    or via a bootstrap stack; never commit credentials).
+terraform init \
+  -backend-config="bucket=policy-twin-tfstate" \
+  -backend-config="key=policy-twin/dev/terraform.tfstate" \
+  -backend-config="region=eu-west-1" \
+  -backend-config="dynamodb_table=policy-twin-tflock" \
+  -backend-config="encrypt=true"
+
+# 2. Plan / apply per environment.
+terraform plan  -var-file=environments/dev.tfvars
+terraform apply -var-file=environments/dev.tfvars
+
+# prod is a separate state key and, in CI, a manual-approval environment:
+terraform init -reconfigure \
+  -backend-config="key=policy-twin/prod/terraform.tfstate" ...
+terraform plan -var-file=environments/prod.tfvars
 ```
 
-## Conventions
+Credentials come from the environment (instance role, `AWS_PROFILE`, or CI
+OIDC via `aws-actions/configure-aws-credentials`) — nothing is stored here.
 
-- No credentials in this repo. Use environment variables or a CI OIDC role.
-- Remote state with locking (see commented `backend` block in `main.tf`).
-- One state per environment: `dev`, `staging`, `prod` workspaces or
-  separate state keys — never share state across environments.
-- Sovereign deployments: set `var.region` to an in-country region and keep
-  state in-country as well.
-- GPU node pools are tainted (`workload=gpu:NoSchedule`) and sized per
-  `docs/MODEL_STRATEGY.md`; data services (MySQL, OpenSearch, Neo4j, PostGIS,
-  Redpanda) run as managed services or in-cluster per `docs/DEPLOYMENT.md`.
+## Notes
+
+- `terraform fmt -check -recursive` / `terraform validate` were not run in
+  the authoring sandbox (no terraform binary available); files are
+  hand-formatted to `terraform fmt` conventions. Run both before the first
+  apply.
+- The S3 Object-Lock default retention cannot be lowered or disabled once
+  objects are written under COMPLIANCE mode — that is the point (7-year
+  WORM audit retention).
+- The GPU node group carries a `nvidia.com/gpu=true:NoSchedule` taint;
+  AI serving pods must tolerate it and request `nvidia.com/gpu`.

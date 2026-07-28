@@ -1,26 +1,185 @@
 {
   "realm": "policy-twin",
   "enabled": true,
-  "displayName": "Policy Twin (dev placeholder)",
+  "displayName": "Meridian Policy Twin",
+  "displayNameHtml": "<b>Meridian Policy Twin</b>",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionIdleTimeoutRememberMe": 14400,
+  "ssoSessionMaxLifespanRememberMe": 86400,
+  "accessTokenLifespan": 900,
+  "refreshTokenMaxReuse": 10,
+  "defaultSignatureAlgorithm": "RS256",
+  "revokeRefreshToken": false,
+  "defaultLocale": "en",
   "clients": [
     {
-      "clientId": "policy-twin-app",
+      "clientId": "policy-twin-web",
+      "name": "Policy Twin Web (PWA)",
+      "description": "Public SPA client. Authorization Code + PKCE only.",
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:3000"
+      ],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-policy-twin-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "policy-twin-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "policy-twin-api",
+      "name": "Policy Twin API (resource server)",
+      "description": "Bearer-only resource server; validates audience, issues no tokens.",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["http://localhost:3000/*"],
-      "webOrigins": ["http://localhost:3000"]
+      "serviceAccountsEnabled": false
     }
   ],
   "roles": {
     "realm": [
-      { "name": "executive-consumer" },
-      { "name": "policy-analyst" },
-      { "name": "legal-analyst" },
-      { "name": "data-steward" },
-      { "name": "simulation-specialist" },
-      { "name": "platform-administrator" }
+      {
+        "name": "executive-consumer",
+        "description": "Read dashboards, opportunities, briefs for own jurisdiction; sign-off authority. No uploads, no admin."
+      },
+      {
+        "name": "policy-analyst",
+        "description": "Run opportunity generation, create scenarios, generate briefs, upload documents."
+      },
+      {
+        "name": "legal-analyst",
+        "description": "Legislation workbench: compare, annotate, DeepSeek-R1 specialist analyses."
+      },
+      {
+        "name": "data-steward",
+        "description": "Source registry, onboarding checklist sign-off, quality scores, re-index triggers."
+      },
+      {
+        "name": "simulation-specialist",
+        "description": "Advanced scenario configuration (ensemble sizes, calibration overrides), run manifests."
+      },
+      {
+        "name": "platform-administrator",
+        "description": "Environment config, user/role management, DLQ replay, all jurisdictions."
+      }
     ]
-  }
+  },
+  "groups": [
+    {
+      "name": "policy-twin-users",
+      "subGroups": [
+        { "name": "executives", "realmRoles": ["executive-consumer"] },
+        { "name": "analysts", "realmRoles": ["policy-analyst"] },
+        { "name": "legal", "realmRoles": ["legal-analyst"] },
+        { "name": "stewards", "realmRoles": ["data-steward"] },
+        { "name": "simulation", "realmRoles": ["simulation-specialist"] },
+        { "name": "administrators", "realmRoles": ["platform-administrator"] }
+      ]
+    }
+  ],
+  "defaultGroups": ["/policy-twin-users"],
+  "users": [
+    {
+      "username": "demo-executive",
+      "enabled": true,
+      "email": "demo-executive@policy-twin.local",
+      "firstName": "Demo",
+      "lastName": "Executive",
+      "credentials": [{ "type": "password", "value": "CHANGE-ME", "temporary": false }],
+      "realmRoles": ["executive-consumer"],
+      "groups": ["/policy-twin-users/executives"]
+    },
+    {
+      "username": "demo-policy-analyst",
+      "enabled": true,
+      "email": "demo-policy-analyst@policy-twin.local",
+      "firstName": "Demo",
+      "lastName": "PolicyAnalyst",
+      "credentials": [{ "type": "password", "value": "CHANGE-ME", "temporary": false }],
+      "realmRoles": ["policy-analyst"],
+      "groups": ["/policy-twin-users/analysts"]
+    },
+    {
+      "username": "demo-legal-analyst",
+      "enabled": true,
+      "email": "demo-legal-analyst@policy-twin.local",
+      "firstName": "Demo",
+      "lastName": "LegalAnalyst",
+      "credentials": [{ "type": "password", "value": "CHANGE-ME", "temporary": false }],
+      "realmRoles": ["legal-analyst"],
+      "groups": ["/policy-twin-users/legal"]
+    },
+    {
+      "username": "demo-data-steward",
+      "enabled": true,
+      "email": "demo-data-steward@policy-twin.local",
+      "firstName": "Demo",
+      "lastName": "DataSteward",
+      "credentials": [{ "type": "password", "value": "CHANGE-ME", "temporary": false }],
+      "realmRoles": ["data-steward"],
+      "groups": ["/policy-twin-users/stewards"]
+    },
+    {
+      "username": "demo-simulation-specialist",
+      "enabled": true,
+      "email": "demo-simulation-specialist@policy-twin.local",
+      "firstName": "Demo",
+      "lastName": "SimulationSpecialist",
+      "credentials": [{ "type": "password", "value": "CHANGE-ME", "temporary": false }],
+      "realmRoles": ["simulation-specialist"],
+      "groups": ["/policy-twin-users/simulation"]
+    },
+    {
+      "username": "demo-platform-admin",
+      "enabled": true,
+      "email": "demo-platform-admin@policy-twin.local",
+      "firstName": "Demo",
+      "lastName": "PlatformAdmin",
+      "credentials": [{ "type": "password", "value": "CHANGE-ME", "temporary": false }],
+      "realmRoles": ["platform-administrator"],
+      "groups": ["/policy-twin-users/administrators"]
+    }
+  ]
 }

@@ -84,3 +84,19 @@ groups:
         annotations:
           summary: "Model tier {{ $labels.tier }} error rate above 10%"
           description: "The AI router is seeing elevated failures for tier {{ $labels.tier }}; check vLLM/Ray Serve pools."
+
+  # Availability SLI: blackbox health probes (app + services). A target is
+  # down when probe_success is 0 for 5 minutes; the monthly SLI is computed
+  # as avg_over_time(probe_success[30d]) — see docs/NFR-EVIDENCE.md.
+  - name: platform-uptime
+    interval: 30s
+    rules:
+      - alert: UptimeProbeFailing
+        expr: probe_success == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Health probe failing for {{ $labels.instance }}"
+          description: "The blackbox probe to {{ $labels.instance }} has failed for 5+ minutes; availability SLI is burning."

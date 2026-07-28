@@ -7,6 +7,8 @@
 #   app            Node 20 monolith: builds the React+Vite PWA and serves the Hono+tRPC API (port 3000)
 #   simulation     FastAPI simulation/scenario microservice (port 8100)
 #   ai             FastAPI AI/model-routing microservice (port 8200)
+#   ingestion      FastAPI ingestion connectors + loader (port 8300)
+#   documents      FastAPI document/OCR/legal-NLP/AKN pipeline (port 8400)
 #   mysql          MySQL 8.x — Drizzle ORM operational store
 #   minio (+init)  S3-compatible object storage for documents/lakehouse staging
 #   neo4j          Knowledge graph (entities, laws, relationships)
@@ -25,6 +27,8 @@ networks:
     driver: bridge
 
 volumes:
+  documents-artifacts:
+  ingestion-artifacts:
   mysql-data:
   minio-data:
   neo4j-data:
@@ -33,6 +37,7 @@ volumes:
   redpanda-data:
   prometheus-data:
   grafana-data:
+  vllm-cache:
 
 services:
   app:
@@ -58,6 +63,12 @@ services:
       OPENSEARCH_URL: http://opensearch:9200
       POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
       KAFKA_BROKERS: redpanda:9092
+      # Ingestion service + shared loader key (feat-data-loader).
+      INGESTION_BASE_URL: http://ingestion:8300
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      # Document & legal processing service (spec §18); the gateway falls
+      # back to its local processor when this is unreachable.
+      DOCUMENTS_BASE_URL: http://documents:8400
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
@@ -80,6 +91,10 @@ services:
       simulation:
         condition: service_started
       ai:
+        condition: service_started
+      ingestion:
+        condition: service_started
+      documents:
         condition: service_started
     networks: [platform]
     healthcheck:
@@ -118,6 +133,102 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    restart: unless-stopped
+
+  ingestion:
+    build:
+      context: ../../services/ingestion
+    image: policy-twin/ingestion:local
+    ports:
+      - "${INGESTION_PORT:-8300}:8300"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      # Loader -> platform API (feat-data-loader, docs/LOADER.md).
+      PLATFORM_API_URL: http://app:3000
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      INGESTION_ARTIFACTS_DIR: /srv/artifacts/ingestion
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ingestion-artifacts:/srv/artifacts/ingestion
+    depends_on:
+      app:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8300/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # Document & legal processing service (spec §18): upload -> OCR ->
+  # legal NLP -> Akoma Ntoso. The app gateway talks to it via
+  # DOCUMENTS_BASE_URL and degrades to a local fallback processor when it
+  # is down (processing_mode="fallback" on the register response).
+  documents:
+    build:
+      context: ../../services/documents
+    image: policy-twin/documents:local
+    ports:
+      - "${DOCUMENTS_PORT:-8400}:8400"
+    environment:
+      PORT: "8400"
+      DOCUMENTS_ARTIFACTS_DIR: /srv/artifacts/documents
+      DOCUMENTS_S3_ENDPOINT_URL: http://minio:9000
+      DOCUMENTS_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      DOCUMENTS_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      DOCUMENTS_S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      KAFKA_BROKERS: redpanda:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - documents-artifacts:/srv/artifacts/documents
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8400/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # Refresh-cadence scheduler (SR-1): runs each connector on its own
+  # interval with jitter; last-run state persisted in the artifacts volume.
+  # Not started by default — enable with:
+  #   docker compose --profile scheduler up ingestion-scheduler
+  ingestion-scheduler:
+    build:
+      context: ../../services/ingestion
+    image: policy-twin/ingestion:local
+    profiles: ["scheduler"]
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      SCHEDULER_ENABLED: "1"
+      SCHEDULER_TICK_S: ${SCHEDULER_TICK_S:-60}
+      # Optional JSON override: {"worldbank": 86400, "nbs_bulletin": 604800}
+      SCHEDULER_CADENCE: ${SCHEDULER_CADENCE:-}
+      KAFKA_BROKERS: redpanda:9092
+      PLATFORM_API_URL: http://app:3000
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      INGESTION_ARTIFACTS_DIR: /srv/artifacts/ingestion
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - ingestion-artifacts:/srv/artifacts/ingestion
+    depends_on:
+      app:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    networks: [platform]
     restart: unless-stopped
 
   ai:
@@ -334,6 +445,22 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # One-shot topic provisioning (scripts/kafka-topics.sh): creates the
+  # 10-topic event catalog + DLQs, idempotently, then exits.
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/kafka-topics.sh", "redpanda:9092"]
+    volumes:
+      - ../../scripts:/scripts:ro
+    environment:
+      PARTITIONS: ${KAFKA_TOPIC_PARTITIONS:-3}
+      REPLICAS: ${KAFKA_TOPIC_REPLICAS:-1}
+    networks: [platform]
+    restart: "no"
+
   prometheus:
     image: prom/prometheus:v2.53.0
     ports:
@@ -349,6 +476,22 @@ services:
     networks: [platform]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  # Blackbox prober for the availability SLI (probe_success per target).
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    ports:
+      - "${BLACKBOX_PORT:-9115}:9115"
+    volumes:
+      - ../monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    command: ["--config.file=/etc/blackbox_exporter/config.yml"]
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9115/-/healthy"]
       interval: 15s
       timeout: 5s
       retries: 6
@@ -375,6 +518,43 @@ services:
       interval: 15s
       timeout: 5s
       retries: 6
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # vLLM OpenAI-compatible serving tier (GPU profile — not started by
+  # default; enable with: docker compose --profile gpu up vllm).
+  # Works out of the box: point the ai service at it via
+  #   VLLM_BASE_URL=http://vllm:8000  (router + circuit breakers take over)
+  # Swap VLLM_MODEL for per-tier deployments (see docs/LLM.md).
+  # ------------------------------------------------------------------
+  vllm:
+    image: vllm/vllm-openai:latest
+    profiles: ["gpu"]
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen3-32B}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --gpu-memory-utilization ${VLLM_GPU_MEM_UTIL:-0.90}
+    environment:
+      VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen3-32B}
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+    volumes:
+      - vllm-cache:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${VLLM_GPU_COUNT:-1}
+              capabilities: [gpu]
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
     restart: unless-stopped
 
   otel-collector:
