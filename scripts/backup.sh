@@ -41,21 +41,40 @@ DB_PORT="${DB_PORT:-3306}"
 [ -n "$DB_USER" ] && [ -n "$DB_HOST" ] && [ -n "$DB_NAME" ] \
   || die "could not parse DATABASE_URL (expected mysql://user:pass@host:port/db)"
 
-command -v mysqldump >/dev/null || die "mysqldump not found (install mysql-client)"
+# Prefer mysqldump; fall back to the zero-binary Node dumper
+# (scripts/tidb-dump.mjs) for TiDB Cloud sandboxes / slim containers.
+USE_TIDB_DUMP=0
+if ! command -v mysqldump >/dev/null; then
+  log "mysqldump not found — using scripts/tidb-dump.mjs fallback"
+  USE_TIDB_DUMP=1
+fi
 
 # Credentials via env var, never on the command line (process list safe).
 export MYSQL_PWD="$DB_PASS"
 trap 'unset MYSQL_PWD' EXIT
 
 log "dumping database ${DB_NAME} from ${DB_HOST}:${DB_PORT}"
-mysqldump --single-transaction --routines --triggers \
-  -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$DB_NAME" \
-  | gzip > "${DEST}/mysql-${DB_NAME}.sql.gz"
+if [ "$USE_TIDB_DUMP" -eq 1 ]; then
+  DATABASE_URL="mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/" \
+    node "$(dirname "$0")/tidb-dump.mjs" dump "$DB_NAME" \
+    | gzip > "${DEST}/mysql-${DB_NAME}.sql.gz"
+else
+  mysqldump --single-transaction --routines --triggers \
+    -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$DB_NAME" \
+    | gzip > "${DEST}/mysql-${DB_NAME}.sql.gz"
+fi
 
 log "exporting audit log (WORM copy)"
-mysqldump --single-transaction --no-create-info \
-  -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$DB_NAME" audit_events \
-  | gzip > "${DEST}/audit-worm-export.sql.gz"
+if [ "$USE_TIDB_DUMP" -eq 1 ]; then
+  DATABASE_URL="mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/" \
+    node "$(dirname "$0")/tidb-dump.mjs" dump "$DB_NAME" \
+      --no-create-info --tables audit_events \
+    | gzip > "${DEST}/audit-worm-export.sql.gz"
+else
+  mysqldump --single-transaction --no-create-info \
+    -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$DB_NAME" audit_events \
+    | gzip > "${DEST}/audit-worm-export.sql.gz"
+fi
 
 if [ -d "$ARTIFACTS_DIR" ]; then
   log "archiving artifacts dir ${ARTIFACTS_DIR}"

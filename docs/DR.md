@@ -7,7 +7,7 @@ checklist that proves them.
 
 | Component | Backup | Frequency | Retention |
 | --------- | ------ | --------- | --------- |
-| MySQL (operational DB) | `scripts/backup.sh` → `mysqldump --single-transaction` + gzip | Daily (cron/GitOps scheduler) | 7 daily + 4 weekly |
+| MySQL (operational DB) | `scripts/backup.sh` → `mysqldump --single-transaction` + gzip (falls back to the zero-binary Node dumper `scripts/tidb-dump.mjs` when mysqldump/mysql are absent, e.g. TiDB Cloud sandboxes) | Daily (cron/GitOps scheduler) | 7 daily + 4 weekly |
 | Audit log | WORM export (`audit-worm-export.sql.gz` inside every backup) + sha256 manifest | With every backup | 7 years (object-lock on the upload bucket) |
 | Artifacts (ingestion JSONL, exports) | `artifacts.tar.gz` inside every backup | Daily | Same rotation |
 | Iceberg/S3, Neo4j, OpenSearch, PostGIS | Per `docs/DEPLOYMENT.md` (versioning/replication; rebuildable from replay) | Continuous/Daily | ≥35 days |

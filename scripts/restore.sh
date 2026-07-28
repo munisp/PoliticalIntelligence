@@ -23,7 +23,27 @@ die() { printf '[restore] ERROR: %s\n' "$*" >&2; exit 1; }
 
 SRC="${1:-}"
 [ -n "$SRC" ] && [ -d "$SRC" ] || die "usage: scripts/restore.sh <backup-dir>"
-command -v mysql >/dev/null || die "mysql client not found"
+
+# Prefer the mysql client; fall back to the zero-binary Node loader
+# (scripts/tidb-dump.mjs) for TiDB Cloud sandboxes / slim containers.
+USE_TIDB_DUMP=0
+if ! command -v mysql >/dev/null; then
+  log "mysql client not found — using scripts/tidb-dump.mjs fallback"
+  USE_TIDB_DUMP=1
+fi
+TIDB_DUMP="$(dirname "$0")/tidb-dump.mjs"
+
+# mysql_exec <db-or-empty> <sql> — run SQL, rows as TSV on stdout.
+# (Credentials below are parsed before this is ever called.)
+mysql_exec() {
+  local db="$1" sql="$2"
+  if [ "$USE_TIDB_DUMP" -eq 1 ]; then
+    DATABASE_URL="mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/" \
+      node "$TIDB_DUMP" exec "${db:-information_schema}" "$sql" 2>/dev/null
+  else
+    mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" ${db:+"$db"} -e "$sql"
+  fi
+}
 
 log "verifying manifest"
 ( cd "$SRC" && sha256sum --check manifest.sha256 ) || die "manifest verification failed"
@@ -53,17 +73,21 @@ export MYSQL_PWD="$DB_PASS"
 trap 'unset MYSQL_PWD' EXIT
 
 log "creating scratch database ${TARGET_DB} on ${DB_HOST}:${DB_PORT}"
-mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
-  -e "DROP DATABASE IF EXISTS \`${TARGET_DB}\`; CREATE DATABASE \`${TARGET_DB}\`;"
+mysql_exec "" "DROP DATABASE IF EXISTS \`${TARGET_DB}\`"
+mysql_exec "" "CREATE DATABASE \`${TARGET_DB}\`"
 
 log "loading dump (this is the timed RTO step in a drill)"
-gunzip -c "$DUMP" | mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$TARGET_DB"
+if [ "$USE_TIDB_DUMP" -eq 1 ]; then
+  DATABASE_URL="mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/" \
+    node "$TIDB_DUMP" load "$TARGET_DB" "$DUMP"
+else
+  gunzip -c "$DUMP" | mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$TARGET_DB"
+fi
 
 log "row-count assertions"
 fail=0
 for table in jurisdictions admin_units sector_metrics opportunities users audit_events; do
-  n="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" "$TARGET_DB" \
-        -e "SELECT COUNT(*) FROM \`${table}\`;" 2>/dev/null || echo ERR)"
+  n="$(mysql_exec "$TARGET_DB" "SELECT COUNT(*) FROM \`${table}\`;" || echo ERR)"
   if [ "$n" = "ERR" ]; then
     printf '[restore]   table %-20s MISSING\n' "$table"
     fail=1
@@ -76,12 +100,16 @@ done
 
 log "replaying audit hash chain against scratch DB"
 RESTORE_URL="mysql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${TARGET_DB}"
-if DATABASE_URL="$RESTORE_URL" npx tsx -e "
-  import { verifyAuditChain } from './api/utils/auditchain';
-  const r = await verifyAuditChain();
-  console.log('[restore]   audit chain:', JSON.stringify(r));
-  if (!r.chain_valid) process.exit(1);
-"; then
+# Temp .mts placed in the repo root so the relative import resolves.
+VERIFY_MTS="./.restore-verify-$$.mts"
+trap 'unset MYSQL_PWD; rm -f "$VERIFY_MTS"' EXIT
+cat > "$VERIFY_MTS" <<'EOF'
+import { verifyAuditChain } from "./api/utils/auditchain";
+const r = await verifyAuditChain();
+console.log("[restore]   audit chain:", JSON.stringify(r));
+process.exit(r.chain_valid ? 0 : 1);
+EOF
+if DATABASE_URL="$RESTORE_URL" npx tsx "$VERIFY_MTS"; then
   log "audit chain intact"
 else
   die "audit chain verification failed (tamper-evidence check)"

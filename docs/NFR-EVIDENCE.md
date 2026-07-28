@@ -11,7 +11,7 @@ claimed met (noted per row). Nothing below is claimed without a pointer.
 | Read latency | p95 < 5s for dashboard reads | `tests/k6/api-reads.k6.js` (100 VU/5m, threshold `p(95)<5000`), sandbox equivalent `tests/perf/local-bench.mjs` (same thresholds, CI `e2e` job runs `--smoke`), alert `DashboardReadLatencyHigh` in `infra/monitoring/alerts.yml` | **evidence-ready** |
 | Advisory/generation latency | p95 < 20s | `tests/k6/advisory.k6.js` (20 VU/5m, threshold `p(95)<20000`), advisory group in `tests/perf/local-bench.mjs`, `llm_routing_decisions_total` series | **evidence-ready** (intake + status round trip; full LLM completion latency is pending a served model tier — offline synthesizer is the default) |
 | Concurrency | 100 read / 20 LLM concurrent sessions | k6 executors above (constant-vus 100 / 20); `tests/perf/local-bench.mjs` worker counts (`READ_VUS`/`ADVISORY_VUS`) | **evidence-ready** |
-| DR | RPO ≤ 24h, RTO ≤ 8h | `scripts/backup.sh` (mysqldump + artifacts tar + audit WORM export + sha256 manifest + retention), `scripts/restore.sh` (verified restore into scratch DB: manifest check, row-count assertions, audit chain replay), runbook `docs/DR.md` incl. quarterly timed drill checklist | **evidence-pending** — scripts + runbook exist and are drill-ready; the RTO claim requires the first timed quarterly drill |
+| DR | RPO ≤ 24h, RTO ≤ 8h | `scripts/backup.sh` (mysqldump + artifacts tar + audit WORM export + sha256 manifest + retention; zero-binary fallback `scripts/tidb-dump.mjs`), `scripts/restore.sh` (verified restore into scratch DB: manifest check, row-count assertions, audit chain replay), runbook `docs/DR.md` incl. quarterly timed drill checklist, **DR drill #1 executed 2026-07-28** (see "Executed DR drills" below) | **evidence-ready** — first timed drill: full DB + audit restore in ≈29 s vs 8 h RTO |
 | Audit retention | 7 years, immutable | Hash-chained audit log `api/utils/auditchain.ts` + `auditLog.verify` endpoint (asserted in `tests/e2e/e2e.mjs`), WORM export inside every backup (`audit-worm-export.sql.gz` + manifest, verified in `scripts/restore.sh`) | **evidence-pending** — tamper-evidence + export verification exist; immutability depends on enabling object-lock on the upload bucket (ops step documented in `docs/DR.md`) |
 | Reproducibility | Same inputs + seed ⇒ identical outputs | `services/simulation/tests/test_reproducibility.py` (reproducibility hash), seeded `reproducibility_hash` run manifests in `db/seed.ts` | **evidence-ready** (pytest suite green; calibration/backtesting still open per `docs/COMPLIANCE.md`) |
 | Explainability | Citations on every recommendation; reasoning traces stored | Contract-level `evidence_base ≥ 1` (`contracts/entities.ts`), brief citations rail (`api/runner.ts`, ≥3 sources, tested in `api/tests/briefs-citations.test.ts`), golden Q&A citation checks `services/ai/tests/test_regression.py`, e2e assertion "generated brief has non-empty citations" in `tests/e2e/e2e.mjs` | **evidence-ready** |
@@ -93,11 +93,32 @@ measured with the Prometheus blackbox prober, not self-reported uptime:
 | --- | --- | --- | --- | --- |
 | _pending_ | staging | 5 health endpoints | — | first run of the checklist above |
 
+**Executed DR drills:**
+
+### DR drill #1 — 2026-07-28 (TEST-3, executed)
+
+Environment: sandbox MySQL-compatible cluster (TiDB endpoint); no
+`mysqldump`/`mysql` binaries available, so both scripts exercised the
+zero-binary fallback `scripts/tidb-dump.mjs` (automatic fallback path in
+`scripts/backup.sh` / `scripts/restore.sh`).
+
+| Step | Result | Time |
+| --- | --- | --- |
+| `scripts/backup.sh` | rc=0 — 565 audit events exported, all 41 tables dumped (30+ core tables), `manifest.sha256` written, TiDB fallback engaged | 8 s |
+| `scripts/restore.sh backups/20260728-010957` into scratch DB `…_restore_check` | rc=0 — manifest verified, 139 statements loaded, row counts verified: jurisdictions 6, admin_units 63, sector_metrics 194, opportunities 11, users 9, audit_events 565 | 21 s |
+| Audit chain replay against scratch DB | `chain_valid: true` — 557 chained events + 8 legacy events, no broken links | (incl. above) |
+| **RTO evidence** | **≈29 s total for full DB + audit restore vs 8 h NFR target** | — |
+
+Scratch DB dropped after verification (`DROP DATABASE …_restore_check`).
+Drill scope note: RPO ≤ 24 h is a scheduling property (daily cron per
+`docs/DR.md`); this drill evidences the RTO leg.
+
 **Executed performance runs:**
 
 | Date | Method | Profile | p95 reads | p95 advisory | Error rate | Requests | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-07-27 | `node tests/perf/local-bench.mjs` (zero-dep bench, same thresholds as `tests/k6/*.k6.js`) against the built server on the seeded MySQL pilot | NFR smoke | **360 ms** | **610 ms** | **0%** | 340 reads + 71 advisory | ✅ within NFR (p95 < 5s / 20s) |
+| 2026-07-28 | `BASE_URL=http://localhost:3100 SESSION_COOKIE=$(node tests/e2e/mint-session.mjs --union-id e2e-analyst) node tests/perf/local-bench.mjs --smoke` against the freshly built server (`npm run build && PORT=3100 npm start`) on the sandbox DB | NFR smoke | **520 ms** (p50 91 ms, p99 532 ms) | **614 ms** (p50 583 ms, p99 624 ms) | **0%** | 322 reads + 68 advisory | ✅ PASS — within NFR (p95 < 5s / 20s) |
 
 Method note: the bench drives the real HTTP surface (`/v1/jurisdictions`,
 `/v1/opportunities/rankings`, brief/advisory intake + status polling) with
