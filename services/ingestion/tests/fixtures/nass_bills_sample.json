@@ -1,0 +1,70 @@
+{
+  "publication": "National Assembly bills tracker (sample)",
+  "source_portal": "https://nass.gov.ng",
+  "note": "Offline fixture mirroring the NASS / PLAC bills tracker shape; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "bills": [
+    {
+      "title": "Nigeria Tax Bill, 2024",
+      "sponsor": "Executive (Federal Government)",
+      "chamber": "House",
+      "stage": "third_reading",
+      "date": "2025-03-18",
+      "sector": "finance_economy",
+      "source_url": "https://nass.gov.ng/documents/bill/11072"
+    },
+    {
+      "title": "Nigeria Tax Administration Bill, 2024",
+      "sponsor": "Executive (Federal Government)",
+      "chamber": "Senate",
+      "stage": "committee",
+      "date": "2025-02-12",
+      "sector": "finance_economy",
+      "source_url": "https://nass.gov.ng/documents/bill/11073"
+    },
+    {
+      "title": "Electricity Act (Amendment) Bill, 2025",
+      "sponsor": "Sen. Enyinnaya Abaribe",
+      "chamber": "Senate",
+      "stage": "second_reading",
+      "date": "2025-04-09",
+      "sector": "power",
+      "source_url": "https://nass.gov.ng/documents/bill/11145"
+    },
+    {
+      "title": "National Digital Economy and E-Governance Bill, 2024",
+      "sponsor": "Sen. Shuaibu Salisu",
+      "chamber": "Senate",
+      "stage": "committee",
+      "date": "2024-11-27",
+      "sector": "digital_economy",
+      "source_url": "https://nass.gov.ng/documents/bill/10988"
+    },
+    {
+      "title": "National Food Reserve Agency (Establishment) Bill, 2025",
+      "sponsor": "Hon. Sadiq Ango Abdullahi",
+      "chamber": "House",
+      "stage": "first_reading",
+      "date": "2025-05-21",
+      "sector": "agriculture",
+      "source_url": "https://nass.gov.ng/documents/bill/11201"
+    },
+    {
+      "title": "Nigerian Railway Corporation Act (Repeal and Re-enactment) Bill, 2024",
+      "sponsor": "Sen. Adamu Aliero",
+      "chamber": "Senate",
+      "stage": "passed",
+      "date": "2024-12-11",
+      "sector": "transport",
+      "source_url": "https://nass.gov.ng/documents/bill/10854"
+    },
+    {
+      "title": "Student Loans (Access to Higher Education) Act (Amendment) Bill, 2025",
+      "sponsor": "Hon. Gboyega Isiaka",
+      "chamber": "House",
+      "stage": "assented",
+      "date": "2025-01-29",
+      "sector": "education",
+      "source_url": "https://nass.gov.ng/documents/bill/11095"
+    }
+  ]
+}

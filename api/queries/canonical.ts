@@ -289,6 +289,119 @@ export async function upsertDataSources(
 }
 
 /* ------------------------------------------------------------------ */
+/* budgets (budget_line entities — feat-ng-connectors)                  */
+/* ------------------------------------------------------------------ */
+
+export async function upsertBudgets(
+  rows: { data: Record<string, unknown>; provenance: Provenance }[],
+): Promise<EntityCounts> {
+  const db = getDb();
+  const counts = empty();
+  for (const { data, provenance } of rows) {
+    try {
+      const budgetId = String(
+        data.budget_id ??
+          `budget:${data.fiscal_year}:${data.mda}:${data.program_code ?? ""}`,
+      );
+      const existing = await db
+        .select({ budgetId: schema.budgets.budgetId })
+        .from(schema.budgets)
+        .where(eq(schema.budgets.budgetId, budgetId))
+        .limit(1);
+      if (existing.length > 0) {
+        // Update the appropriation figure only — preserve original provenance.
+        await db
+          .update(schema.budgets)
+          .set({
+            appropriatedNgn:
+              data.amount_ngn !== undefined ? Number(data.amount_ngn) : null,
+          })
+          .where(eq(schema.budgets.budgetId, budgetId));
+        counts.updated++;
+      } else {
+        await db.insert(schema.budgets).values({
+          budgetId,
+          jurisdictionId: String(data.jurisdiction_id),
+          fiscalYear: Number(data.fiscal_year),
+          mda: String(data.mda ?? "unknown"),
+          sectorCode: (data.sector_code as string) ?? null,
+          appropriatedNgn:
+            data.amount_ngn !== undefined ? Number(data.amount_ngn) : null,
+          source: [
+            data.appropriation_type ?? "capital",
+            data.program_code ?? "",
+          ]
+            .join(" ")
+            .trim() || null,
+          origin: provenance.origin,
+          sourceUrl: provenance.url ?? null,
+          fetchedAt: toDate(provenance.fetched_at),
+        });
+        counts.inserted++;
+      }
+    } catch (err) {
+      counts.errors.push(
+        `budget_line ${data.budget_id ?? data.mda}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  return counts;
+}
+
+/* ------------------------------------------------------------------ */
+/* policy_documents (bill_document entities — feat-ng-connectors)       */
+/* ------------------------------------------------------------------ */
+
+export async function upsertPolicyDocuments(
+  rows: { data: Record<string, unknown>; provenance: Provenance }[],
+): Promise<EntityCounts> {
+  const db = getDb();
+  const counts = empty();
+  for (const { data, provenance } of rows) {
+    try {
+      const documentId = String(data.document_id);
+      const metadata = (data.metadata ?? null) as Record<
+        string,
+        unknown
+      > | null;
+      const existing = await db
+        .select({ documentId: schema.policyDocuments.documentId })
+        .from(schema.policyDocuments)
+        .where(eq(schema.policyDocuments.documentId, documentId))
+        .limit(1);
+      if (existing.length > 0) {
+        // Update stage-carrying metadata only — preserve original provenance.
+        await db
+          .update(schema.policyDocuments)
+          .set({ metadata })
+          .where(eq(schema.policyDocuments.documentId, documentId));
+        counts.updated++;
+      } else {
+        await db.insert(schema.policyDocuments).values({
+          documentId,
+          title: String(data.title ?? documentId),
+          jurisdictionId: String(data.jurisdiction_id),
+          sourceUri:
+            (data.source_url as string) ?? provenance.url ?? null,
+          hash: (data.hash as string) ?? null,
+          docType: String(data.document_type ?? "bill"),
+          metadata,
+          origin: provenance.origin,
+          sourceUrl: provenance.url ?? null,
+          fetchedAt: toDate(provenance.fetched_at),
+        });
+        counts.inserted++;
+      }
+    } catch (err) {
+      counts.errors.push(
+        `bill_document ${data.document_id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  return counts;
+}
+
+/* ------------------------------------------------------------------ */
 /* Batch dispatch                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -300,10 +413,20 @@ export type CanonicalBatch = {
     provenance: Provenance;
   }[];
   data_sources?: { data: Record<string, unknown>; provenance: Provenance }[];
+  budgets?: { data: Record<string, unknown>; provenance: Provenance }[];
+  policy_documents?: {
+    data: Record<string, unknown>;
+    provenance: Provenance;
+  }[];
 };
 
 export type LoaderCounts = Record<
-  "sector_metrics" | "facilities" | "procurement_records" | "data_sources",
+  | "sector_metrics"
+  | "facilities"
+  | "procurement_records"
+  | "data_sources"
+  | "budgets"
+  | "policy_documents",
   { inserted: number; updated: number; errors: number }
 > & { error_messages: string[] };
 
@@ -315,6 +438,8 @@ export async function loadCanonicalBatch(
     facilities: { inserted: 0, updated: 0, errors: 0 },
     procurement_records: { inserted: 0, updated: 0, errors: 0 },
     data_sources: { inserted: 0, updated: 0, errors: 0 },
+    budgets: { inserted: 0, updated: 0, errors: 0 },
+    policy_documents: { inserted: 0, updated: 0, errors: 0 },
     error_messages: [] as string[],
   };
   const run = async (
@@ -335,6 +460,8 @@ export async function loadCanonicalBatch(
   await run("facilities", upsertFacilities);
   await run("procurement_records", upsertProcurementRecords);
   await run("data_sources", upsertDataSources);
+  await run("budgets", upsertBudgets);
+  await run("policy_documents", upsertPolicyDocuments);
   return result;
 }
 

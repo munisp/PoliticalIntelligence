@@ -36,6 +36,8 @@ including failures.
 | `overpass` | OSM Overpass (mirror `overpass.kumi.systems`, retry to `overpass-api.de`) | **LIVE endpoint** (verified in DATA_SOURCES_REAL.md §10; sandbox egress blocked re-capture at build time — connector validated against structurally exact fixtures) | `facilities` (schools/clinics/hospitals/markets) |
 | `budeshi` | Budeshi OCDS procurement API | **LIVE endpoint** per §6 (budeshi.ng HTTP 200); API host (`budeshi-engine.vercel.app`, discovered from the SPA bundle) was egress-blocked from the dev sandbox at build time — connector written against the OCDS release shape, fixture-validated | `procurement_records` |
 | `file_harvester` | Budget Office / Open Treasury downloads | **DOWNLOAD class** — scheduled fetch + checksum; stdlib XLSX/CSV parsing (no pandas) | `data_sources`, derived rows |
+| `budget_office` | Budget Office of the Federation (budgetoffice.gov.ng) appropriation/MTEF publications | **HYBRID** — attempts the live publications listing; falls back to bundled 2025-appropriation fixture stamped `origin=derived` when unreachable | `budget_line` → `budgets` |
+| `nass_bills` | National Assembly bills tracker (nass.gov.ng / placbillstrack) | **HYBRID** — attempts the live bills listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `bill_document` → `policy_documents` (`doc_type="bill"`, stage/sponsor/chamber in `metadata`) |
 
 Live-captured payloads are committed under
 `onboarding/packs/kaduna-ng/live_samples/` and
@@ -91,6 +93,10 @@ structured errors, async jobs with idempotency, pytest, Dockerfile).
 - `GET /v1/connectors` — connector registry with last-run status and counts.
 - `GET /health`.
 
+Scheduler cadences (defaults, `SCHEDULER_CADENCE` override): worldbank/hdx/budeshi daily;
+overpass/nada/nbs_bulletin/ubec_factsheet/nass_bills weekly; file_harvester hourly;
+nbs_outcomes/budget_office quarterly (90d).
+
 Pipeline: `fetch → contract_check → normalize → dedupe → emit`.
 Canonical JSONL artifacts at `./artifacts/ingestion/<source>/<date>.jsonl`
 (one JSON object per line: entity + data + provenance). Platform events
@@ -100,7 +106,7 @@ producer adapter: Redpanda/Kafka when `KAFKA_BROKERS` is set and
 stdout adapter (default, fully functional offline).
 
 Run: `pip install -r requirements.txt && uvicorn app.main:app --port 8300`.
-Tests (no network — recorded fixtures): `python -m pytest` (26 tests).
+Tests (no network — recorded fixtures): `python -m pytest` (101 tests, 1 skipped).
 
 ## 6. Connector developer guide
 
@@ -116,7 +122,9 @@ class MyConnector(BaseConnector):
 - `fetch` returns raw payloads wrapped with `self.provenance(url, payload)`
   (adds source_id, URL, fetched_at, SHA-256 checksum, license).
 - `normalize` maps to canonical entities: `jurisdiction`, `admin_unit`,
-  `sector_metric`, `facility`, `procurement_record`, `data_source`.
+  `sector_metric`, `facility`, `procurement_record`, `data_source`,
+  `outcome_observation`, `budget_line` (→ `budgets` table), `bill_document`
+  (→ `policy_documents` with `doc_type="bill"`).
 - `contract_check` (inherited) validates required keys (`REQUIRED_KEYS`),
   freshness (`max_record_age_days`), and completeness; results travel with
   the job and are persisted to `ingestion_runs.contract_results`.

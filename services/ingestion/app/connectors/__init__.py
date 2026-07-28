@@ -11,6 +11,8 @@ from app.connectors.file_harvester import FileHarvesterConnector
 from app.connectors.nbs_bulletin import NbsBulletinConnector
 from app.connectors.ubec_factsheet import UbecFactsheetConnector
 from app.connectors.nbs_outcomes import NbsOutcomesConnector
+from app.connectors.budget_office import BudgetOfficeConnector
+from app.connectors.nass_bills import NassBillsConnector
 
 REGISTRY: dict[str, type[BaseConnector]] = {
     c.name: c
@@ -24,6 +26,8 @@ REGISTRY: dict[str, type[BaseConnector]] = {
         NbsBulletinConnector,
         UbecFactsheetConnector,
         NbsOutcomesConnector,
+        BudgetOfficeConnector,
+        NassBillsConnector,
     )
 }
 

@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "fdacb574-216a-440e-8065-0c3a66b2a72f",
-  "prevId": "a9d918ed-dc3c-461c-8336-9085baa8e4e9",
+  "id": "34d4351d-6b9e-454f-8456-a9a2c8c5a844",
+  "prevId": "fdacb574-216a-440e-8065-0c3a66b2a72f",
   "tables": {
     "admin_units": {
       "name": "admin_units",
@@ -907,11 +907,25 @@
           "notNull": true,
           "autoincrement": false
         },
+        "heading": {
+          "name": "heading",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "text": {
           "name": "text",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "grounding": {
+          "name": "grounding",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "language": {
@@ -2195,6 +2209,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "evidence_base": {
+          "name": "evidence_base",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ria_annex": {
+          "name": "ria_annex",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2847,6 +2875,35 @@
         "ocr_confidence": {
           "name": "ocr_confidence",
           "type": "double",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "origin": {
+          "name": "origin",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'seed'"
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fetched_at": {
+          "name": "fetched_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
