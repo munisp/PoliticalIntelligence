@@ -37,10 +37,15 @@ volumes:
   redpanda-data:
   prometheus-data:
   grafana-data:
+  trino-data:
   vllm-cache:
 
 services:
-  app:
+  # API gateway (API-9). Default SERVICES_MODE=monolith: serves the full
+  # in-process route table (tRPC + REST /v1) exactly as before. With
+  # SERVICES_MODE=micro the gateway forwards /v1/* and /api/trpc/* to the
+  # per-domain services below (see "Domain services (API-9 micro mode)").
+  api-gateway:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.app
@@ -48,6 +53,16 @@ services:
     ports:
       - "${APP_PORT:-3000}:3000"
     environment:
+      # monolith (default, fully runnable) | micro (forward to domain services)
+      SERVICES_MODE: ${SERVICES_MODE:-monolith}
+      SERVICE_URL_JURISDICTIONS: http://jurisdictions:3001
+      SERVICE_URL_OPPORTUNITIES: http://opportunities:3002
+      SERVICE_URL_SCENARIOS: http://scenarios:3003
+      SERVICE_URL_LEGISLATION: http://legislation:3004
+      SERVICE_URL_DOCUMENTS_GATEWAY: http://documents-gateway:3005
+      SERVICE_URL_BRIEFS: http://briefs:3006
+      SERVICE_URL_ADMIN: http://admin:3007
+      SERVICE_URL_OPS: http://ops:3008
       NODE_ENV: ${NODE_ENV:-development}
       PORT: "3000"
       DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
@@ -88,7 +103,8 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_started
-      simulation:
+    
+        simulation:
         condition: service_started
       ai:
         condition: service_started
@@ -96,9 +112,374 @@ services:
         condition: service_started
       documents:
         condition: service_started
-    networks: [platform]
+    networks:
+      platform:
+        # Back-compat alias: other services still reach the gateway as
+        # http://app:3000 (PLATFORM_API_URL etc.).
+        aliases: [app]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+
+  # ------------------------------------------------------------------
+  # Domain services (API-9 micro mode, spec §14). One image, different
+  # CMD per domain; each exposes ONLY its domain's tRPC routers + REST
+  # routes (api/services/index.ts registry). Not started by default —
+  # enable with:
+  #   SERVICES_MODE=micro docker compose --profile microservices up
+  # The default monolith mode needs none of these.
+  # ------------------------------------------------------------------
+  jurisdictions:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/jurisdictions.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: jurisdictions
+      PORT: "3001"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3001:3001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  opportunities:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/opportunities.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: opportunities
+      PORT: "3002"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3002:3002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3002/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  scenarios:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/scenarios.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: scenarios
+      PORT: "3003"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3003:3003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3003/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  legislation:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/legislation.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: legislation
+      PORT: "3004"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3004:3004"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3004/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  documents-gateway:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/documents-gateway.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: documents-gateway
+      PORT: "3005"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3005:3005"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3005/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  briefs:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/briefs.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: briefs
+      PORT: "3006"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3006:3006"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3006/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  admin:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/admin.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: admin
+      PORT: "3007"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3007:3007"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3007/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  ops:
+    image: policy-twin/app:local
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.app
+    profiles: ["microservices"]
+    command: ["node", "dist/services/ops.js"]
+    environment:
+      NODE_ENV: production
+      DOMAIN: ops
+      PORT: "3008"
+      DATABASE_URL: mysql://${MYSQL_USER:-policytwin}:${MYSQL_PASSWORD:-policytwin}@mysql:3306/${MYSQL_DATABASE:-policytwin}
+      SIMULATION_SERVICE_URL: http://simulation:8100
+      AI_SERVICE_URL: http://ai:8200
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${MINIO_BUCKET:-policy-twin}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
+      OPENSEARCH_URL: http://opensearch:9200
+      POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      KAFKA_BROKERS: redpanda:9092
+      DOCUMENTS_BASE_URL: http://documents:8400
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      EVENT_CONSUMERS: "0"
+    ports:
+      - "3008:3008"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3008/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -152,7 +533,7 @@ services:
     volumes:
       - ingestion-artifacts:/srv/artifacts/ingestion
     depends_on:
-      app:
+      api-gateway:
         condition: service_started
       redpanda:
         condition: service_healthy
@@ -222,7 +603,7 @@ services:
     volumes:
       - ingestion-artifacts:/srv/artifacts/ingestion
     depends_on:
-      app:
+      api-gateway:
         condition: service_started
       redpanda:
         condition: service_healthy
@@ -247,6 +628,8 @@ services:
       # Model tier endpoints (vLLM / Ray Serve). Defaults point at in-process dev stubs.
       MODEL_DEFAULT_TIER: ${MODEL_DEFAULT_TIER:-qwen3-dev}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+      # AI-7: set LLM_TRANSPORT=ray to route via Ray Serve (RAY_SERVE_URL)
+      LLM_TRANSPORT: ${LLM_TRANSPORT:-vllm}
       RAY_SERVE_URL: ${RAY_SERVE_URL:-http://localhost:8001}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -555,6 +938,65 @@ services:
       timeout: 10s
       retries: 20
       start_period: 300s
+    restart: unless-stopped
+
+  # DM-4/DM-5: Trino analytical fabric over the Iceberg lakehouse (MinIO
+  # warehouse). Catalogs mounted from infra/docker/trino/catalog. Smoke
+  # query: docs/LAKEHOUSE.md.
+  # ING-8: Dagster orchestration control plane (optional profile). Wraps the
+  # 8 connectors as jobs with per-pack schedules + a new-source sensor
+  # (services/ingestion/app/orchestration/dagster_defs.py). Enable with:
+  #   docker compose --profile orchestration up dagster
+  # UI on http://localhost:8301
+  dagster:
+    build:
+      context: ../../services/ingestion
+    image: policy-twin/ingestion:local
+    profiles: ["orchestration"]
+    command: >
+      /bin/sh -c "pip install --no-cache-dir dagster dagster-webserver &&
+      DAGSTER_HOME=/app dagster dev -m app.orchestration.dagster_defs
+      -h 0.0.0.0 -p 8301"
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      PLATFORM_API_URL: http://app:3000
+      LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
+      INGESTION_ARTIFACTS_DIR: /srv/artifacts/ingestion
+      INGESTION_SOURCES_DIR: /srv/artifacts/ingestion/sources
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${DAGSTER_PORT:-8301}:8301"
+    volumes:
+      - ingestion-artifacts:/srv/artifacts/ingestion
+    depends_on:
+      api-gateway:
+        condition: service_started
+      redpanda:
+        condition: service_healthy
+    networks: [platform]
+    restart: unless-stopped
+
+  trino:
+    image: trinodb/trino:latest
+    ports:
+      - "${TRINO_PORT:-8080}:8080"
+    environment:
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+      - trino-data:/var/lib/trino
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
     restart: unless-stopped
 
   otel-collector:
