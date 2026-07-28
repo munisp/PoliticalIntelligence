@@ -120,7 +120,7 @@ export default function FieldData() {
 
   return (
     <InnovationPage
-      title="Field Data Collection"
+      title={t.innovations.fieldDataTitle}
       description="Offline-first facility surveys for field officers. Submissions queue locally without connectivity and sync automatically on reconnect — each carries a provenance label."
       Icon={ClipboardList}
       actions={
