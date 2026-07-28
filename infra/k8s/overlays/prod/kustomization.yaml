@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: policy-twin
 resources:
   - ../../base
+  - ../../model-serving
   - networkpolicy.yaml
   - ../../base/cert-manager.yaml
   - ../../base/external-secrets.yaml
