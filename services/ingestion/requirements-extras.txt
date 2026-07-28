@@ -1,3 +1,8 @@
 # Optional extras — install only when the corresponding infra exists.
 # Kafka/Redpanda event producer (events fall back to stdout when absent).
 kafka-python==2.0.2
+# OBS-3: OpenTelemetry SDK — only needed when OTEL_SDK_ENABLED=true
+# (lazy-imported by app/metrics.py setup_tracing; noop without these).
+opentelemetry-sdk>=1.29,<2
+opentelemetry-exporter-otlp-proto-http>=1.29,<2
+opentelemetry-instrumentation-fastapi>=0.50b0

@@ -167,9 +167,11 @@ class RunManager:
             run.artifacts.append(ArtifactRef(**manifest))
             run.status = RunStatus.succeeded
             run.finished_at = datetime.now(timezone.utc)
+            _record_run_metric(run, "succeeded")
             log.info("run succeeded", extra={"simulation_run_id": run_id})
         except Exception as exc:
             run.status = RunStatus.failed
+            _record_run_metric(run, "failed")
             run.error = str(exc)
             run.finished_at = datetime.now(timezone.utc)
             log.warning(f"run failed: {exc}",
@@ -187,3 +189,16 @@ def results_digest(run: ScenarioRun) -> str:
         quantitative.append(dump)
     payload = json.dumps(quantitative, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _record_run_metric(run, status: str) -> None:
+    """OBS-1: simulation_runs_total{engine,status} (zero-dep metrics)."""
+    try:
+        from app.metrics import counter
+        engines = "+".join(sorted({e.engine.value for e in
+                                   run.config.model_plan})) or "unknown"
+        counter("simulation_runs_total",
+                "Simulation runs by engine set and status").inc(
+                    {"engine": engines, "status": status})
+    except Exception:
+        pass

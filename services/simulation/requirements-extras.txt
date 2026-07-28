@@ -7,3 +7,8 @@ mesa>=3.0,<4
 pysd>=3.14,<4
 ortools>=9.11,<10
 boto3>=1.35,<2
+# OBS-3: OpenTelemetry SDK — only needed when OTEL_SDK_ENABLED=true
+# (lazy-imported by app/metrics.py setup_tracing; noop without these).
+opentelemetry-sdk>=1.29,<2
+opentelemetry-exporter-otlp-proto-http>=1.29,<2
+opentelemetry-instrumentation-fastapi>=0.50b0

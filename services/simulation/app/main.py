@@ -15,6 +15,7 @@ from app.logging_setup import configure_logging, get_logger
 from app.models import (Audit, Envelope, ErrorEnvelope, Meta, ScenarioConfig,
                         ScenarioRunPublic, ScenarioRunResults, utcnow)
 from app.worker import RunManager
+from app.metrics import instrument, setup_tracing
 
 configure_logging(settings.log_level)
 log = get_logger("api")
@@ -37,6 +38,9 @@ app = FastAPI(
                 "and the four-layer digital twin.",
     lifespan=lifespan,
 )
+
+instrument(app, settings.service_name)
+setup_tracing(app, settings.service_name)
 
 
 # ---------------------------------------------------------------------------

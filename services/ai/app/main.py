@@ -18,6 +18,7 @@ from app.logging_setup import configure_logging, get_logger
 from app.models import (Audit, CopilotQuery, Envelope, ErrorEnvelope, Meta,
                         RecommendationRequest, RetrieveRequest)
 from app.retrieval.fusion import HybridRetriever
+from app.metrics import instrument, setup_tracing
 
 configure_logging(settings.log_level)
 log = get_logger("api")
@@ -49,6 +50,9 @@ app = FastAPI(
                 "synthesizer (fully functional without GPUs).",
     lifespan=lifespan,
 )
+
+instrument(app, settings.service_name)
+setup_tracing(app, settings.service_name)
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +125,14 @@ async def retrieve(req: RetrieveRequest, request: Request):
     retriever: HybridRetriever = request.app.state.retriever
     bundle = retriever.retrieve(req.query, req.jurisdiction_id, req.filters,
                                 req.top_k)
+    try:
+        from app.metrics import counter
+        counter("retrieval_requests_total",
+                "Hybrid retrieval requests").inc({
+                    "paths": "+".join(sorted(
+                        p.value for p in bundle.retrieval_paths_used)) or "none"})
+    except Exception:
+        pass
     return _envelope(request, bundle)
 
 

@@ -100,6 +100,19 @@ class RoutingAuditLog:
 audit_log = RoutingAuditLog()
 
 
+def _record_routing_metric(entry) -> None:
+    try:
+        from app.metrics import counter
+        counter("llm_routing_decisions_total",
+                "LLM routing decisions by tier").inc({
+                    "tier": entry.selected_tier.value,
+                    "workload_class": entry.workload_class.value,
+                    "offline": str(entry.offline).lower(),
+                })
+    except Exception:
+        pass
+
+
 def _canary_decision(decision_id: str, workload: WorkloadClass) -> str | None:
     if not CANARY["enabled"] or workload.value != CANARY["workload_class"]:
         return None
@@ -249,7 +262,7 @@ class ModelRouter:
         if self.serving is not None:
             breakers = {t.value: self.serving.breaker_for(t).state
                         for t in ModelTier if t is not ModelTier.offline}
-        audit_log.append(RoutingAuditEntry(
+        _entry = RoutingAuditEntry(
             decision_id=meta.decision_id,
             request_id=request_id,
             timestamp=datetime.now(timezone.utc),
@@ -263,4 +276,6 @@ class ModelRouter:
             prompt_tokens=(usage or {}).get("prompt_tokens", 0),
             completion_tokens=(usage or {}).get("completion_tokens", 0),
             circuit_breakers=breakers,
-        ))
+        )
+        audit_log.append(_entry)
+        _record_routing_metric(_entry)

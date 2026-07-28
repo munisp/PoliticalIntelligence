@@ -80,10 +80,26 @@ class JobManager:
             report = await asyncio.to_thread(
                 run_pipeline, job, data, filename, self.store, **meta)
             job.status = JobStatus.succeeded
+            try:
+                from app.metrics import counter
+                counter("documents_processed_total",
+                        "Documents processed by the legal pipeline").inc(
+                            {"status": "succeeded",
+                             "doc_type": str(getattr(job, "doc_type", "unknown"))})
+            except Exception:
+                pass
             job.ocr_confidence = report.mean_ocr_confidence
         except Exception as exc:
             log.exception("document job %s failed", job.job_id)
             job.status = JobStatus.failed
+            try:
+                from app.metrics import counter
+                counter("documents_processed_total",
+                        "Documents processed by the legal pipeline").inc(
+                            {"status": "failed",
+                             "doc_type": str(getattr(job, "doc_type", "unknown"))})
+            except Exception:
+                pass
             job.error = str(exc)
             for st in job.stages:
                 if st.status == "running":

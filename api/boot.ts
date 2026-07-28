@@ -62,6 +62,11 @@ app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 const { default: rest } = await import("./rest");
 app.route("/v1", rest);
 
+// OpenTelemetry tracing (OBS-3): noop unless OTEL_SDK_ENABLED=true and the
+// optional @opentelemetry/* packages are installed — see api/utils/otel.ts.
+const { setupNodeOtel } = await import("./utils/otel");
+await setupNodeOtel();
+
 // Durable-outbox relay for the event backbone (noop without KAFKA_BROKERS).
 const { startOutboxRelay } = await import("./utils/events");
 startOutboxRelay();

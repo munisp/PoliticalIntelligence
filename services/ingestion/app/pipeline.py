@@ -85,6 +85,16 @@ def run_pipeline(
         "loader": loader_outcome,
     })
 
+    try:
+        from app.metrics import counter
+        counter("ingestion_records_total",
+                "Canonical records ingested").inc(
+                    {"connector": connector.name}, amount=len(canonical))
+        counter("ingestion_runs_total", "Ingestion runs").inc(
+            {"connector": connector.name,
+             "status": "succeeded" if contract.schema_ok else "contract_failed"})
+    except Exception:
+        pass
     return {
         "connector": connector.name,
         "jurisdiction": jurisdiction,
