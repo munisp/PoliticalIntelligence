@@ -224,8 +224,6 @@ function opp(
   } as OppRow;
 }
 
-const ALL_EV = [EV.commissioning, EV.financing, EV.esia, EV.design];
-
 export const CORRIDOR_OPPORTUNITIES: OppRow[] = [
   /* ---- Direct (construction supply chain) ---- */
   opp("opp:lch:materials-supply", "jur:ng-la", "construction", "Cement, aggregates & laterite supply contracts",

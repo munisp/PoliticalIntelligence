@@ -56,7 +56,7 @@ describe("lagos-calabar corridor seed", () => {
 
   it("every opportunity has a non-empty evidence_base citing pack evidence sources", async () => {
     const rows = await corridorOpps();
-    const packEvidenceIds = new Set(Object.values(EV));
+    const packEvidenceIds = new Set<string>(Object.values(EV));
     for (const row of rows) {
       const refs = (row.evidenceRefs ?? []) as string[];
       expect(refs.length, row.opportunityId).toBeGreaterThan(0);
