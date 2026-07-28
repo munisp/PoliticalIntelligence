@@ -118,3 +118,72 @@ already on emit), `audit.events` (throttled WORM export kick). Consumers
 dedup by event id. Job hardening: the runner's lifecycle writes
 `job_heartbeats`; a sweeper auto-fails jobs with no heartbeat for 10 min and
 emits `ops.alerts`.
+
+## Keycloak switch-over runbook (SEC-1)
+
+The identity plane switches from Kimi OAuth to the sovereign Keycloak IdP
+with environment only — no code changes (`api/utils/oidc.ts`,
+`api/context.ts`):
+
+| Env | Value | Notes |
+| --- | --- | --- |
+| `AUTH_PROVIDER` | `keycloak` | default `kimi` |
+| `OIDC_ISSUER` | `https://keycloak.<domain>/realms/policy-twin` | must match the token `iss` exactly |
+| `OIDC_CLIENT_ID` | `policy-twin-web` | token `aud` check |
+| `OIDC_CLIENT_SECRET` | `<realm client secret>` | reserved for code-flow exchange |
+
+Steps:
+
+1. **Import the realm** (ships at `infra/docker/keycloak/realm-policy-twin.json`):
+   `docker exec keycloak /opt/keycloak/bin/kc.sh import --file /opt/keycloak/data/import/realm-policy-twin.json`
+   (or start the container with `--import-realm` and the realm on the import
+   dir). The realm defines the six roles `executive-consumer`,
+   `policy-analyst`, `legal-analyst`, `data-steward`,
+   `simulation-specialist`, `platform-administrator`, mapped to platform
+   roles via `KEYCLOAK_ROLE_MAP`.
+2. **Create the client** `policy-twin-web` (confidential, standard flow +
+   direct access grants for service accounts); add its audience to tokens
+   (Keycloak 24+: client scope `policy-twin-web` with an audience mapper, or
+   set "Included Client Audience").
+3. **DNS/TLS:** terminate TLS at the ingress (cert-manager `ClusterIssuer`
+   in `infra/k8s`); `OIDC_ISSUER` must be the EXTERNAL https URL — Keycloak
+   must be started with `--hostname=https://keycloak.<domain>` so the
+   discovery document advertises matching URLs, or verification fails on
+   `iss` mismatch.
+4. **Roll out:** set the four env vars on the `app` deployment and restart.
+   Sessions are Bearer JWTs verified against the realm JWKS (discovery at
+   `$OIDC_ISSUER/.well-known/openid-configuration`, cached). Users are
+   provisioned on first login with `unionId = oidc:<sub>`; Kimi and
+   Keycloak identities coexist.
+5. **Verify:** `api/tests/oidc.test.ts` runs the full path against a mock
+   issuer (in-test JWKS + discovery). Live smoke:
+   `curl -H "Authorization: Bearer $KC_TOKEN" https://api.<domain>/v1/auth/me`.
+6. **Rollback:** unset `AUTH_PROVIDER` (or set `kimi`) and restart; Kimi
+   sessions are untouched.
+
+## Evidence immutability: S3 Object Lock (SEC-4)
+
+WORM audit exports (`api/utils/worm.ts`) write append-only JSONL + manifest
+artifacts locally and, when configured, push them to an S3 bucket with
+**Object Lock in COMPLIANCE mode** — the strongest retention: not even the
+root account can delete or overwrite before the retain-until date:
+
+| Env | Meaning | Default |
+| --- | --- | --- |
+| `WORM_S3_BUCKET` | Object-Lock-enabled bucket (lock enabled at creation) | unset = local only |
+| `WORM_S3_PREFIX` | key prefix | `audit-worm/` |
+| `WORM_RETENTION_YEARS` | retention period (spec: 7 years) | `7` |
+| `WORM_S3_PRESIGN_URL_TEMPLATE` | presigned-PUT flow, `{key}` placeholder | unset |
+| `WORM_EXPORT_DIR` / `WORM_EXPORT_INTERVAL_MS` | local artifact dir / cadence | `./artifacts/audit-worm` / 1h |
+
+Uploads use `PutObject` with `ObjectLockMode=COMPLIANCE`,
+`ObjectLockRetainUntilDate = now + retention`, and
+`ChecksumAlgorithm=SHA256`. With the presigned template set, the artifact
+bytes are PUT to the presigned URL with the equivalent
+`x-amz-object-lock-mode: COMPLIANCE` and `x-amz-object-lock-retain-until-date`
+headers (the presigning side must sign those headers). Every manifest
+carries `sha256` of the JSONL and the running `chain_head`, checkpointed in
+the `audit_worm_exports` table; `verifyWormExports` re-validates manifests,
+per-event hashes, and cross-file chain continuity. Local artifacts are
+written with the `wx` flag — an attempt to rewrite a sealed export is
+rejected (tested in `api/tests/worm.test.ts`).
