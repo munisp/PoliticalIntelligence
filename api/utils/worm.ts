@@ -94,8 +94,19 @@ async function lastChainHead(): Promise<string> {
 async function uploadToS3(key: string, body: string): Promise<string | null> {
   const presignTemplate = process.env.WORM_S3_PRESIGN_URL_TEMPLATE;
   if (presignTemplate) {
+    const years = Number(process.env.WORM_RETENTION_YEARS ?? 7);
+    const retainUntil = new Date(Date.now() + years * 365 * 24 * 3600 * 1000);
     const url = presignTemplate.replace("{key}", encodeURIComponent(key));
-    const resp = await fetch(url, { method: "PUT", body });
+    // COMPLIANCE-mode Object Lock headers — the presigning side must have
+    // signed these headers (docs/SECURITY.md §Evidence immutability).
+    const resp = await fetch(url, {
+      method: "PUT",
+      body,
+      headers: {
+        "x-amz-object-lock-mode": "COMPLIANCE",
+        "x-amz-object-lock-retain-until-date": retainUntil.toISOString(),
+      },
+    });
     if (!resp.ok) throw new Error(`presigned PUT failed: HTTP ${resp.status}`);
     return `presigned:${key}`;
   }
