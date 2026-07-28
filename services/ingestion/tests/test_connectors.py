@@ -197,10 +197,19 @@ def test_budeshi_procurement_records():
 
 
 def test_registry_complete():
+    # 11 base + 25 new (macro-legal, regulators, subnat/firms)
     assert set(REGISTRY) == {"worldbank", "hdx", "overpass", "nada",
                              "budeshi", "file_harvester",
                              "nbs_bulletin", "ubec_factsheet",
                              "nbs_outcomes",
-                             "budget_office", "nass_bills"}
+                             "budget_office", "nass_bills",
+                             "cbn", "dmo", "nbs_series",
+                             "faac", "oagf", "gazettes", "judgments",
+                             "nitda", "cbn_fintech", "ncc", "nerc",
+                             "nafdac", "son", "ncaa",
+                             "state_budgets", "state_procurement",
+                             "state_assembly_bills", "state_irs", "cac",
+                             "bpp", "smedan", "npopc", "afdb",
+                             "afreximbank", "iati"}
     for name in REGISTRY:
         assert get_connector(name).name == name
