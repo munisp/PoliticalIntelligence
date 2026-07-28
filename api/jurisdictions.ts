@@ -43,6 +43,8 @@ const loadCanonicalInput = z.object({
   facilities: z.array(canonicalRecord).max(500).optional(),
   procurement_records: z.array(canonicalRecord).max(500).optional(),
   data_sources: z.array(canonicalRecord).max(500).optional(),
+  budgets: z.array(canonicalRecord).max(500).optional(),
+  policy_documents: z.array(canonicalRecord).max(500).optional(),
 });
 
 const pagination = {
@@ -240,7 +242,9 @@ export const jurisdictionsRouter = createRouter({
         (input.sector_metrics?.length ?? 0) +
         (input.facilities?.length ?? 0) +
         (input.procurement_records?.length ?? 0) +
-        (input.data_sources?.length ?? 0);
+        (input.data_sources?.length ?? 0) +
+        (input.budgets?.length ?? 0) +
+        (input.policy_documents?.length ?? 0);
       if (total === 0) {
         throw apiError(ctx, {
           http: "BAD_REQUEST",
