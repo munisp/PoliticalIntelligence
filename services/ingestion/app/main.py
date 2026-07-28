@@ -14,6 +14,7 @@ from app.errors import ServiceError
 from app.logging_setup import configure_logging, get_logger
 from app.models import (Audit, Envelope, ErrorEnvelope, IngestRequest, Meta)
 from app.worker import JobManager
+from app.metrics import instrument, setup_tracing
 
 configure_logging(settings.log_level)
 log = get_logger("api")
@@ -35,6 +36,9 @@ app = FastAPI(
                 "NADA, Budeshi, file harvester) with end-to-end provenance.",
     lifespan=lifespan,
 )
+
+instrument(app, settings.service_name)
+setup_tracing(app, settings.service_name)
 
 
 def _envelope(request: Request, data) -> Envelope:
