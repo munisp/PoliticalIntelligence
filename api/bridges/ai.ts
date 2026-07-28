@@ -247,12 +247,24 @@ async function postJsonValidated<T>(
   throw new RecommendationContractError(errors);
 }
 
+/** AI-8: routing decision record persisted to the immutable audit store. */
+export interface ModelRoutingRecord {
+  tier: "remote" | "offline-fallback";
+  model: string;
+  fallback: boolean;
+  decided_at: string;
+}
+
 export async function generateRecommendation(body: {
   opportunity: OpportunityContext;
   evidence: EvidenceSnippet[];
   legal_dependencies: Recommendation["legal_dependencies"];
   simulation_scenarios: Recommendation["simulation_scenarios"];
-}): Promise<{ recommendation: Recommendation; bridge: "remote" | "fallback" }> {
+}): Promise<{
+  recommendation: Recommendation;
+  bridge: "remote" | "fallback";
+  routing: ModelRoutingRecord;
+}> {
   const { llmRoutingDecisions } = await import("../utils/metrics");
   // PII redaction on the generation INPUT before it leaves the gateway.
   const safeBody = redact("bridge.recommendations.input", body);
@@ -268,6 +280,12 @@ export async function generateRecommendation(body: {
     return {
       recommendation: redact("bridge.recommendations.output", recommendation),
       bridge: "remote",
+      routing: {
+        tier: "remote",
+        model: "serving-tier",
+        fallback: false,
+        decided_at: new Date().toISOString(),
+      },
     };
   } catch (err) {
     if (err instanceof RecommendationContractError) throw err; // fail the job
@@ -284,6 +302,12 @@ export async function generateRecommendation(body: {
     return {
       recommendation: redact("bridge.recommendations.output", recommendation),
       bridge: "fallback",
+      routing: {
+        tier: "offline-fallback",
+        model: "deterministic",
+        fallback: true,
+        decided_at: new Date().toISOString(),
+      },
     };
   }
 }

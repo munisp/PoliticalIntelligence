@@ -159,7 +159,7 @@ jobRunner.register("opportunities.generate", async ({ input, reportProgress }) =
     }
     throw err; // job fails with the error envelope; nothing is persisted
   }
-  const { recommendation, bridge } = generated;
+  const { recommendation, bridge, routing } = generated;
   recommendation.generated_at = new Date();
   await reportProgress(80);
 
@@ -172,12 +172,14 @@ jobRunner.register("opportunities.generate", async ({ input, reportProgress }) =
     approvalChain: [{ role: "policy_analyst", state: "generated", at: new Date().toISOString() }] as never,
     createdBy: actor_id,
   });
+  // AI-8: the model routing record is persisted to the immutable audit
+  // store on every generation, alongside the recommendations.generated event.
   await auditBackground(
     actor_id,
     "recommendations.generated",
     "recommendation",
     recommendation.recommendation_id,
-    { topic: EventTopics.recommendationsGenerated, bridge },
+    { topic: EventTopics.recommendationsGenerated, bridge, model_routing: routing },
   );
   return { recommendation_id: recommendation.recommendation_id, bridge };
 });
@@ -343,13 +345,21 @@ jobRunner.register("briefs.generate", async ({ input, reportProgress }) => {
       : (redactPayload(content, undefined, piiCounts) as typeof content);
   logRedactionEvent("runner.briefs.generate.output", piiCounts);
 
+  const briefRouting = {
+    tier: "offline-fallback",
+    model: "deterministic",
+    fallback: true,
+    decided_at: new Date().toISOString(),
+  };
   await updateBrief(brief_id, {
     content: safeContent as never,
     reviewState: "in_review",
-    modelRouting: { tier: "offline-fallback", model: "deterministic", fallback: true } as never,
+    modelRouting: briefRouting as never,
   });
+  // AI-8: routing record persisted to the immutable audit store.
   await auditBackground(actor_id, "reports.generated", "brief", brief_id, {
     topic: EventTopics.reportsGenerated,
+    model_routing: briefRouting,
   });
   return { brief_id };
 });
