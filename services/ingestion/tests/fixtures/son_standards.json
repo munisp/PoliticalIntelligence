@@ -1,0 +1,55 @@
+{
+  "publication": "SON standards and conformity assessment instruments (sample)",
+  "source_portal": "https://son.gov.ng",
+  "note": "Offline fixture mirroring the SON standards/conformity-assessment listing; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "instruments": [
+    {
+      "title": "Mandatory Conformity Assessment Programme (MANCAP) Operational Guidelines",
+      "instrument_type": "conformity_assessment_guidelines",
+      "subject_sectors": ["standards", "manufacturing"],
+      "reference": "SON/MANCAP/2021",
+      "issued_date": "2021-04-08",
+      "source_url": "https://son.gov.ng/mancap-operational-guidelines"
+    },
+    {
+      "title": "Standards Organisation of Nigeria Conformity Assessment Programme (SONCAP) for Imports",
+      "instrument_type": "conformity_assessment_guidelines",
+      "subject_sectors": ["standards", "imports", "trade"],
+      "reference": "SON/SONCAP/2013",
+      "issued_date": "2013-03-01",
+      "source_url": "https://son.gov.ng/soncap-imports-programme"
+    },
+    {
+      "title": "Guidelines for Product Registration under the SON Product Registration Scheme",
+      "instrument_type": "registration_guidelines",
+      "subject_sectors": ["standards", "product_registration"],
+      "reference": "SON/PRS/2022",
+      "issued_date": "2022-07-14",
+      "source_url": "https://son.gov.ng/product-registration-scheme-guidelines"
+    },
+    {
+      "title": "Nigerian Industrial Standard NIS 444-1: Cement — Composition, Specifications and Conformity Criteria",
+      "instrument_type": "standard",
+      "subject_sectors": ["standards", "construction", "manufacturing"],
+      "reference": "NIS 444-1:2018",
+      "issued_date": "2018-01-22",
+      "source_url": "https://son.gov.ng/standards/nis-444-1-cement"
+    },
+    {
+      "title": "Guidelines for E-Product Registration and Electronic MANCAP Certification",
+      "instrument_type": "guidelines",
+      "subject_sectors": ["standards", "digital_services"],
+      "reference": "SON/EPR/2023",
+      "issued_date": "2023-05-30",
+      "source_url": "https://son.gov.ng/e-product-registration-guidelines"
+    },
+    {
+      "title": "Nigerian Industrial Standard NIS 554: Steel Reinforcement Bars for Concrete — Specification",
+      "instrument_type": "standard",
+      "subject_sectors": ["standards", "construction"],
+      "reference": "NIS 554:2017",
+      "issued_date": "2017-11-03",
+      "source_url": "https://son.gov.ng/standards/nis-554-steel-reinforcement"
+    }
+  ]
+}
