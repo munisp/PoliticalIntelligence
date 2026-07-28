@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useNavigate } from "react-router";
 import {
   AlertTriangle,
   Copy,
@@ -9,13 +8,15 @@ import {
   ScrollText,
   X,
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
 import { nanoid } from "nanoid";
+import { useNavigate } from "react-router";
+import { toast, Toaster } from "sonner";
 
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { envelopeMeta, unwrap } from "@/lib/trpc-data";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/LocaleContext";
 import EmptyState from "@/components/shared/EmptyState";
 import { SkeletonCard, SkeletonTable } from "@/components/shared/Skeleton";
 import {
@@ -29,154 +30,214 @@ import {
 
 import OverviewStrip from "@/components/data-health/OverviewStrip";
 import PipelineBoard, {
-  buildPipelineRows,
-  type PipelineRow,
+  type BoardRow,
 } from "@/components/data-health/PipelineBoard";
-import ReviewQueue from "@/components/data-health/ReviewQueue";
-import SourceRegistry from "@/components/data-health/SourceRegistry";
+import ReviewQueue, {
+  type ReviewTaskRow,
+} from "@/components/data-health/ReviewQueue";
+import SourceRegistry, {
+  type DataSourceRow,
+} from "@/components/data-health/SourceRegistry";
 import FreshnessHeatmap from "@/components/data-health/FreshnessHeatmap";
 import {
   ageDays,
-  parseCompliance,
+  formatDateTime,
   relativeTime,
-  slaStatus,
-  type DataSourceRow,
+  stewardRoles,
+  type FreshnessSummary,
   type PipelineRunRow,
-  type ReviewTaskRow,
-} from "@/components/data-health/health-utils";
-import { formatDateTime } from "@/components/briefs/brief-utils";
+} from "@/components/data-health/utils";
 
 type Range = "24h" | "7d" | "30d";
-const RANGE_DAYS: Record<Range, number> = { "24h": 1, "7d": 7, "30d": 30 };
 
 export default function DataHealth() {
-  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const role = user
-    ? user.role === "admin"
-      ? "executive"
-      : ((user as { platformRole?: string }).platformRole ?? "policy_analyst")
-    : "policy_analyst";
-  const canSteward = isAuthenticated && ["data_steward", "platform_admin"].includes(role);
+  const { user, isAuthenticated } = useAuth();
+  const t = useT();
 
-  const utils = trpc.useUtils();
-  const [range, setRange] = useState<Range>("30d");
+  /* ------------------------------ state -------------------------------- */
+  const [range, setRange] = useState<Range>("7d");
   const [runsFor, setRunsFor] = useState<string | null>(null);
-  const [reRunRow, setReRunRow] = useState<PipelineRow | null>(null);
-  const [triageRow, setTriageRow] = useState<PipelineRow | null>(null);
+  const [reRunRow, setReRunRow] = useState<BoardRow | null>(null);
+  const [triageRow, setTriageRow] = useState<BoardRow | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [triagingId, setTriagingId] = useState<string | null>(null);
   const [signingOffId, setSigningOffId] = useState<string | null>(null);
-  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
-  const [auditOpen, setAuditOpen] = useState(false);
   const idempotencyKey = useRef(`rerun-${nanoid(16)}`);
 
+  const role = user
+    ? user.role === "admin"
+      ? "admin"
+      : ((user as { platformRole?: string }).platformRole ?? "policy_analyst")
+    : "guest";
+  const canSteward = stewardRoles.includes(role);
+  const stewardEnabled = isAuthenticated && canSteward;
+
   /* ------------------------------ queries ------------------------------ */
-  const stewardEnabled = isAuthenticated;
-  const sourcesQ = trpc.admin.dataSources.useQuery({}, { enabled: stewardEnabled, retry: false });
-  const runsQ = trpc.admin.pipelineRuns.useQuery({ limit: 100 }, { enabled: stewardEnabled, retry: false });
-  const tasksQ = trpc.admin.reviewTasks.useQuery({ limit: 100 }, { enabled: stewardEnabled, retry: false });
-  const complianceQ = trpc.admin.contractsCompliance.useQuery(undefined, {
-    enabled: stewardEnabled,
+  const sourcesQ = trpc.ops.dataSourcesList.useQuery(undefined, {
+    enabled: isAuthenticated,
     retry: false,
   });
   const freshnessQ = trpc.ops.freshnessSummary.useQuery();
-  const auditQ = trpc.ops.auditLog.useQuery(
-    { entity_type: "data_source", limit: 8 },
-    { enabled: stewardEnabled && auditOpen && canSteward, retry: false },
+  const runsQ = trpc.ops.pipelineRuns.useQuery(
+    { limit: 100 },
+    { enabled: isAuthenticated, retry: false },
   );
-  const sourceRunsQ = trpc.admin.pipelineRuns.useQuery(
-    { source_id: runsFor ?? "", limit: 20 },
-    { enabled: stewardEnabled && runsFor !== null, retry: false },
+  const tasksQ = trpc.ops.reviewTasksList.useQuery(
+    { limit: 100 },
+    { enabled: stewardEnabled, retry: false },
+  );
+  const complianceQ = trpc.ops.contractCompliance.useQuery(undefined, {
+    enabled: stewardEnabled,
+    retry: false,
+  });
+  const auditQ = trpc.ops.auditLog.useQuery(
+    { entity_type: "data_source", limit: 20 },
+    { enabled: stewardEnabled && auditOpen, retry: false },
   );
 
-  const sources = useMemo(
-    () => (unwrap(sourcesQ.data) as DataSourceRow[] | undefined) ?? [],
-    [sourcesQ.data],
-  );
-  const runs = useMemo(
-    () => (unwrap(runsQ.data) as PipelineRunRow[] | undefined) ?? [],
-    [runsQ.data],
-  );
-  const tasks = useMemo(
-    () => (unwrap(tasksQ.data) as ReviewTaskRow[] | undefined) ?? [],
-    [tasksQ.data],
-  );
-  const freshness = unwrap(freshnessQ.data) as
-    | { asOf: Date | null; status: string; sources: number; label: string }
-    | undefined;
   const complianceMeta = envelopeMeta(complianceQ.data);
 
-  const forbidden =
-    !isAuthenticated ||
-    [sourcesQ, runsQ, tasksQ].some((q) =>
-      q.error?.data?.code === "FORBIDDEN" || q.error?.data?.code === "UNAUTHORIZED",
+  /* --------------------------- derived data ---------------------------- */
+  const sources: DataSourceRow[] = useMemo(() => {
+    const rows = (unwrap(sourcesQ.data) as DataSourceRow[] | undefined) ?? [];
+    const compliance =
+      (unwrap(complianceQ.data) as
+        | { items?: { source_id: string; contract_compliance?: DataSourceRow["contractCompliance"] }[] }
+        | undefined)?.items ?? [];
+    const byId = new Map(compliance.map((c) => [c.source_id, c.contract_compliance]));
+    return rows.map((s) => ({ ...s, contractCompliance: byId.get(s.sourceId) ?? s.contractCompliance }));
+  }, [sourcesQ.data, complianceQ.data]);
+
+  const runsBySource = useMemo(() => {
+    const runs = (unwrap(runsQ.data) as PipelineRunRow[] | undefined) ?? [];
+    const map = new Map<string, PipelineRunRow[]>();
+    for (const r of runs) {
+      const list = map.get(r.sourceId) ?? [];
+      list.push(r);
+      map.set(r.sourceId, list);
+    }
+    for (const list of map.values()) {
+      list.sort(
+        (a, b) =>
+          new Date(b.startedAt ?? b.createdAt).getTime() -
+          new Date(a.startedAt ?? a.createdAt).getTime(),
+      );
+    }
+    return map;
+  }, [runsQ.data]);
+
+  const tasks: ReviewTaskRow[] = useMemo(() => {
+    const rows = (unwrap(tasksQ.data) as ReviewTaskRow[] | undefined) ?? [];
+    return [...rows].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
+  }, [tasksQ.data]);
 
-  /* ----------------------------- mutations ------------------------------ */
-  const triageM = trpc.admin.triageReviewTask.useMutation({
-    onSuccess: async (_p, vars) => {
-      toast.success(`Review task ${vars.status.replace(/_/g, " ")}`, {
-        description: "Triage recorded with actor id — audit event written.",
-      });
-      setTriagingId(null);
-      await utils.admin.reviewTasks.invalidate();
-    },
-    onError: (err) => {
-      toast.error("Triage failed", { description: err.message });
-      setTriagingId(null);
-    },
-  });
+  const boardRows: BoardRow[] = useMemo(
+    () =>
+      sources.map((source) => {
+        const runs = runsBySource.get(source.sourceId) ?? [];
+        const latestRun = runs[0] ?? null;
+        const task = tasks.find(
+          (t) =>
+            t.entityRef === source.sourceId &&
+            (t.status === "open" || t.status === "in_progress"),
+        );
+        return {
+          source,
+          latestRun,
+          runs: runs.slice(0, 6),
+          task: task
+            ? {
+                taskId: task.taskId,
+                status: task.status,
+                assigneeRole: task.assigneeRole,
+              }
+            : null,
+        };
+      }),
+    [sources, runsBySource, tasks],
+  );
 
-  const updateSourceM = trpc.admin.updateDataSource.useMutation({
-    onSuccess: async (_p, vars) => {
-      if (vars.contract_compliance) {
-        toast.success("Contract change approved", {
-          description: "Drift sign-off recorded with actor + timestamp (audit).",
-        });
-      } else {
-        toast.success("Source updated", { description: "Audit event recorded." });
-      }
-      setSigningOffId(null);
-      await Promise.all([
-        utils.admin.dataSources.invalidate(),
-        utils.admin.contractsCompliance.invalidate(),
-      ]);
-    },
-    onError: (err) => {
-      toast.error("Update failed", { description: err.message });
-      setSigningOffId(null);
-    },
-  });
+  const { healthy, stale, failing } = useMemo(() => {
+    let h = 0,
+      s = 0,
+      f = 0;
+    for (const src of sources) {
+      if (src.status === "healthy") h++;
+      else if (src.status === "failing") f++;
+      else s++;
+    }
+    return { healthy: h, stale: s, failing: f };
+  }, [sources]);
 
-  /* ------------------------------ derived ------------------------------- */
-  const healthy = sources.filter((s) => s.health === "healthy").length;
-  const stale = sources.filter((s) => s.health === "stale").length;
-  const failing = sources.filter((s) => s.health === "failing").length;
+  const freshness = unwrap(freshnessQ.data) as FreshnessSummary | undefined;
 
   const breaches = useMemo(
     () =>
       sources.filter(
         (s) =>
-          slaStatus(s.freshnessDays, s.refreshCadence) === "breached" &&
-          !acknowledged.has(s.sourceId),
+          !acknowledged.has(s.sourceId) &&
+          (s.status === "failing" || ageDays(s.lastRefresh) > s.slaDays),
       ),
     [sources, acknowledged],
   );
 
-  const rangeRuns = useMemo(() => {
-    const cutoff = Date.now() - RANGE_DAYS[range] * 86400000;
-    return runs.filter((r) => {
-      const t = r.startedAt ? new Date(r.startedAt).getTime() : new Date(r.createdAt).getTime();
-      return Number.isNaN(t) ? true : t >= cutoff;
-    });
-  }, [runs, range]);
+  const forbidden =
+    isAuthenticated &&
+    !canSteward &&
+    (sourcesQ.isError || tasksQ.isError) &&
+    /forbidden|unauthor/i.test(
+      `${sourcesQ.error?.message ?? ""} ${tasksQ.error?.message ?? ""}`,
+    );
 
-  const boardRows = useMemo(() => buildPipelineRows(sources, rangeRuns), [sources, rangeRuns]);
+  /* ----------------------------- mutations ------------------------------ */
+  const updateSourceM = trpc.ops.updateDataSource.useMutation({
+    onSuccess: () => {
+      toast.success(t.dataHealth.toastSourceUpdated);
+      setSigningOffId(null);
+      void sourcesQ.refetch();
+      void complianceQ.refetch();
+    },
+    onError: (err) => {
+      toast.error(t.dataHealth.toastUpdateFailed, { description: err.message });
+      setSigningOffId(null);
+    },
+  });
+
+  const triageM = trpc.ops.triageTask.useMutation({
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.status === "resolved"
+          ? t.dataHealth.toastResolved
+          : vars.status === "dismissed"
+            ? t.dataHealth.toastDismissed
+            : t.dataHealth.toastInProgress,
+      );
+      setTriagingId(null);
+      void tasksQ.refetch();
+    },
+    onError: (err) => {
+      toast.error(t.dataHealth.toastTriageFailed, { description: err.message });
+      setTriagingId(null);
+    },
+  });
+
+  /* ------------------------------ actions ------------------------------- */
+  const sourceRunsQ = trpc.ops.pipelineRuns.useQuery(
+    { source_id: runsFor ?? "", limit: 25 },
+    { enabled: runsFor !== null },
+  );
 
   const acknowledgeBreach = (s: DataSourceRow) => {
-    if (!canSteward) return;
-    const compliance = parseCompliance(s.contractCompliance) ?? {};
+    const compliance = s.contractCompliance ?? {
+      schema_ok: true,
+      sla_ok: false,
+      license_ok: true,
+    };
     updateSourceM.mutate({
       source_id: s.sourceId,
       contract_compliance: {
@@ -212,16 +273,16 @@ export default function DataHealth() {
       navigate("/legislation");
     } else {
       document.getElementById("source-registry")?.scrollIntoView({ behavior: "smooth" });
-      toast.info("Issue located in the source registry below.");
+      toast.info(t.dataHealth.issueLocated);
     }
   };
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${label} copied to clipboard.`);
+      toast.success(t.dataHealth.copiedToClipboard.replace("{label}", label));
     } catch {
-      toast.error("Clipboard unavailable", { description: text });
+      toast.error(t.dataHealth.clipboardUnavailable, { description: text });
     }
   };
 
@@ -252,14 +313,18 @@ export default function DataHealth() {
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3" data-print-hidden>
         <div>
-          <p className="caption-label text-ink-muted">Platform · Data operations</p>
+          <p className="caption-label text-ink-muted">{t.dataHealth.caption}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
-            Data Source Health
+            {t.dataHealth.title}
           </h1>
           <p className="mt-1 text-[13px] text-ink-secondary">
             {isLoading
-              ? "Loading sources…"
-              : `${sources.length} registered sources · ${healthy} healthy · ${stale} stale · ${failing} failing · Last full sync 02:00 WAT`}
+              ? t.dataHealth.loading
+              : t.dataHealth.summary
+                  .replace("{total}", String(sources.length))
+                  .replace("{healthy}", String(healthy))
+                  .replace("{stale}", String(stale))
+                  .replace("{failing}", String(failing))}
             {freshness?.label && (
               <span className="ml-2 text-ink-muted">· {freshness.label}</span>
             )}
@@ -268,7 +333,7 @@ export default function DataHealth() {
         <div className="flex items-center gap-2">
           <div
             role="group"
-            aria-label="Time range"
+            aria-label={t.dataHealth.timeRange}
             className="flex rounded-md border border-ink-subtle bg-ink-surface p-0.5"
           >
             {(["24h", "7d", "30d"] as Range[]).map((r) => (
@@ -294,9 +359,9 @@ export default function DataHealth() {
             className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle bg-ink-surface px-3 py-1.5 text-sm font-medium text-ink-secondary hover:border-ink-strong hover:text-ink-primary"
           >
             <ScrollText aria-hidden className="h-4 w-4" />
-            Pipeline runs
+            {t.dataHealth.pipelineRuns}
           </button>
-          <span title={canSteward ? undefined : "Requires the data steward or platform admin role"}>
+          <span title={canSteward ? undefined : t.dataHealth.stewardRoleRequired}>
             <button
               type="button"
               disabled={!canSteward}
@@ -309,7 +374,7 @@ export default function DataHealth() {
               )}
             >
               <Plus aria-hidden className="h-4 w-4" />
-              Register source
+              {t.dataHealth.registerSource}
             </button>
           </span>
         </div>
@@ -328,7 +393,7 @@ export default function DataHealth() {
           >
             <AlertTriangle aria-hidden className="h-4 w-4 shrink-0 text-status-danger" />
             <span className="font-medium text-status-danger">
-              {breaches.length} source{breaches.length === 1 ? "" : "s"} breached freshness SLA
+              {t.dataHealth.breachBanner.replace("{count}", String(breaches.length))}
             </span>
             <span className="text-ink-secondary">
               —{" "}
@@ -344,7 +409,7 @@ export default function DataHealth() {
                 }
                 className="rounded border border-status-danger/40 px-2 py-0.5 text-xs text-status-danger hover:bg-status-danger/10"
               >
-                View
+                {t.dataHealth.view}
               </button>
               {canSteward && (
                 <button
@@ -352,7 +417,7 @@ export default function DataHealth() {
                   onClick={() => breaches.forEach(acknowledgeBreach)}
                   className="rounded bg-status-danger/20 px-2 py-0.5 text-xs font-medium text-status-danger hover:bg-status-danger/30"
                 >
-                  Acknowledge (audit)
+                  {t.dataHealth.acknowledge}
                 </button>
               )}
             </span>
@@ -364,11 +429,11 @@ export default function DataHealth() {
       {!isAuthenticated || forbidden ? (
         <div className="mt-5">
           <EmptyState
-            title="Data steward access required"
+            title={t.dataHealth.accessTitle}
             guidance={
               isAuthenticated
-                ? "The Data Source Health console is restricted to data stewards and platform administrators. Your current role does not include pipeline administration."
-                : "Sign in with a data steward account to view pipeline status, freshness and contract compliance."
+                ? t.dataHealth.accessGuidanceRole
+                : t.dataHealth.accessGuidanceSignIn
             }
           />
         </div>
@@ -384,9 +449,9 @@ export default function DataHealth() {
       ) : sourcesQ.isError ? (
         <div className="mt-5">
           <EmptyState
-            title="Data sources could not be loaded"
+            title={t.dataHealth.errorSources}
             guidance={sourcesQ.error.message}
-            action={{ label: "Retry", onClick: () => void sourcesQ.refetch() }}
+            action={{ label: t.action.retry, onClick: () => void sourcesQ.refetch() }}
           />
         </div>
       ) : (
@@ -449,9 +514,9 @@ export default function DataHealth() {
               >
                 <span className="caption-label inline-flex items-center gap-1.5 text-ink-muted">
                   <ListChecks aria-hidden className="h-3.5 w-3.5" />
-                  Recent data-source audit events
+                  {t.dataHealth.auditEvents}
                 </span>
-                <span className="text-xs text-ink-secondary">{auditOpen ? "Hide" : "Show"}</span>
+                <span className="text-xs text-ink-secondary">{auditOpen ? t.dataHealth.hide : t.dataHealth.show}</span>
               </button>
               <AnimatePresence initial={false}>
                 {auditOpen && (
@@ -467,7 +532,7 @@ export default function DataHealth() {
                         <SkeletonTable rows={4} columns={3} />
                       ) : auditQ.isError ? (
                         <p className="py-2 text-xs text-ink-muted">
-                          Audit log unavailable: {auditQ.error.message}
+                          {t.dataHealth.auditUnavailable.replace("{message}", auditQ.error.message)}
                         </p>
                       ) : (
                         <AuditList payload={auditQ.data} />
@@ -499,7 +564,7 @@ export default function DataHealth() {
               key="runs-drawer"
               role="dialog"
               aria-modal="true"
-              aria-label="Pipeline run history"
+              aria-label={t.dataHealth.pipelineRuns}
               initial={{ x: 480 }}
               animate={{ x: 0 }}
               exit={{ x: 480 }}
@@ -508,13 +573,13 @@ export default function DataHealth() {
             >
               <div className="flex items-center justify-between border-b border-ink-subtle px-4 py-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-ink-primary">Pipeline runs</h2>
+                  <h2 className="text-sm font-semibold text-ink-primary">{t.dataHealth.pipelineRuns}</h2>
                   <p className="font-mono text-[11px] text-ink-muted">{runsFor}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setRunsFor(null)}
-                  aria-label="Close run history"
+                  aria-label={t.dataHealth.closeRunHistory}
                   className="rounded p-1 text-ink-muted hover:text-ink-primary"
                 >
                   <X aria-hidden className="h-4 w-4" />
@@ -548,7 +613,7 @@ export default function DataHealth() {
                           </span>
                         </div>
                         <p className="mt-1 font-mono text-[10px] text-ink-muted">
-                          {r.pipelineId} · {r.rowsProcessed.toLocaleString()} rows
+                          {r.pipelineId} · {r.rowsProcessed.toLocaleString()} {t.dataHealth.rows}
                         </p>
                         {r.error && (
                           <pre className="mt-1.5 overflow-x-auto rounded border border-status-danger/30 bg-ink-inset p-1.5 font-mono text-[10px] text-status-danger">
@@ -560,7 +625,7 @@ export default function DataHealth() {
                     {((unwrap(sourceRunsQ.data) as PipelineRunRow[] | undefined) ?? []).length ===
                       0 && (
                       <li className="rounded-md border border-dashed border-ink-subtle p-6 text-center text-xs text-ink-muted">
-                        No runs recorded for this source.
+                        {t.dataHealth.noRuns}
                       </li>
                     )}
                   </ul>
@@ -575,20 +640,18 @@ export default function DataHealth() {
       <Dialog open={reRunRow !== null} onOpenChange={(o) => !o && setReRunRow(null)}>
         <DialogContent className="border-ink-subtle bg-ink-elevated text-ink-primary">
           <DialogHeader>
-            <DialogTitle>Re-run pipeline</DialogTitle>
+            <DialogTitle>{t.dataHealth.rerunTitle}</DialogTitle>
             <DialogDescription className="text-ink-secondary">
-              {reRunRow?.source.name} — re-run requests are idempotent.
+              {t.dataHealth.rerunDesc.replace("{name}", reRunRow?.source.name ?? "")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 text-[13px] text-ink-secondary">
             <p>
-              Idempotency key:{" "}
+              {t.dataHealth.idempotencyKey}{" "}
               <span className="font-mono text-xs text-civic">{idempotencyKey.current}</span>
             </p>
             <p className="rounded-md border border-status-warning/40 bg-status-warning/10 p-2 text-xs text-status-warning">
-              Pipeline re-runs execute on the orchestration service. This deployment does not
-              expose a re-run API endpoint, so the request cannot be dispatched from the console —
-              copy the signed request for the orchestrator operator instead.
+              {t.dataHealth.rerunNote}
             </p>
           </div>
           <DialogFooter>
@@ -597,7 +660,7 @@ export default function DataHealth() {
               onClick={() => setReRunRow(null)}
               className="rounded-md border border-ink-subtle px-3 py-1.5 text-sm text-ink-secondary hover:text-ink-primary"
             >
-              Cancel
+              {t.action.cancel}
             </button>
             <button
               type="button"
@@ -614,14 +677,14 @@ export default function DataHealth() {
                     null,
                     2,
                   ),
-                  "Re-run request",
+                  t.dataHealth.rerunTitle,
                 );
                 setReRunRow(null);
               }}
               className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base hover:bg-civic-strong"
             >
               <Copy aria-hidden className="h-4 w-4" />
-              Copy re-run request
+              {t.dataHealth.copyRerun}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -631,15 +694,14 @@ export default function DataHealth() {
       <Dialog open={triageRow !== null} onOpenChange={(o) => !o && setTriageRow(null)}>
         <DialogContent className="border-ink-subtle bg-ink-elevated text-ink-primary">
           <DialogHeader>
-            <DialogTitle>Create triage task</DialogTitle>
+            <DialogTitle>{t.dataHealth.triageTitle}</DialogTitle>
             <DialogDescription className="text-ink-secondary">
-              Assign failure triage for {triageRow?.source.name} to a data steward.
+              {t.dataHealth.triageDesc.replace("{name}", triageRow?.source.name ?? "")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 text-[13px] text-ink-secondary">
             <p className="rounded-md border border-status-warning/40 bg-status-warning/10 p-2 text-xs text-status-warning">
-              Task creation is not exposed by the review API in this deployment — only existing
-              tasks can be triaged. Copy the pre-filled task request for the steward on duty.
+              {t.dataHealth.triageNote}
             </p>
             {triageRow?.latestRun?.error && (
               <pre className="overflow-x-auto rounded-md border border-status-danger/30 bg-ink-inset p-2 font-mono text-xs text-status-danger">
@@ -653,7 +715,7 @@ export default function DataHealth() {
               onClick={() => setTriageRow(null)}
               className="rounded-md border border-ink-subtle px-3 py-1.5 text-sm text-ink-secondary hover:text-ink-primary"
             >
-              Cancel
+              {t.action.cancel}
             </button>
             <button
               type="button"
@@ -671,14 +733,14 @@ export default function DataHealth() {
                     null,
                     2,
                   ),
-                  "Triage task request",
+                  t.dataHealth.triageTitle,
                 );
                 setTriageRow(null);
               }}
               className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base hover:bg-civic-strong"
             >
               <Copy aria-hidden className="h-4 w-4" />
-              Copy task request
+              {t.dataHealth.copyTask}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -688,20 +750,19 @@ export default function DataHealth() {
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
         <DialogContent className="border-ink-subtle bg-ink-elevated text-ink-primary">
           <DialogHeader>
-            <DialogTitle>Register a data source</DialogTitle>
+            <DialogTitle>{t.dataHealth.registerTitle}</DialogTitle>
             <DialogDescription className="text-ink-secondary">
-              New sources are onboarded through the source-contract pipeline.
+              {t.dataHealth.registerDesc}
             </DialogDescription>
           </DialogHeader>
           <ol className="list-decimal space-y-1.5 pl-5 text-[13px] text-ink-secondary">
-            <li>Draft the source contract (schema, delivery SLA, licence).</li>
-            <li>Submit for contract approval in the review queue.</li>
-            <li>Connect the ingestion endpoint and run the first sync.</li>
-            <li>Verify schema conformance and freshness SLA on this console.</li>
+            <li>{t.dataHealth.registerStep1}</li>
+            <li>{t.dataHealth.registerStep2}</li>
+            <li>{t.dataHealth.registerStep3}</li>
+            <li>{t.dataHealth.registerStep4}</li>
           </ol>
           <p className="rounded-md border border-status-warning/40 bg-status-warning/10 p-2 text-xs text-status-warning">
-            The registration API is not exposed in this deployment — copy the registration request
-            and hand it to the platform operator to complete onboarding.
+            {t.dataHealth.registerNote}
           </p>
           <DialogFooter>
             <button
@@ -709,7 +770,7 @@ export default function DataHealth() {
               onClick={() => setRegisterOpen(false)}
               className="rounded-md border border-ink-subtle px-3 py-1.5 text-sm text-ink-secondary hover:text-ink-primary"
             >
-              Close
+              {t.action.close}
             </button>
             <button
               type="button"
@@ -726,14 +787,14 @@ export default function DataHealth() {
                     null,
                     2,
                   ),
-                  "Registration request",
+                  t.dataHealth.registerTitle,
                 );
                 setRegisterOpen(false);
               }}
               className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base hover:bg-civic-strong"
             >
               <Copy aria-hidden className="h-4 w-4" />
-              Copy registration request
+              {t.dataHealth.copyRegistration}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -743,6 +804,7 @@ export default function DataHealth() {
 }
 
 function AuditList({ payload }: { payload: unknown }) {
+  const t = useT();
   const rows = (unwrap(payload) as
     | { items?: { eventId: number; action: string; entityId: string; actorId: number | null; createdAt: Date | string }[] }
     | { eventId: number; action: string; entityId: string; actorId: number | null; createdAt: Date | string }[]
@@ -752,7 +814,7 @@ function AuditList({ payload }: { payload: unknown }) {
     | undefined;
   const items = Array.isArray(rows) ? rows : (rows?.items ?? []);
   if (items.length === 0) {
-    return <p className="py-2 text-xs text-ink-muted">No data-source audit events recorded.</p>;
+    return <p className="py-2 text-xs text-ink-muted">{t.dataHealth.noAuditEvents}</p>;
   }
   return (
     <ul className="divide-y divide-ink-subtle/60">
@@ -761,7 +823,7 @@ function AuditList({ payload }: { payload: unknown }) {
           <span className="font-mono text-[10px] text-ink-muted">{formatDateTime(e.createdAt)}</span>
           <span className="font-medium text-ink-primary">{e.action}</span>
           <span className="font-mono text-[10px] text-ink-secondary">{e.entityId}</span>
-          <span className="text-ink-muted">actor #{e.actorId ?? "system"}</span>
+          <span className="text-ink-muted">actor #{e.actorId ?? t.dataHealth.actorSystem}</span>
         </li>
       ))}
     </ul>
