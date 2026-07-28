@@ -39,6 +39,7 @@ import ContextPanel, {
   type PlatformCitation,
 } from "@/components/legislation/ContextPanel";
 import CitationTraceModal from "@/components/legislation/CitationTraceModal";
+import DraftingPanel from "@/components/legislation/DraftingPanel";
 import { indexHealth, toApprovalState, type GraphData } from "@/components/legislation/types";
 
 const DRAFT_TYPE_IDS = ["amendment", "regulation", "model"] as const;
@@ -68,6 +69,7 @@ export default function Legislation() {
   const [draftType, setDraftType] = useState<string>(DRAFT_TYPES[0]);
   const [draftMenuOpen, setDraftMenuOpen] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
+  const [draftingOpen, setDraftingOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -521,6 +523,18 @@ ${body}
               {t.legislation.citationTrace}
             </motion.button>
 
+            <motion.button
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              type="button"
+              onClick={() => setDraftingOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-civic/40 bg-civic/10 px-3 py-1.5 text-[13px] font-medium text-civic hover:bg-civic/20"
+            >
+              <FilePlus2 aria-hidden className="h-3.5 w-3.5" />
+              Drafting wizard
+            </motion.button>
+
             <motion.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
@@ -700,6 +714,13 @@ ${body}
         clause={clause}
         law={law}
         requestId={clauseRequestId}
+      />
+
+      {/* G4: evidence-grounded drafting wizard */}
+      <DraftingPanel
+        open={draftingOpen}
+        onClose={() => setDraftingOpen(false)}
+        onNotice={setNotice}
       />
 
       {/* Submit-for-review handoff modal */}

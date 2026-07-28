@@ -190,7 +190,7 @@ describe("G4 drafting — end-to-end workflow", () => {
       clause_id: clauseId,
       text: "(1) Edited obligation text for the drafting test.",
     });
-    expect(res.data.text).toContain("Edited obligation text");
+    expect(res.data?.text).toContain("Edited obligation text");
     const row = await getDb().query.clauses.findFirst({
       where: eq(schema.clauses.clauseId, clauseId),
     });
