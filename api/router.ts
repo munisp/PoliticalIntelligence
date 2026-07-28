@@ -15,6 +15,7 @@ import { auditLogRouter } from "./audit-log";
 import { onboardingRouter } from "./onboarding";
 import { geoRouter } from "./geo";
 import { outcomesRouter } from "./outcomes";
+import { advocacyRouter } from "./advocacy";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -34,6 +35,7 @@ export const appRouter = createRouter({
   onboarding: onboardingRouter,
   geo: geoRouter,
   outcomes: outcomesRouter,
+  advocacy: advocacyRouter,
 });
 
 export type AppRouter = typeof appRouter;
