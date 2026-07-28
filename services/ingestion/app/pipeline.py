@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app import events
+from app import events, loader
 from app.config import settings
 from app.connectors.base import BaseConnector
 from app.models import CanonicalRecord, ContractResult, utcnow
@@ -72,14 +72,29 @@ def run_pipeline(
         for rec in canonical:
             fh.write(rec.model_dump_json() + "\n")
 
+    # Post-emit: load canonical records into the platform DB. Loader errors
+    # are recorded (never raised) so a loader outage cannot fail the run.
+    loader_outcome = loader.load_canonical(canonical, jurisdiction)
+
     producer.send(events.TOPIC_FEATURES_MATERIALIZED, {
         "connector": connector.name,
         "jurisdiction": jurisdiction,
         "records_out": len(canonical),
         "artifact": str(artifact),
         "contract": contract.model_dump(mode="json"),
+        "loader": loader_outcome,
     })
 
+    try:
+        from app.metrics import counter
+        counter("ingestion_records_total",
+                "Canonical records ingested").inc(
+                    {"connector": connector.name}, amount=len(canonical))
+        counter("ingestion_runs_total", "Ingestion runs").inc(
+            {"connector": connector.name,
+             "status": "succeeded" if contract.schema_ok else "contract_failed"})
+    except Exception:
+        pass
     return {
         "connector": connector.name,
         "jurisdiction": jurisdiction,
@@ -87,4 +102,5 @@ def run_pipeline(
         "records_out": len(canonical),
         "artifact": str(artifact),
         "contract": contract,
+        "loader": loader_outcome,
     }
