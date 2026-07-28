@@ -25,10 +25,19 @@ app.use("*", async (c, next) => {
   );
 });
 
-// Liveness/readiness probe (compose healthcheck target).
-app.get("/healthz", (c) =>
-  c.json({ status: "ok", api_version: "v1", ts: new Date().toISOString() }),
-);
+// Liveness/readiness probe (compose healthcheck target). Readiness is real:
+// a DB probe (SELECT 1) decides 200 vs 503 (API-6).
+app.get("/healthz", async (c) => {
+  const base = { api_version: "v1", ts: new Date().toISOString() };
+  try {
+    const { getDb } = await import("./queries/connection");
+    const { sql } = await import("drizzle-orm");
+    await getDb().execute(sql`select 1`);
+    return c.json({ status: "ok", db: "up", ...base }, 200);
+  } catch {
+    return c.json({ status: "degraded", db: "down", ...base }, 503);
+  }
+});
 
 // Prometheus scrape endpoint.
 app.get("/metrics", async (c) => {
@@ -53,9 +62,23 @@ app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 const { default: rest } = await import("./rest");
 app.route("/v1", rest);
 
+// OpenTelemetry tracing (OBS-3): noop unless OTEL_SDK_ENABLED=true and the
+// optional @opentelemetry/* packages are installed — see api/utils/otel.ts.
+const { setupNodeOtel } = await import("./utils/otel");
+await setupNodeOtel();
+
 // Durable-outbox relay for the event backbone (noop without KAFKA_BROKERS).
 const { startOutboxRelay } = await import("./utils/events");
 startOutboxRelay();
+
+// Event consumers + DLQ + job-heartbeat sweeper + WORM export interval
+// (EVENT_CONSUMERS=0 disables; default on). Additive, non-blocking.
+if (process.env.EVENT_CONSUMERS !== "0") {
+  const { startConsumers } = await import("./consumers");
+  startConsumers().catch((err) =>
+    console.error("[consumers] startup failed:", err),
+  );
+}
 
 export default app;
 

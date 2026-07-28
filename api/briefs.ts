@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { REVIEW_STATES, type ReviewState } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit, requestMeta } from "./utils/envelope";
-import { requireRole, requireSignOff, assertJurisdictionAccess } from "./utils/rbac";
+import { requireRole, requireSignOff, assertJurisdictionAccess, assertJurisdictionRead, resolveReadScope } from "./utils/rbac";
 import { findBrief, insertBrief, listBriefs, updateBrief } from "./queries/briefs";
 import { insertApprovalEvent, approvalEventsFor } from "./queries/legislation";
 import { insertJob } from "./queries/admin";
@@ -63,6 +63,8 @@ async function transitionBrief(
 }
 
 export const briefsRouter = createRouter({
+  // ABAC-scoped read (SR-10/SEC-3): actors see briefs in their assigned
+  // jurisdictions only; executive/platform_admin see all.
   list: publicQuery
     .input(
       z.object({
@@ -72,17 +74,19 @@ export const briefsRouter = createRouter({
         limit: z.number().int().min(1).max(100).default(25),
       }),
     )
-    .query(async ({ ctx, input }) =>
-      envelope(
+    .query(async ({ ctx, input }) => {
+      const scope = await resolveReadScope(ctx, input.jurisdiction_id);
+      return envelope(
         await listBriefs({
-          jurisdictionId: input.jurisdiction_id,
+          jurisdictionId: scope.jurisdictionId,
+          jurisdictionIds: scope.jurisdictionIds,
           reviewState: input.review_state,
           cursor: input.cursor,
           limit: input.limit,
         }),
         ctx,
-      ),
-    ),
+      );
+    }),
 
   get: publicQuery
     .input(z.object({ brief_id: z.string().min(1) }))
@@ -94,6 +98,7 @@ export const briefsRouter = createRouter({
           code: "BRIEF_NOT_FOUND",
           message: `Brief ${input.brief_id} not found`,
         });
+      await assertJurisdictionRead(ctx, brief.jurisdictionId);
       const approvals = await approvalEventsFor("brief", input.brief_id);
       return envelope({ ...brief, approval_history: approvals }, ctx);
     }),

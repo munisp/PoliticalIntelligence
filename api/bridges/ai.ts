@@ -3,6 +3,12 @@ import type {
   Recommendation,
 } from "@contracts/entities";
 import { mulberry32, hashSeed } from "../utils/prng";
+import {
+  RecommendationContractError,
+  assertValidRecommendation,
+  validateRecommendationObject,
+} from "../utils/reco-contract";
+import { redactPayload, logRedactionEvent, type RedactionCounts } from "../utils/pii";
 
 /**
  * Bridge to services/ai (retrieval orchestration + LLM routing).
@@ -175,31 +181,181 @@ export function fallbackRecommendation(opts: {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* PII + contract guards on the generation path (AI-11, §9.2)          */
+/* ------------------------------------------------------------------ */
+
+/** Deep-redact a payload, logging COUNTS only (never the PII). */
+function redact<T>(surface: string, value: T): T {
+  if (process.env.PII_REDACTION === "off") return value;
+  const counts: RedactionCounts = {};
+  const out = redactPayload(value, undefined, counts) as T;
+  logRedactionEvent(surface, counts);
+  return out;
+}
+
+/** Persist a contract-validation failure to the audit trail (best-effort). */
+async function auditContractFailure(
+  surface: string,
+  errors: string[],
+  repaired: boolean,
+): Promise<void> {
+  console.error(
+    `[contract] ${surface} validation failed repaired=${repaired}: ${errors.join("; ")}`,
+  );
+  try {
+    const { insertAuditEvent } = await import("../queries/audit");
+    await insertAuditEvent({
+      actorId: null,
+      action: "recommendations.contract_validation_failed",
+      entityType: "recommendation",
+      entityId: surface,
+      payload: { errors, repaired } as never,
+    });
+  } catch (err) {
+    console.error("[contract] audit insert failed:", err);
+  }
+}
+
+/**
+ * Validate a remote bridge response against the §9.2 contract with ONE
+ * repair retry (the request is re-POSTed with the validation errors
+ * attached so the service can self-correct). Throws
+ * RecommendationContractError when the output is still invalid — callers
+ * must fail the job rather than persist a non-conformant recommendation.
+ */
+async function postJsonValidated<T>(
+  path: string,
+  body: unknown,
+  surface: string,
+  validate: (obj: unknown) => string[],
+): Promise<T> {
+  const first = await postJson<unknown>(path, body);
+  let errors = validate(first);
+  if (errors.length === 0) return first as T;
+  await auditContractFailure(surface, errors, false);
+  // Single repair retry.
+  const repaired = await postJson<unknown>(path, {
+    ...(body as Record<string, unknown>),
+    repair_errors: errors,
+    repair_instruction:
+      "Your previous answer FAILED the output contract. Return ONLY the corrected payload.",
+  });
+  errors = validate(repaired);
+  if (errors.length === 0) return repaired as T;
+  await auditContractFailure(surface, errors, true);
+  throw new RecommendationContractError(errors);
+}
+
+/** AI-8: routing decision record persisted to the immutable audit store. */
+export interface ModelRoutingRecord {
+  tier: "remote" | "offline-fallback";
+  model: string;
+  fallback: boolean;
+  decided_at: string;
+}
+
 export async function generateRecommendation(body: {
   opportunity: OpportunityContext;
   evidence: EvidenceSnippet[];
   legal_dependencies: Recommendation["legal_dependencies"];
   simulation_scenarios: Recommendation["simulation_scenarios"];
-}): Promise<{ recommendation: Recommendation; bridge: "remote" | "fallback" }> {
+}): Promise<{
+  recommendation: Recommendation;
+  bridge: "remote" | "fallback";
+  routing: ModelRoutingRecord;
+}> {
   const { llmRoutingDecisions } = await import("../utils/metrics");
+  // PII redaction on the generation INPUT before it leaves the gateway.
+  const safeBody = redact("bridge.recommendations.input", body);
   try {
-    const recommendation = await postJson<Recommendation>(
+    const recommendation = await postJsonValidated<Recommendation>(
       "/v1/recommendations",
-      body,
+      safeBody,
+      "bridge.recommendations",
+      validateRecommendationObject,
     );
     llmRoutingDecisions.inc({ tier: "remote" });
-    return { recommendation, bridge: "remote" };
-  } catch {
+    // PII redaction on the generated OUTPUT before persistence.
+    return {
+      recommendation: redact("bridge.recommendations.output", recommendation),
+      bridge: "remote",
+      routing: {
+        tier: "remote",
+        model: "serving-tier",
+        fallback: false,
+        decided_at: new Date().toISOString(),
+      },
+    };
+  } catch (err) {
+    if (err instanceof RecommendationContractError) throw err; // fail the job
     llmRoutingDecisions.inc({ tier: "offline-fallback" });
     const recommendation = fallbackRecommendation({
-      opportunity: body.opportunity,
-      evidence: body.evidence,
-      legalDependencies: body.legal_dependencies,
-      scenarioLinks: body.simulation_scenarios,
+      opportunity: safeBody.opportunity,
+      evidence: safeBody.evidence,
+      legalDependencies: safeBody.legal_dependencies,
+      scenarioLinks: safeBody.simulation_scenarios,
     });
     recommendation.generated_at = new Date();
-    return { recommendation, bridge: "fallback" };
+    // The offline path must satisfy the same contract before persistence.
+    assertValidRecommendation(recommendation);
+    return {
+      recommendation: redact("bridge.recommendations.output", recommendation),
+      bridge: "fallback",
+      routing: {
+        tier: "offline-fallback",
+        model: "deterministic",
+        fallback: true,
+        decided_at: new Date().toISOString(),
+      },
+    };
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Hybrid retrieval (AI-4): gateway search → AI service /v1/retrieve   */
+/* ------------------------------------------------------------------ */
+
+export interface RetrievedEvidence {
+  evidence_source_id: string;
+  source_type: "metric" | "legal" | "policy" | "profile";
+  citation: string;
+  retrieval_path: "sql" | "vector" | "graph";
+  confidence: number;
+  content: string;
+  attributes: Record<string, unknown>;
+}
+
+export interface EvidenceBundle {
+  bundle_id: string;
+  query: string;
+  jurisdiction_id: string;
+  evidence: RetrievedEvidence[];
+  retrieval_paths_used: string[];
+  adapter_modes: Record<string, string>;
+}
+
+/**
+ * POST /v1/retrieve on the AI service (hybrid SQL+vector+graph with RRF
+ * fusion). Throws when the service is unreachable/errors — callers fall
+ * back to the SQL LIKE path.
+ */
+export async function retrieveBundle(body: {
+  query: string;
+  jurisdiction_id?: string;
+  filters?: Record<string, unknown>;
+  top_k?: number;
+}): Promise<EvidenceBundle> {
+  const resp = await postJson<{ data: EvidenceBundle }>("/v1/retrieve", {
+    query: body.query,
+    jurisdiction_id: body.jurisdiction_id ?? "jur:ng",
+    filters: body.filters ?? {},
+    top_k: body.top_k ?? 10,
+  });
+  if (!resp?.data || !Array.isArray(resp.data.evidence)) {
+    throw new Error("ai service returned malformed EvidenceBundle");
+  }
+  return resp.data;
 }
 
 /* ------------------------------------------------------------------ */
@@ -246,18 +402,45 @@ export function fallbackCopilotAnswer(opts: {
   };
 }
 
+/** Minimal copilot output contract: grounded answer + citations list. */
+function validateCopilotObject(obj: unknown): string[] {
+  const errors: string[] = [];
+  const o = obj as Partial<CopilotAnswer> | null;
+  if (!o || typeof o !== "object") return ["copilot answer is not an object"];
+  if (typeof o.answer !== "string" || o.answer.trim() === "")
+    errors.push("answer must be a non-empty string");
+  if (!Array.isArray(o.citations)) errors.push("citations must be a list");
+  if (
+    o.confidence !== undefined &&
+    !(typeof o.confidence === "number" && o.confidence >= 0 && o.confidence <= 1)
+  )
+    errors.push("confidence must be a number in [0, 1]");
+  return errors;
+}
+
 export async function copilotQuery(body: {
   query: string;
   jurisdiction_id?: string;
   evidence: EvidenceSnippet[];
 }): Promise<CopilotAnswer> {
+  // PII redaction on the copilot INPUT (belt-and-braces with the tRPC
+  // input middleware — the bridge is also called from non-tRPC paths).
+  const safeBody = redact("bridge.copilot.input", body);
   try {
-    const resp = await postJson<Omit<CopilotAnswer, "bridge">>(
+    const resp = await postJsonValidated<Omit<CopilotAnswer, "bridge">>(
       "/v1/copilot/query",
-      body,
+      safeBody,
+      "bridge.copilot",
+      validateCopilotObject,
     );
-    return { ...resp, bridge: "remote" };
-  } catch {
-    return fallbackCopilotAnswer({ query: body.query, evidence: body.evidence });
+    // PII redaction on the generated OUTPUT before it is stored/returned.
+    return { ...redact("bridge.copilot.output", resp), bridge: "remote" };
+  } catch (err) {
+    if (err instanceof RecommendationContractError) throw err;
+    const fallback = fallbackCopilotAnswer({
+      query: safeBody.query,
+      evidence: safeBody.evidence,
+    });
+    return redact("bridge.copilot.output", fallback);
   }
 }
