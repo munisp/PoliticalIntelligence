@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { useT } from "@/lib/LocaleContext";
 import ScenarioBuilder, {
   type QueuedRunInfo,
 } from "@/components/simulation/ScenarioBuilder";
@@ -29,10 +30,10 @@ import {
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 const TABS = [
-  { id: "builder", label: "Builder", Icon: FlaskConical },
-  { id: "runs", label: "Runs", Icon: ListOrdered },
-  { id: "compare", label: "Compare", Icon: GitCompareArrows },
-  { id: "artifacts", label: "Artifacts", Icon: FolderOpen },
+  { id: "builder", Icon: FlaskConical },
+  { id: "runs", Icon: ListOrdered },
+  { id: "compare", Icon: GitCompareArrows },
+  { id: "artifacts", Icon: FolderOpen },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -41,6 +42,13 @@ function isTab(v: string | null): v is TabId {
 }
 
 export default function Simulation() {
+  const t = useT();
+  const TAB_LABELS: Record<TabId, string> = {
+    builder: t.simulation.tabBuilder,
+    runs: t.simulation.tabRuns,
+    compare: t.simulation.tabCompare,
+    artifacts: t.simulation.tabArtifacts,
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const tab: TabId = isTab(searchParams.get("tab"))
     ? (searchParams.get("tab") as TabId)
@@ -84,12 +92,14 @@ export default function Simulation() {
       if (prev && prev !== r.status) {
         if (r.status === "succeeded") {
           notify(
-            `Run ${shortRunId(r.simulationRunId)} (${r.scenarioName}) succeeded — artifacts sealed.`,
+            t.simulation.runSucceeded
+              .replace("{id}", shortRunId(r.simulationRunId))
+              .replace("{name}", r.scenarioName),
           );
         } else if (r.status === "failed") {
-          notify(`Run ${shortRunId(r.simulationRunId)} failed — see engine logs.`);
+          notify(t.simulation.runFailed.replace("{id}", shortRunId(r.simulationRunId)));
         } else if (prev === "queued" && r.status === "running") {
-          setAnnouncement(`Run ${shortRunId(r.simulationRunId)} is now running.`);
+          setAnnouncement(t.simulation.runRunning.replace("{id}", shortRunId(r.simulationRunId)));
         }
       }
       prevStatuses.current.set(r.simulationRunId, r.status);
@@ -102,7 +112,9 @@ export default function Simulation() {
         setSessionRunIds((s) => new Set(s).add(info.simulationRunId));
       }
       notify(
-        `Run queued for “${info.scenarioName}” — tracking ${shortRunId(info.simulationRunId || "sim:pending")} in the Runs tab.`,
+        t.simulation.runQueued
+          .replace("{name}", info.scenarioName)
+          .replace("{id}", shortRunId(info.simulationRunId || "sim:pending")),
       );
       setTab("runs");
     },
@@ -132,12 +144,12 @@ export default function Simulation() {
         className="flex flex-wrap items-start justify-between gap-3"
       >
         <div>
-          <p className="caption-label text-ink-muted">Kaduna State · Scenario engine</p>
+          <p className="caption-label text-ink-muted">{t.simulation.caption}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
-            Simulation Studio
+            {t.simulation.title}
           </h1>
           <p className="mt-1 text-[13px] text-ink-secondary">
-            Twin state v3.2 · Last calibration 09 Jan 2025 · Engines: 6 available
+            {t.simulation.subtitle}
           </p>
         </div>
         <motion.div
@@ -148,19 +160,19 @@ export default function Simulation() {
         >
           {[
             {
-              label: "Run history",
+              label: t.simulation.runHistory,
               Icon: History,
               onClick: () => setTab("runs"),
               primary: false,
             },
             {
-              label: "Assumptions registry",
+              label: t.simulation.assumptionsRegistry,
               Icon: BookOpenCheck,
               onClick: () => setRegistryOpen(true),
               primary: false,
             },
             {
-              label: "New scenario",
+              label: t.simulation.newScenario,
               Icon: Plus,
               onClick: () => setTab("builder"),
               primary: true,
@@ -196,18 +208,18 @@ export default function Simulation() {
           className="mt-3 flex items-center gap-2 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-[13px] text-status-warning"
         >
           <TriangleAlert aria-hidden className="h-4 w-4 shrink-0" />
-          Scenario engine unavailable — queued runs will resume automatically. You can
-          still build and queue scenarios; jobs persist.
+          {t.simulation.degradedBanner}
         </p>
       )}
 
       {/* ---------------------------- Tab bar ---------------------------- */}
       <div
         role="tablist"
-        aria-label="Simulation studio sections"
+        aria-label={t.simulation.sectionsAria}
         className="mt-4 flex gap-1 overflow-x-auto border-b border-ink-subtle"
       >
-        {TABS.map(({ id, label, Icon }) => {
+        {TABS.map(({ id, Icon }) => {
+          const label = TAB_LABELS[id];
           const active = tab === id;
           return (
             <button
@@ -227,7 +239,7 @@ export default function Simulation() {
               {label}
               {id === "runs" && activeRunCount > 0 && (
                 <span
-                  aria-label={`${activeRunCount} active runs`}
+                  aria-label={t.simulation.activeRuns.replace("{count}", String(activeRunCount))}
                   className="flex h-4 min-w-4 items-center justify-center rounded-full bg-status-info/20 px-1 font-mono text-[10px] text-status-info"
                 >
                   {activeRunCount}
@@ -307,7 +319,7 @@ export default function Simulation() {
             <button
               type="button"
               onClick={() => setToast(null)}
-              aria-label="Dismiss notification"
+              aria-label={t.simulation.dismissNotification}
               className="rounded p-0.5 text-ink-muted hover:text-ink-primary"
             >
               <X aria-hidden className="h-3.5 w-3.5" />
@@ -339,6 +351,7 @@ function AssumptionsRegistryModal({
   onClose: () => void;
   sets: AssumptionSetLite[];
 }) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -362,7 +375,7 @@ function AssumptionsRegistryModal({
           <motion.div
             role="dialog"
             aria-modal="true"
-            aria-label="Assumptions registry"
+            aria-label={t.simulation.assumptionsRegistry}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
@@ -373,17 +386,16 @@ function AssumptionsRegistryModal({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-ink-primary">
-                  Assumptions registry
+                  {t.simulation.assumptionsRegistry}
                 </h2>
                 <p className="mt-0.5 text-[13px] text-ink-secondary">
-                  Versioned baseline assumptions behind every scenario run. Overrides
-                  are recorded per run in the execution profile.
+                  {t.simulation.registryIntro}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close registry"
+                aria-label={t.simulation.closeRegistry}
                 autoFocus
                 className="rounded p-1 text-ink-muted hover:text-ink-primary"
               >
@@ -392,7 +404,7 @@ function AssumptionsRegistryModal({
             </div>
             {sets.length === 0 ? (
               <p className="mt-4 text-[13px] text-ink-muted">
-                No assumption sets loaded for this jurisdiction.
+                {t.simulation.registryEmpty}
               </p>
             ) : (
               <div className="mt-4 space-y-4">
@@ -412,13 +424,13 @@ function AssumptionsRegistryModal({
                       <thead>
                         <tr className="border-b border-ink-subtle/60">
                           <th scope="col" className="caption-label px-3 py-1.5 text-ink-muted">
-                            Assumption
+                            {t.simulation.thAssumption}
                           </th>
                           <th scope="col" className="caption-label px-3 py-1.5 text-right text-ink-muted">
-                            Value
+                            {t.simulation.thValue}
                           </th>
                           <th scope="col" className="caption-label px-3 py-1.5 text-right text-ink-muted">
-                            Source
+                            {t.simulation.thSource}
                           </th>
                         </tr>
                       </thead>
