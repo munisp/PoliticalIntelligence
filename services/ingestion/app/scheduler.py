@@ -56,6 +56,7 @@ DEFAULT_CADENCE_S: dict[str, int] = {
     "smedan": 30 * 24 * 3600,           # monthly SMEDAN survey highlights
     "npopc": 30 * 24 * 3600,            # monthly NPopC projections
     "afdb": 30 * 24 * 3600,             # monthly AfDB Nigeria portfolio
+    "afreximbank": 30 * 24 * 3600,      # monthly Afreximbank announcements
 }
 DEFAULT_JITTER_PCT = 0.10
 DEFAULT_JURISDICTION = "jur:ng-kd"

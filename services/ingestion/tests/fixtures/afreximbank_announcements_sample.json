@@ -1,0 +1,10 @@
+{
+  "note": "Afreximbank project/trade finance announcements touching Nigeria used as the deterministic offline fallback for the afreximbank connector.",
+  "rows": [
+    {"facility_id": "AFRX-NG-2024-011", "title": "$300m Trade Facilitation Facility to Bank of Industry for SME on-lending", "beneficiary": "Bank of Industry", "sector": "trade", "instrument": "credit_line", "announcement_year": 2024, "amount_usd": 300000000, "exchange_rate_ngn_per_usd": 1480.0},
+    {"facility_id": "AFRX-NG-2023-047", "title": "Kaduna Textile Revival Project — pre-export finance for ginning clusters", "beneficiary": "Kaduna State Ministry of Business, Innovation and Technology", "sector": "manufacturing", "instrument": "project_loan", "announcement_year": 2023, "amount_usd": 85000000, "exchange_rate_ngn_per_usd": 780.0, "state": "Kaduna"},
+    {"facility_id": "AFRX-NG-2024-023", "title": "Lagos Pharma Manufacturing Park — intra-African trade finance window", "beneficiary": "Lagos State Ministry of Health / Fidson Consortium", "sector": "health", "instrument": "project_loan", "announcement_year": 2024, "amount_usd": 120000000, "exchange_rate_ngn_per_usd": 1520.0, "state": "Lagos"},
+    {"facility_id": "AFRX-NG-2022-009", "title": "Nigeria Creative Industry Support Initiative (music and film exports)", "beneficiary": "Federal Ministry of Art, Culture and the Creative Economy", "sector": "creative", "instrument": "guarantee", "announcement_year": 2022, "amount_ngn": 19125000000},
+    {"facility_id": "AFRX-NG-2024-031", "title": "Kano Agro-Commodity Export Readiness Facility", "beneficiary": "Kano State Investment and Properties Ltd", "sector": "agriculture", "instrument": "credit_line", "announcement_year": 2024, "amount_usd": 60000000, "exchange_rate_ngn_per_usd": 1500.0, "state": "Kano"}
+  ]
+}

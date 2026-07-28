@@ -22,6 +22,7 @@ from app.connectors.bpp import BppConnector
 from app.connectors.smedan import SmedanConnector
 from app.connectors.npopc import NpopcConnector
 from app.connectors.afdb import AfdbConnector
+from app.connectors.afreximbank import AfreximbankConnector
 
 REGISTRY: dict[str, type[BaseConnector]] = {
     c.name: c
@@ -46,6 +47,7 @@ REGISTRY: dict[str, type[BaseConnector]] = {
         SmedanConnector,
         NpopcConnector,
         AfdbConnector,
+        AfreximbankConnector,
     )
 }
 
