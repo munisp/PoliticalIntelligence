@@ -100,6 +100,19 @@ class RoutingAuditLog:
 audit_log = RoutingAuditLog()
 
 
+def _record_routing_metric(entry) -> None:
+    try:
+        from app.metrics import counter
+        counter("llm_routing_decisions_total",
+                "LLM routing decisions by tier").inc({
+                    "tier": entry.selected_tier.value,
+                    "workload_class": entry.workload_class.value,
+                    "offline": str(entry.offline).lower(),
+                })
+    except Exception:
+        pass
+
+
 def _canary_decision(decision_id: str, workload: WorkloadClass) -> str | None:
     if not CANARY["enabled"] or workload.value != CANARY["workload_class"]:
         return None
@@ -113,15 +126,21 @@ class ModelRouter:
     """Routes generation requests to model tiers with fallback + audit."""
 
     def __init__(self, base_url: str | None = None, api_key: str | None = None,
-                 timeout: float | None = None):
+                 timeout: float | None = None, serving: "Any | None" = None):
         self.base_url = (base_url if base_url is not None
                          else settings.vllm_base_url)
         self.api_key = api_key if api_key is not None else settings.vllm_api_key
         self.timeout = timeout if timeout is not None \
             else settings.llm_timeout_seconds
+        # Optional production serving layer (app.llm.serving.ServingClient):
+        # per-tier endpoints, connection pooling, hedging, circuit breakers.
+        # When absent, the legacy single-endpoint httpx path below is used.
+        self.serving = serving
 
     @property
     def online(self) -> bool:
+        if self.serving is not None:
+            return self.serving.configured
         return bool(self.base_url)
 
     # ------------------------------------------------------------------
@@ -159,6 +178,10 @@ class ModelRouter:
             self._audit(meta, request_id, started)
             return None, meta
 
+        if self.serving is not None:
+            return self._generate_via_serving(meta, chain, prompt, request_id,
+                                              started)
+
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -190,9 +213,56 @@ class ModelRouter:
         return None, meta
 
     # ------------------------------------------------------------------
+    def _generate_via_serving(self, meta: RoutingMetadata,
+                              chain: list[ModelTier], prompt: str,
+                              request_id: str,
+                              started: float) -> tuple[str | None, RoutingMetadata]:
+        """Fallback chain through the serving layer (breaker-guarded tiers).
+
+        An open circuit breaker or a missing per-tier endpoint skips the tier;
+        exhausted chains degrade to the offline synthesizer (text=None)."""
+        model_version = meta.canary_model_version
+        usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0}
+        for tier in chain:
+            attempt: dict[str, Any] = {"tier": tier.value}
+            try:
+                result = self.serving.complete(
+                    tier,
+                    messages=[{"role": "user", "content": prompt}],
+                    model_version=model_version,
+                )
+                meta.selected_tier = tier
+                attempt["outcome"] = "ok"
+                attempt["latency_ms"] = result.latency_ms
+                attempt["hedged"] = result.hedged
+                attempt["usage"] = {
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                }
+                usage = attempt["usage"]
+                meta.attempts.append(attempt)
+                self._audit(meta, request_id, started, usage=usage)
+                return result.text, meta
+            except RuntimeError as exc:
+                # circuit-open / no-endpoint-configured: skip without penalty
+                attempt["outcome"] = str(exc)
+            except Exception as exc:  # timeout / 5xx / DNS — try next tier
+                attempt["outcome"] = f"failed:{type(exc).__name__}"
+            meta.attempts.append(attempt)
+            meta.fallback_used = True
+        meta.offline = True
+        meta.selected_tier = ModelTier.offline
+        self._audit(meta, request_id, started, usage=usage)
+        return None, meta
+
+    # ------------------------------------------------------------------
     def _audit(self, meta: RoutingMetadata, request_id: str,
-               started: float) -> None:
-        audit_log.append(RoutingAuditEntry(
+               started: float, usage: dict[str, int] | None = None) -> None:
+        breakers = {}
+        if self.serving is not None:
+            breakers = {t.value: self.serving.breaker_for(t).state
+                        for t in ModelTier if t is not ModelTier.offline}
+        _entry = RoutingAuditEntry(
             decision_id=meta.decision_id,
             request_id=request_id,
             timestamp=datetime.now(timezone.utc),
@@ -203,4 +273,9 @@ class ModelRouter:
             fallback_used=meta.fallback_used,
             offline=meta.offline,
             latency_ms=round((time.monotonic() - started) * 1000, 2),
-        ))
+            prompt_tokens=(usage or {}).get("prompt_tokens", 0),
+            completion_tokens=(usage or {}).get("completion_tokens", 0),
+            circuit_breakers=breakers,
+        )
+        audit_log.append(_entry)
+        _record_routing_metric(_entry)
