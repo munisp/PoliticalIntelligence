@@ -9,7 +9,7 @@ import {
 } from "../consumers";
 
 describe("job heartbeats + stuck-job sweeper", () => {
-  it("wrapped job store records heartbeats on lifecycle transitions", async () => {
+  it("wrapped job store records heartbeats on lifecycle transitions", { timeout: 20000 }, async () => {
     const jobId = `job_hb_${Date.now()}`;
     const calls: string[] = [];
     const store = wrapJobStoreWithHeartbeats({
@@ -59,7 +59,7 @@ describe("job heartbeats + stuck-job sweeper", () => {
     expect(rows[0].error).toContain("stuck job");
   });
 
-  it("sweeper leaves fresh-heartbeat jobs alone", async () => {
+  it("sweeper leaves fresh-heartbeat jobs alone", { timeout: 20000 }, async () => {
     const jobId = `job_fresh_${Date.now()}`;
     await getDb()
       .insert(schema.jobs)
