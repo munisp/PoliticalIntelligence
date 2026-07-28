@@ -46,6 +46,7 @@ including failures.
 | `bpp` | Bureau of Public Procurement NOCOPO award notices (bpp.gov.ng) | **HYBRID** — attempts the live awards listing; falls back to bundled fixture stamped `origin=derived` when unreachable (complements `budeshi` OCDS with the federal NOCOPO feed) | `procurement_record` (federal MDA buyer, NOCOPO no., `tier="federal"`) → `procurement_records` |
 | `smedan` | SMEDAN/NBS MSME survey highlights (smedan.gov.ng) | **HYBRID** — attempts the live survey highlights endpoint; falls back to bundled fixture stamped `origin=derived` when unreachable | `sector_metric` (`SMEDAN_*` — MSME count, employment, GDP share, informal/women-owned shares; national + state rows) → `sector_metrics` |
 | `npopc` | National Population Commission projections (nationalpopulation.gov.ng) | **HYBRID** — attempts the live state/LGA projections endpoint; falls back to bundled fixture stamped `origin=derived` when unreachable | `sector_metric` (`POP_*` — total, growth rate, age structure, density; state + LGA rows, confidence 0.7) → `sector_metrics` |
+| `afdb` | African Development Bank projects portal — Nigeria portfolio | **HYBRID** — attempts the live portfolio query; falls back to bundled fixture stamped `origin=derived` when unreachable (USD amounts converted at the appraisal exchange rate) | `budget_line` (`tier="development_partner"`) → `budgets`; project appraisal citations as `evidence_source` → `evidence_sources` |
 
 Live-captured payloads are committed under
 `onboarding/packs/kaduna-ng/live_samples/` and
