@@ -202,6 +202,7 @@ def test_registry_complete():
                              "nbs_bulletin", "ubec_factsheet",
                              "nbs_outcomes",
                              "budget_office", "nass_bills",
-                             "state_budgets"}
+                             "state_budgets",
+                             "state_procurement"}
     for name in REGISTRY:
         assert get_connector(name).name == name

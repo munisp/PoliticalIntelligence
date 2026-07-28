@@ -39,6 +39,7 @@ including failures.
 | `budget_office` | Budget Office of the Federation (budgetoffice.gov.ng) appropriation/MTEF publications | **HYBRID** — attempts the live publications listing; falls back to bundled 2025-appropriation fixture stamped `origin=derived` when unreachable | `budget_line` → `budgets` |
 | `nass_bills` | National Assembly bills tracker (nass.gov.ng / placbillstrack) | **HYBRID** — attempts the live bills listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `bill_document` → `policy_documents` (`doc_type="bill"`, stage/sponsor/chamber in `metadata`) |
 | `state_budgets` | State budget portals — Lagos/Kaduna/Kano first-class, generic `https://<state>state.gov.ng/budget` fallback | **HYBRID** — attempts each state's approved-budget listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `budget_line` (`tier="state"`, state→jurisdiction FK) → `budgets` |
+| `state_procurement` | State procurement portals — Lagos PPA / Kaduna KDPPA / Kano PPB, generic state fallback | **HYBRID** — attempts each state's awards listing (OCDS-shaped); falls back to bundled fixture stamped `origin=derived` when unreachable | `procurement_record` (buyer/supplier/value/ocid, state in payload) → `procurement_records` |
 
 Live-captured payloads are committed under
 `onboarding/packs/kaduna-ng/live_samples/` and
