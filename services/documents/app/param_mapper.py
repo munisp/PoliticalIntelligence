@@ -75,10 +75,12 @@ _INSTRUMENT_RULES: list[tuple[str, re.Pattern[str], float]] = [
         r"\btax\s+(?:credit|relief|rebate|holiday|exemption)\b", re.I), 0.90),
     ("subsidy", re.compile(r"\bsubsid(?:y|ies|ise|ize|ised|ized)\b", re.I),
      0.88),
-    ("grant", re.compile(r"\bgrants?\b", re.I), 0.82),
+    # procurement_quota before grant: "grant a margin of preference for
+    # local content" is a quota instrument, not a fiscal grant.
     ("procurement_quota", re.compile(
         r"\b(?:procurement\s+quota|local\s+content|preference\s+margin|"
         r"quota\b|set[-\s]?aside)\b", re.I), 0.86),
+    ("grant", re.compile(r"\bgrants?\b", re.I), 0.82),
     ("training_levy", re.compile(
         r"\b(?:training\s+levy|levy\b|apprenticeship(?:\s+fund)?|"
         r"training\s+fund)\b", re.I), 0.85),
