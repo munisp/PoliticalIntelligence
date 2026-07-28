@@ -74,6 +74,13 @@ export const backtestRunInput = z.object({
   cutoff_month: z.number().int().min(3).max(33).default(18),
 });
 
+/** SIM-5: walk-forward calibration report across all engines. */
+export const calibrationReportInput = z.object({
+  jurisdiction_id: z.string().min(1),
+  engines: z.array(z.enum(SIMULATION_ENGINES)).min(1).max(6).optional(),
+  seed: z.number().int().min(0).default(42),
+});
+
 export const policyDiffInput = z.object({
   law_id_a: z.string().min(1),
   law_id_b: z.string().min(1),
