@@ -25,6 +25,7 @@ import {
   Download,
   MoreHorizontal,
   Sparkles,
+  Globe2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,16 @@ import { useInstallPrompt, useOnlineStatus } from "@/hooks/use-pwa";
 import { useAuth } from "@/hooks/useAuth";
 import { LOGIN_PATH } from "@/const";
 import { LogOut } from "lucide-react";
+import { useT } from "@/lib/LocaleContext";
+import type { Dict } from "@/i18n";
+import LanguageSwitcher from "@/components/innovations/LanguageSwitcher";
+
+/** Locale-aware nav label (additive i18n — keeps the English `label` as
+ *  tooltip/fallback while the visible string follows the active locale). */
+function NavLabel({ k }: { k: keyof Dict["nav"] }) {
+  const t = useT();
+  return <>{t.nav[k]}</>;
+}
 
 /* ------------------------------------------------------------------ */
 /* Auth slot (Phase 5): sidebar user card + topbar control             */
@@ -89,12 +100,13 @@ function AuthUserCard({
   onNavigate?: () => void;
 }) {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const t = useT();
 
   if (isLoading) {
     return (
       <div
         aria-busy="true"
-        aria-label="Loading account"
+        aria-label={t.layout.loadingAccount}
         className={cn(
           "flex w-full items-center gap-2.5 rounded-md border border-ink-subtle bg-ink-elevated px-2.5 py-2",
           collapsed && "justify-center px-0",
@@ -127,10 +139,10 @@ function AuthUserCard({
         {!collapsed && (
           <span className="min-w-0 flex-1 text-left">
             <span className="block text-[13px] font-medium text-ink-primary">
-              Sign in
+              {t.layout.signIn}
             </span>
             <span className="block truncate text-[11px] text-ink-muted">
-              Government SSO · role-based
+              {t.layout.ssoHint}
             </span>
           </span>
         )}
@@ -162,7 +174,7 @@ function AuthUserCard({
               logout();
               onNavigate?.();
             }}
-            aria-label="Sign out"
+            aria-label={t.layout.signOut}
             className="rounded p-1 text-ink-muted hover:text-ink-primary"
           >
             <LogOut aria-hidden className="h-4 w-4" />
@@ -181,12 +193,13 @@ function AuthUserCard({
 /** Topbar auth control: loading skeleton / sign-in icon / avatar + sign out. */
 function AuthTopbarControl() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const t = useT();
 
   if (isLoading) {
     return (
       <span
         aria-busy="true"
-        aria-label="Loading account"
+        aria-label={t.layout.loadingAccount}
         className="h-8 w-8 animate-pulse rounded-full border border-ink-subtle bg-ink-elevated"
       />
     );
@@ -196,7 +209,7 @@ function AuthTopbarControl() {
     return (
       <Link
         to={LOGIN_PATH}
-        aria-label="Sign in"
+        aria-label={t.layout.signIn}
         className="flex h-8 w-8 items-center justify-center rounded-full border border-ink-subtle bg-ink-elevated text-ink-muted hover:border-civic/50 hover:text-ink-primary"
       >
         <UserRound aria-hidden className="h-4 w-4" />
@@ -218,8 +231,8 @@ function AuthTopbarControl() {
       <button
         type="button"
         onClick={logout}
-        aria-label="Sign out"
-        title="Sign out"
+        aria-label={t.layout.signOut}
+        title={t.layout.signOut}
         className="rounded p-1.5 text-ink-secondary hover:text-ink-primary"
       >
         <LogOut aria-hidden className="h-4 w-4" />
@@ -234,28 +247,32 @@ function AuthTopbarControl() {
 
 interface NavItem {
   label: string;
+  /** i18n key into the active pack's `nav` section. */
+  tKey: keyof Dict["nav"];
   href: string;
   Icon: LucideIcon;
   dot?: boolean;
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { label: "Executive Dashboard", href: "/dashboard", Icon: LayoutDashboard },
-  { label: "Opportunity Explorer", href: "/opportunities", Icon: Compass },
-  { label: "Policy & Legislation", href: "/legislation", Icon: Scale },
-  { label: "Simulation Studio", href: "/simulation", Icon: FlaskConical },
-  { label: "Executive Briefs", href: "/briefs", Icon: FileText },
-  { label: "Data Source Health", href: "/data-health", Icon: HeartPulse },
-  { label: "Copilot", href: "/copilot", Icon: MessageSquareText, dot: true },
+  { label: "Executive Dashboard", tKey: "executiveDashboard", href: "/dashboard", Icon: LayoutDashboard },
+  { label: "Opportunity Explorer", tKey: "opportunityExplorer", href: "/opportunities", Icon: Compass },
+  { label: "Policy & Legislation", tKey: "policyWorkbench", href: "/legislation", Icon: Scale },
+  { label: "Simulation Studio", tKey: "simulationStudio", href: "/simulation", Icon: FlaskConical },
+  { label: "Executive Briefs", tKey: "executiveBriefs", href: "/briefs", Icon: FileText },
+  { label: "Data Source Health", tKey: "dataHealth", href: "/data-health", Icon: HeartPulse },
+  { label: "Copilot", tKey: "copilot", href: "/copilot", Icon: MessageSquareText, dot: true },
 ];
 
 const SECONDARY_NAV: NavItem[] = [
   /* INNOVATIONS-NAV */
-  { label: "Innovations", href: "/innovations", Icon: Sparkles },
-  { label: "Documents library", href: "/documents", Icon: FolderOpen },
-  { label: "Audit log", href: "/audit-log", Icon: ScrollText },
-  { label: "Settings", href: "/settings", Icon: Settings },
-  { label: "Help & shortcuts", href: "/help", Icon: CircleHelp },
+  { label: "Innovations", tKey: "innovations", href: "/innovations", Icon: Sparkles },
+  /* GEO3D-NAV */
+  { label: "3D Geospatial", tKey: "geo3d", href: "/geo3d", Icon: Globe2 },
+  { label: "Documents library", tKey: "documents", href: "/documents", Icon: FolderOpen },
+  { label: "Audit log", tKey: "auditLog", href: "/audit-log", Icon: ScrollText },
+  { label: "Settings", tKey: "settings", href: "/settings", Icon: Settings },
+  { label: "Help & shortcuts", tKey: "help", href: "/help", Icon: CircleHelp },
 ];
 
 const PAGE_TITLES: Record<string, { title: string; crumb: string }> = {
@@ -266,6 +283,7 @@ const PAGE_TITLES: Record<string, { title: string; crumb: string }> = {
   "/briefs": { title: "Executive Briefs", crumb: "Kaduna State / Documents" },
   "/data-health": { title: "Data Source Health", crumb: "Platform / Pipelines" },
   "/copilot": { title: "Copilot", crumb: "Kaduna State / Assistant" },
+  "/geo3d": { title: "3D Geospatial", crumb: "Kaduna State / LGA extrusion" },
 };
 
 const DEMO_ROLES = [
@@ -291,6 +309,7 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const { canInstall, install } = useInstallPrompt();
+  const t = useT();
 
   const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -333,7 +352,7 @@ function SidebarContent({
           <button
             type="button"
             onClick={onToggleCollapse}
-            aria-label="Collapse sidebar"
+            aria-label={t.layout.collapseSidebar}
             className="ml-auto rounded p-1 text-ink-muted hover:text-ink-primary"
           >
             <ChevronsLeft aria-hidden className="h-4 w-4" />
@@ -345,7 +364,7 @@ function SidebarContent({
         <button
           type="button"
           onClick={onToggleCollapse}
-          aria-label="Expand sidebar"
+          aria-label={t.layout.expandSidebar}
           className="mx-auto mt-2 rounded p-1 text-ink-muted hover:text-ink-primary"
         >
           <ChevronsRight aria-hidden className="h-4 w-4" />
@@ -356,7 +375,7 @@ function SidebarContent({
       <div className={cn("px-3 pt-3", collapsed && "px-2")}>
         <button
           type="button"
-          aria-label="Select jurisdiction — current: Kaduna State, Nigeria"
+          aria-label={t.layout.selectJurisdiction}
           className={cn(
             "flex w-full items-center gap-2 rounded-md border border-ink-subtle bg-ink-elevated px-2.5 py-2 text-left hover:border-ink-strong",
             collapsed && "justify-center px-0",
@@ -384,7 +403,7 @@ function SidebarContent({
 
       {/* Primary nav */}
       <nav aria-label="Primary" className="mt-3 flex-1 space-y-0.5 overflow-y-auto px-3">
-        {PRIMARY_NAV.map(({ label, href, Icon, dot }) => (
+        {PRIMARY_NAV.map(({ label, tKey, href, Icon, dot }) => (
           <NavLink
             key={href}
             to={href}
@@ -404,7 +423,11 @@ function SidebarContent({
                     />
                   )}
                 </span>
-                {!collapsed && <span className="truncate">{label}</span>}
+                {!collapsed && (
+                  <span className="truncate">
+                    <NavLabel k={tKey} />
+                  </span>
+                )}
               </>
             )}
           </NavLink>
@@ -426,10 +449,10 @@ function SidebarContent({
             )}
           >
             <Download aria-hidden className="h-[18px] w-[18px] shrink-0" />
-            {!collapsed && "Install Meridian"}
+            {!collapsed && t.layout.installApp}
           </button>
         )}
-        {SECONDARY_NAV.map(({ label, href, Icon }) => (
+        {SECONDARY_NAV.map(({ label, tKey, href, Icon }) => (
           <NavLink
             key={href}
             to={href}
@@ -441,7 +464,11 @@ function SidebarContent({
               <>
                 {activeBar(isActive)}
                 <Icon aria-hidden className="h-[18px] w-[18px] shrink-0" />
-                {!collapsed && <span className="truncate">{label}</span>}
+                {!collapsed && (
+                  <span className="truncate">
+                    <NavLabel k={tKey} />
+                  </span>
+                )}
               </>
             )}
           </NavLink>
@@ -463,6 +490,7 @@ function SidebarContent({
 function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const location = useLocation();
   const online = useOnlineStatus();
+  const t = useT();
   const [jobsOpen, setJobsOpen] = useState(false);
   const [role, setRole] = useState<(typeof DEMO_ROLES)[number]>(DEMO_ROLES[0]);
   const page = PAGE_TITLES[location.pathname] ?? {
@@ -478,7 +506,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
       <button
         type="button"
         onClick={onOpenMobileNav}
-        aria-label="Open navigation"
+        aria-label={t.layout.openNavigation}
         className="rounded p-1.5 text-ink-secondary hover:text-ink-primary xl:hidden"
       >
         <Menu aria-hidden className="h-5 w-5" />
@@ -500,7 +528,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         className="mx-auto hidden w-full max-w-sm items-center gap-2 rounded-md border border-ink-subtle bg-ink-surface px-3 py-1.5 text-[13px] text-ink-muted hover:border-ink-strong md:flex"
       >
         <Search aria-hidden className="h-4 w-4" />
-        <span className="flex-1 text-left">Search or ask Copilot…</span>
+        <span className="flex-1 text-left">{t.layout.searchOrAsk}</span>
         <kbd className="rounded border border-ink-subtle bg-ink-inset px-1.5 py-0.5 font-mono text-[10px]">
           ⌘K
         </kbd>
@@ -508,7 +536,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
       <button
         type="button"
         onClick={openCommandPalette}
-        aria-label="Open search"
+        aria-label={t.layout.openSearch}
         className="rounded p-1.5 text-ink-secondary hover:text-ink-primary md:hidden"
       >
         <Search aria-hidden className="h-5 w-5" />
@@ -521,7 +549,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             className="inline-flex items-center gap-1.5 rounded-full border border-status-warning/40 bg-status-warning/10 px-2 py-1 text-xs font-medium text-status-warning"
           >
             <WifiOff aria-hidden className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Offline — showing cached data</span>
+            <span className="hidden sm:inline">{t.layout.offlineCached}</span>
           </span>
         )}
 
@@ -529,7 +557,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         <Link
           to="/data-health"
           className="hidden items-center gap-1.5 rounded-full border border-ink-subtle bg-ink-surface px-2.5 py-1 text-xs text-ink-secondary hover:border-ink-strong lg:inline-flex"
-          aria-label="Data as of 12 Jan 2025 — open Data Source Health"
+          aria-label={t.layout.dataFreshness}
         >
           <span aria-hidden className="h-2 w-2 rounded-full bg-status-success" />
           Data as of 12 Jan 2025
@@ -541,7 +569,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             type="button"
             onClick={() => setJobsOpen((v) => !v)}
             aria-expanded={jobsOpen}
-            aria-label="Background jobs"
+            aria-label={t.layout.backgroundJobs}
             className="relative rounded p-1.5 text-ink-secondary hover:text-ink-primary"
           >
             <Bell aria-hidden className="h-5 w-5" />
@@ -556,7 +584,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
               aria-label="Jobs"
               className="absolute right-0 top-full z-40 mt-1 w-72 rounded-md border border-ink-subtle bg-ink-elevated p-3 shadow-overlay"
             >
-              <p className="caption-label text-ink-muted">Running jobs</p>
+              <p className="caption-label text-ink-muted">{t.layout.runningJobs}</p>
               <ul className="mt-2 space-y-2 text-[13px]">
                 <li className="flex items-center justify-between gap-2">
                   <span className="truncate text-ink-secondary">
@@ -578,7 +606,7 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         {/* Approval queue badge */}
         <Link
           to="/briefs"
-          aria-label="Approval queue — 3 items awaiting your sign-off"
+          aria-label={t.layout.approvalQueue}
           className="relative rounded p-1.5 text-ink-secondary hover:text-ink-primary"
         >
           <ClipboardCheck aria-hidden className="h-5 w-5" />
@@ -590,9 +618,13 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           </span>
         </Link>
 
+        {/* I18N-SLOT: language switcher (EN/HA/YO/IG), additive, next to the
+            demo role switcher. Default locale remains English. */}
+        <LanguageSwitcher className="hidden md:inline-flex" />
+
         {/* Role switcher (demo) */}
         <label className="hidden items-center gap-1.5 xl:flex">
-          <span className="sr-only">Demo role</span>
+          <span className="sr-only">{t.layout.demoRole}</span>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as (typeof DEMO_ROLES)[number])}
@@ -618,10 +650,10 @@ function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
 /* ------------------------------------------------------------------ */
 
 const BOTTOM_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", Icon: LayoutDashboard },
-  { label: "Explorer", href: "/opportunities", Icon: Compass },
-  { label: "Workbench", href: "/legislation", Icon: Scale },
-  { label: "Studio", href: "/simulation", Icon: FlaskConical },
+  { label: "Dashboard", tKey: "dashboard", href: "/dashboard", Icon: LayoutDashboard },
+  { label: "Explorer", tKey: "explorer", href: "/opportunities", Icon: Compass },
+  { label: "Workbench", tKey: "workbench", href: "/legislation", Icon: Scale },
+  { label: "Studio", tKey: "studio", href: "/simulation", Icon: FlaskConical },
 ];
 
 function BottomNav({ onMore }: { onMore: () => void }) {
@@ -632,7 +664,7 @@ function BottomNav({ onMore }: { onMore: () => void }) {
       className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-ink-subtle bg-ink-base/95 backdrop-blur md:hidden"
     >
       <div className="grid grid-cols-5">
-        {BOTTOM_NAV.map(({ label, href, Icon }) => (
+        {BOTTOM_NAV.map(({ tKey, href, Icon }) => (
           <NavLink
             key={href}
             to={href}
@@ -644,7 +676,7 @@ function BottomNav({ onMore }: { onMore: () => void }) {
             }
           >
             <Icon aria-hidden className="h-5 w-5" />
-            {label}
+            <NavLabel k={tKey} />
           </NavLink>
         ))}
         <button
@@ -653,7 +685,7 @@ function BottomNav({ onMore }: { onMore: () => void }) {
           className="flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-ink-muted"
         >
           <MoreHorizontal aria-hidden className="h-5 w-5" />
-          More
+          <NavLabel k="more" />
         </button>
       </div>
     </nav>
