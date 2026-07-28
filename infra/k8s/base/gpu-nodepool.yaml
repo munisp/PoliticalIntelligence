@@ -1,0 +1,76 @@
+# AI-9 (spec §37): GPU node pools — cloud-agnostic (EKS/AKS/GKE) k8s-side
+# contract. The cloud-specific provisioning lives in
+# infra/terraform/modules/eks (aws_eks_node_group.gpu); this file carries
+# the cluster-side pieces every provider needs:
+#   1. NVIDIA device plugin DaemonSet (advertise nvidia.com/gpu)
+#   2. gpu taint documentation (nodes are tainted role=gpu-inference:
+#      NoSchedule by the Terraform node group; workloads tolerate it —
+#      see rayserve.yaml and ai.yaml overlay patches)
+#   3. a Namespace-limited ResourceQuota so GPU workloads cannot starve the
+#      control plane
+#
+# Pool contract (§37) — labels/taints every provider must apply:
+#   node label  role=gpu-inference, gpu-pool=<interactive|premium|specialist|batch>
+#   taint       role=gpu-inference:NoSchedule
+# Workloads select a pool with:
+#   nodeSelector: {role: gpu-inference, gpu-pool: interactive}
+#   tolerations:  [{key: role, operator: Equal, value: gpu-inference,
+#                   effect: NoSchedule}]
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-device-plugin
+  namespace: kube-system
+  labels:
+    app: nvidia-device-plugin
+spec:
+  selector:
+    matchLabels:
+      app: nvidia-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: nvidia-device-plugin
+    spec:
+      priorityClassName: system-node-critical
+      # Only run on GPU nodes (any §37 pool).
+      nodeSelector:
+        role: gpu-inference
+      tolerations:
+        - key: role
+          operator: Equal
+          value: gpu-inference
+          effect: NoSchedule
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: nvidia-device-plugin
+          image: nvcr.io/nvidia/k8s-device-plugin:v0.16.2
+          args:
+            - --fail-on-init-error=false
+            - --device-list-strategy=envvar
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+              readOnly: true
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gpu-workload-quota
+  namespace: policy-twin
+spec:
+  hard:
+    requests.nvidia.com/gpu: "8"   # matches terraform gpu node group max
+    limits.nvidia.com/gpu: "8"
