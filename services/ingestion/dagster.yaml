@@ -1,0 +1,20 @@
+# ING-8: Dagster instance config (DAGSTER_HOME=services/ingestion).
+# Local dev defaults — sqlite storage, in-process executor. For staging use
+# Postgres storage + the DockerRunLauncher; see
+# https://docs.dagster.io/deployment/dagster-instance
+scheduler:
+  module: dagster.core.scheduler
+  class: DagsterDaemonScheduler
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 4
+
+run_launcher:
+  module: dagster.core.launcher
+  class: DefaultRunLauncher
+
+# Workspace: load the ingestion Definitions module.
+# dagster dev -m app.orchestration.dagster_defs  (run from services/ingestion)
