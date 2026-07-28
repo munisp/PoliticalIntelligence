@@ -251,6 +251,10 @@ export const laws = mysqlTable(
     status: varchar("status", { length: 32 }).default("in_force").notNull(),
     year: int("year"),
     sourceUri: text("source_uri"),
+    /** G4: evidence base for drafted bills (contracts/drafting EvidenceBase). */
+    evidenceBase: json("evidence_base"),
+    /** G4: Regulatory Impact Assessment annex (contracts/drafting RiaAnnex). */
+    riaAnnex: json("ria_annex"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
@@ -266,7 +270,11 @@ export const clauses = mysqlTable(
     clauseId: varchar("clause_id", { length: 96 }).primaryKey(),
     lawId: varchar("law_id", { length: 64 }).notNull(),
     sectionPath: varchar("section_path", { length: 128 }).notNull(),
+    /** G4: generated-clause heading (null for imported clauses). */
+    heading: varchar("heading", { length: 256 }),
     text: text("text").notNull(),
+    /** G4: evidence grounding per generated clause (ClauseGrounding[]). */
+    grounding: json("grounding"),
     language: varchar("language", { length: 8 }).default("en").notNull(),
     confidence: double("confidence").default(0.9).notNull(),
     reviewState: reviewStateEnum("review_state"),
@@ -1056,3 +1064,70 @@ export const datasetPolicies = mysqlTable(
 );
 
 export type DatasetPolicy = typeof datasetPolicies.$inferSelect;
+
+
+/* ------------------------------------------------------------------ */
+/* ADDITIVE (G2): realized-outcome store (docs/OUTCOMES.md).           */
+/* Realized indicator observations (e.g. NBS labour-force releases)    */
+/* that feed real-data causal estimation and backtesting.              */
+/* NOTE: jurisdictionId follows the repo-wide convention (varchar(64)  */
+/* natural key, e.g. "jur:ng-kd") — NOT a bigint FK — matching every   */
+/* other jurisdiction-scoped table in this schema.                     */
+/* ------------------------------------------------------------------ */
+export const outcomeSeries = mysqlTable(
+  "outcome_series",
+  {
+    id: serial("id").primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    /** e.g. EMPLOYMENT_TOTAL, UNEMPLOYMENT_RATE, FIRM_COUNT */
+    indicatorCode: varchar("indicator_code", { length: 64 }).notNull(),
+    source: varchar("source", { length: 255 }).notNull(),
+    origin: mysqlEnum("origin", ["live", "derived", "seed"])
+      .default("seed")
+      .notNull(),
+    unit: varchar("unit", { length: 32 }).notNull(),
+    frequency: mysqlEnum("frequency", ["monthly", "quarterly", "annual"])
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    jurIndicator: uniqueIndex("outcome_series_jur_indicator_src").on(
+      t.jurisdictionId,
+      t.indicatorCode,
+      t.source,
+      t.frequency,
+    ),
+    jurIdx: index("outcome_series_jur_idx").on(t.jurisdictionId),
+  }),
+);
+
+export type OutcomeSeries = typeof outcomeSeries.$inferSelect;
+export type InsertOutcomeSeries = typeof outcomeSeries.$inferInsert;
+
+export const outcomeObservations = mysqlTable(
+  "outcome_observations",
+  {
+    id: serial("id").primaryKey(),
+    /** FK -> outcome_series.id (bigint unsigned serial). */
+    seriesId: bigint("series_id", { mode: "number", unsigned: true }).notNull(),
+    /** Period label YYYY-MM (quarterly/annual series use the end month). */
+    period: varchar("period", { length: 7 }).notNull(),
+    value: double("value").notNull(),
+    fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+    provenanceJson: json("provenance_json"),
+  },
+  (t) => ({
+    seriesPeriod: uniqueIndex("outcome_observations_series_period").on(
+      t.seriesId,
+      t.period,
+    ),
+    seriesIdx: index("outcome_observations_series_idx").on(t.seriesId),
+  }),
+);
+
+export type OutcomeObservation = typeof outcomeObservations.$inferSelect;
+export type InsertOutcomeObservation = typeof outcomeObservations.$inferInsert;
