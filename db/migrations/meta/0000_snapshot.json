@@ -2537,7 +2537,7 @@
           "name": "lastSignInAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false,
           "default": "(now())"
         }
