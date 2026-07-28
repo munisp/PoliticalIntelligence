@@ -283,6 +283,10 @@ class CalibrationReport(BaseModel):
     jurisdiction_id: str
     metric: str
     band_level: float = BAND_LEVEL
+    # G2: "realized" when scored against realized outcome observations
+    # pushed to the outcome store; "seeded" for the deterministic seed
+    # series (pre-G2 behavior).
+    actuals_source: str = "seeded"
     random_seed: int
     cutoffs: list[int]
     history_periods: list[str]
@@ -292,6 +296,11 @@ class CalibrationReport(BaseModel):
     recalibration: dict[str, Any] | None = None
 
 
+class ActualObservation(BaseModel):
+    period: str  # YYYY-MM
+    value: float
+
+
 class BacktestRequest(BaseModel):
     jurisdiction_id: str = "jur:ng-kd"
     metric: str = "employment"
@@ -299,6 +308,10 @@ class BacktestRequest(BaseModel):
     cutoffs: list[int] | None = None  # default: walk-forward grid
     random_seed: int = 42
     recalibrate: bool = False
+    # G2: explicit realized actuals (period/value). When omitted, the
+    # caller's outcome store is consulted; when neither has data, the
+    # seeded deterministic series is used (pre-G2 behavior).
+    actuals: list[ActualObservation] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -333,10 +346,27 @@ def _window_metrics(train: np.ndarray, test: np.ndarray,
     )
 
 
-def run_backtest(req: BacktestRequest) -> CalibrationReport:
-    """Walk-forward backtest of all requested engines for one metric."""
-    periods, history = seed_data.baseline_series(req.jurisdiction_id, req.metric)
-    history = np.asarray(history, dtype=float)
+def run_backtest(req: BacktestRequest, outcomes=None) -> CalibrationReport:
+    """Walk-forward backtest of all requested engines for one metric.
+
+    Actuals resolution (G2): explicit ``req.actuals`` win; otherwise the
+    pushed realized-outcome store (``outcomes``, an app.outcomes.OutcomeStore)
+    is consulted; otherwise the seeded deterministic series. The source is
+    recorded in the report's ``actuals_source`` field."""
+    actuals_source = "seeded"
+    realized: tuple[list[str], list[float]] | None = None
+    if req.actuals:
+        obs = sorted(req.actuals, key=lambda o: o.period)
+        realized = ([o.period for o in obs], [o.value for o in obs])
+    elif outcomes is not None:
+        realized = outcomes.actuals_for_metric(req.jurisdiction_id, req.metric)
+    if realized and len(realized[0]) >= 4:
+        periods, values = realized
+        history = np.asarray(values, dtype=float)
+        actuals_source = "realized"
+    else:
+        periods, history = seed_data.baseline_series(req.jurisdiction_id, req.metric)
+        history = np.asarray(history, dtype=float)
     n = len(history)
     cutoffs = req.cutoffs or default_cutoffs(n)
     for c in cutoffs:
@@ -376,6 +406,7 @@ def run_backtest(req: BacktestRequest) -> CalibrationReport:
 
     report = CalibrationReport(
         jurisdiction_id=req.jurisdiction_id, metric=req.metric,
+        actuals_source=actuals_source,
         random_seed=req.random_seed, cutoffs=list(cutoffs),
         history_periods=list(periods), engines=engine_rows,
     )

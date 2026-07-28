@@ -24,9 +24,13 @@ class RunManager:
     """Owns the run registry, idempotency map and the asyncio worker pool."""
 
     def __init__(self, store: ArtifactStore | None = None,
-                 twin_registry: TwinRegistry | None = None):
+                 twin_registry: TwinRegistry | None = None,
+                 outcomes=None):
         self.store = store or ArtifactStore()
         self.twins = twin_registry or TwinRegistry(self.store)
+        # G2: realized-outcome handoff cache (app.outcomes.OutcomeStore).
+        from app.outcomes import OutcomeStore
+        self.outcomes = outcomes or OutcomeStore()
         self._runs: dict[str, ScenarioRun] = {}
         self._idempotency: dict[str, str] = {}  # key -> run_id
         self._cancel_flags: dict[str, asyncio.Event] = {}
@@ -144,6 +148,12 @@ class RunManager:
                 ).hexdigest()[:8], 16)
                 ctx = EngineContext(config=config, plan=entry, jurisdiction=jur,
                                     assumptions=asm, random_seed=engine_seed)
+                # G2: when realized outcome observations have been pushed
+                # for this jurisdiction, the causal engine estimates on the
+                # real panel (data_mode="realized"); otherwise it keeps its
+                # synthetic-panel behavior.
+                if entry.engine.value == "causal":
+                    ctx.panel = self.outcomes.panel_for(config.jurisdiction_id)
                 result = await asyncio.get_running_loop().run_in_executor(
                     None, run_engine, entry.engine.value, ctx)
                 results.append(result)

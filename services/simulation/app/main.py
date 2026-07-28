@@ -5,6 +5,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, Request
+from pydantic import BaseModel
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -178,12 +179,72 @@ async def run_backtest_endpoint(req: BacktestRequest, request: Request):
     backtest-derived prior adjustments to the digital twin."""
     manager: RunManager = request.app.state.runs
     resolve_jurisdiction(req.jurisdiction_id)  # fail fast with 4xx
-    report = run_backtest(req)
+    report = run_backtest(req, outcomes=manager.outcomes)
     persist_report(report, manager.store)
     if req.recalibrate:
         manager.twins.get_or_create(req.jurisdiction_id)
         recalibrate_from_backtest(report, manager.twins)
     return _envelope(request, report.model_dump(mode="json")).model_dump(mode="json")
+
+
+# ---------------------------------------------------------------------------
+# G2: realized-outcome handoff (docs/OUTCOMES.md)
+#
+# Least-coupled design: the sim service never reads the platform DB. A
+# loader (or the API side) PUSHES realized observations with
+# POST /v1/outcomes; the causal engine and backtest framework consume the
+# process-local OutcomeStore and record data_mode / actuals_source in
+# every artifact. GET reads back whatever has been pushed.
+# ---------------------------------------------------------------------------
+class OutcomePush(BaseModel):
+    jurisdiction_id: str
+    indicator_code: str  # e.g. EMPLOYMENT_TOTAL, UNEMPLOYMENT_RATE, FIRM_COUNT
+    observations: list[dict]  # [{"period": "YYYY-MM", "value": float}, ...]
+    meta: dict | None = None
+
+
+@app.post("/v1/outcomes", status_code=201)
+async def push_outcomes(payload: OutcomePush, request: Request):
+    """Loader push path for realized outcome observations. When the env var
+    OUTCOMES_LOADER_KEY is set, the x-loader-key header must match."""
+    import os
+    expected = os.getenv("OUTCOMES_LOADER_KEY")
+    if expected and request.headers.get("x-loader-key") != expected:
+        from app.errors import ServiceError
+        raise ServiceError(code="LOADER_KEY_INVALID",
+                           message="Valid x-loader-key header required",
+                           http_status=401, retryable=False)
+    manager: RunManager = request.app.state.runs
+    applied = manager.outcomes.push(
+        payload.jurisdiction_id, payload.indicator_code,
+        payload.observations, meta=payload.meta)
+    return JSONResponse(status_code=201, content=_envelope(request, {
+        "jurisdiction_id": payload.jurisdiction_id,
+        "indicator_code": payload.indicator_code,
+        "applied": applied,
+    }).model_dump(mode="json"))
+
+
+@app.get("/v1/outcomes/{jurisdiction_id}")
+async def get_outcomes(jurisdiction_id: str, request: Request,
+                       indicator: str | None = None):
+    """Read back pushed realized outcomes. With ``indicator`` returns one
+    series (periods + values, empty lists when nothing pushed); without it
+    lists the indicators available for the jurisdiction."""
+    manager: RunManager = request.app.state.runs
+    if indicator:
+        periods, values = manager.outcomes.series(jurisdiction_id, indicator)
+        return _envelope(request, {
+            "jurisdiction_id": jurisdiction_id,
+            "indicator_code": indicator,
+            "periods": periods,
+            "values": values,
+            "data_available": bool(periods),
+        }).model_dump(mode="json")
+    return _envelope(request, {
+        "jurisdiction_id": jurisdiction_id,
+        "indicators": manager.outcomes.indicators(jurisdiction_id),
+    }).model_dump(mode="json")
 
 
 @app.get("/v1/twins/{jurisdiction_id}")

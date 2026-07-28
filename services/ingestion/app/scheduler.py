@@ -44,6 +44,7 @@ DEFAULT_CADENCE_S: dict[str, int] = {
     "file_harvester": 3600,
     "nbs_bulletin": 7 * 24 * 3600,
     "ubec_factsheet": 7 * 24 * 3600,
+    "nbs_outcomes": 90 * 24 * 3600,
 }
 DEFAULT_JITTER_PCT = 0.10
 DEFAULT_JURISDICTION = "jur:ng-kd"
