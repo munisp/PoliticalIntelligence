@@ -329,6 +329,9 @@ export const policyDocuments = mysqlTable(
     reviewState: reviewStateEnum("review_state"),
     docType: varchar("doc_type", { length: 64 }),
     ocrConfidence: double("ocr_confidence"),
+    /** Free-form metadata (e.g. bill stage/sponsor/chamber for doc_type="bill"). */
+    metadata: json("metadata"),
+    ...provenanceColumns(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
