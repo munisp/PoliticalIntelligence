@@ -1,0 +1,30 @@
+# Ray Serve config for the G1 go-live tier. The canonical RayService CR
+# lives in infra/k8s/base/rayserve.yaml (AI-7); this ConfigMap carries the
+# serveConfigV2 application definition used when the Ray cluster is
+# bootstrapped for the Qwen3-8B interactive tier. Apply with the rest of
+# this directory; the ai service selects the Ray transport with
+# LLM_TRANSPORT=ray + RAY_SERVE_URL=http://policy-twin-ray-serve:8000.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ray-serve-config
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: policy-twin-ray-serve
+    app.kubernetes.io/part-of: policy-twin
+    app.kubernetes.io/component: model-serving
+data:
+  serve_config.yaml: |
+    applications:
+      - name: llm-tiers
+        import_path: app.llm.ray_serve:serve_app
+        route_prefix: /v1/llm
+        runtime_env:
+          pip:
+            - vllm>=0.8
+            - fastapi>=0.115
+          env_vars:
+            # Go-live default tier: Qwen3-8B on the interactive GPU pool.
+            MODEL_DEFAULT_TIER: qwen3-8b
+            HF_TOKEN: ""
+        deployments: []  # constructed by build_deployments() per tier

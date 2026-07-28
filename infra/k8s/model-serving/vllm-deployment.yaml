@@ -1,0 +1,96 @@
+# G1 (docs/GPU-GOLIVE.md): vLLM deployment for the go-live default tier
+# (Qwen3-8B). Runs on the AI-9 GPU node pool — nodeSelector matches the
+# pool contract in infra/k8s/base/gpu-nodepool.yaml and the Terraform
+# aws_eks_node_group.gpu labels (infra/terraform/modules/eks):
+#   node label  role=gpu-inference, gpu-pool=interactive
+#   taint       role=gpu-inference:NoSchedule
+# The ai service reaches this endpoint via VLLM_BASE_URL (or
+# LLM_REMOTE_BASE_URL) / VLLM_BASE_URL_DEFAULT. Go-live is gated on the
+# eval harness (services/ai/app/evals) passing --gate 0.8 against this
+# endpoint BEFORE the env switch is flipped.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen3-8b
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: vllm-qwen3-8b
+    app.kubernetes.io/part-of: policy-twin
+    app.kubernetes.io/component: model-serving
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # single GPU; avoid two pods contending for one device
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm-qwen3-8b
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vllm-qwen3-8b
+        app.kubernetes.io/part-of: policy-twin
+        app.kubernetes.io/component: model-serving
+    spec:
+      # AI-9 pool contract: interactive GPU pool.
+      nodeSelector:
+        role: gpu-inference
+        gpu-pool: interactive
+      tolerations:
+        - key: role
+          operator: Equal
+          value: gpu-inference
+          effect: NoSchedule
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.8.5
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model=Qwen/Qwen3-8B
+            - --served-model-name=qwen3-8b
+            - --gpu-memory-utilization=0.90
+            - --max-model-len=8192
+            - --disable-log-requests
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: platform-secrets
+                  key: HF_TOKEN
+                  optional: true
+          resources:
+            requests:
+              cpu: "4"
+              memory: 24Gi
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: 40Gi
+              nvidia.com/gpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60  # model load + CUDA graphs
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 20
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: hf-cache
+          emptyDir: {} # swap for a PVC when image baking is not used

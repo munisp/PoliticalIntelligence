@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: policy-twin
 resources:
   - ../../base
+  - ../../model-serving
   - canary.yaml
   - canary-ingress.yaml
 nameSuffix: -stg
