@@ -13,10 +13,12 @@ from app.config import settings
 from app.errors import ServiceError, ValidationError
 from app.llm.offline import synthesize_copilot_answer, synthesize_recommendation
 from app.llm.router import ModelRouter, audit_log
+from app.llm.serving import ServingClient
 from app.logging_setup import configure_logging, get_logger
 from app.models import (Audit, CopilotQuery, Envelope, ErrorEnvelope, Meta,
                         RecommendationRequest, RetrieveRequest)
 from app.retrieval.fusion import HybridRetriever
+from app.metrics import instrument, setup_tracing
 
 configure_logging(settings.log_level)
 log = get_logger("api")
@@ -25,7 +27,14 @@ log = get_logger("api")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.retriever = HybridRetriever()
-    app.state.router = ModelRouter()
+    app.state.serving = ServingClient()  # env-driven; unconfigured -> offline
+    app.state.router = ModelRouter(serving=app.state.serving)
+    # Embedding indexer scheduler hook (AI-12): when INDEXER_INTERVAL_SECONDS
+    # is set, reindex passages on that cadence in a daemon thread.
+    import os
+    if os.getenv("INDEXER_INTERVAL_SECONDS"):
+        from app.retrieval import indexer
+        app.state.indexer_thread = indexer.start_index_scheduler()
     log.info("service started", extra={
         "request_id": "startup",
         "model_tier": "offline" if not app.state.router.online else "online",
@@ -41,6 +50,9 @@ app = FastAPI(
                 "synthesizer (fully functional without GPUs).",
     lifespan=lifespan,
 )
+
+instrument(app, settings.service_name)
+setup_tracing(app, settings.service_name)
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +125,14 @@ async def retrieve(req: RetrieveRequest, request: Request):
     retriever: HybridRetriever = request.app.state.retriever
     bundle = retriever.retrieve(req.query, req.jurisdiction_id, req.filters,
                                 req.top_k)
+    try:
+        from app.metrics import counter
+        counter("retrieval_requests_total",
+                "Hybrid retrieval requests").inc({
+                    "paths": "+".join(sorted(
+                        p.value for p in bundle.retrieval_paths_used)) or "none"})
+    except Exception:
+        pass
     return _envelope(request, bundle)
 
 
@@ -167,6 +187,13 @@ async def copilot_query(req: CopilotQuery, request: Request):
 async def routing_audit(request: Request, limit: int = 100):
     entries = [e.model_dump(mode="json") for e in audit_log.list(limit)]
     return _envelope(request, {"entries": entries, "count": len(entries)})
+
+
+@app.get("/v1/serving/metrics")
+async def serving_metrics(request: Request):
+    """Per-tier serving metrics: requests, failures, p95 latency, breakers."""
+    serving: ServingClient = request.app.state.serving
+    return _envelope(request, serving.metrics_snapshot())
 
 
 @app.get("/v1/regression/latest")
