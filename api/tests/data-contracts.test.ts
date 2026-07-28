@@ -153,4 +153,52 @@ describe.skipIf(!HAS_DB)("data contracts (DM-2, DM-5)", () => {
       expect(await scalar(sql.raw(`SELECT COUNT(*) AS n FROM opportunities`))).toBeGreaterThanOrEqual(10);
     });
   });
+
+  describe("canonical entity coverage (DM-2)", () => {
+    it("budgets: rows present, natural key unique, jurisdiction refs valid", async () => {
+      expect(await scalar(sql.raw(`SELECT COUNT(*) AS n FROM budgets`))).toBeGreaterThanOrEqual(1);
+      expect(await keyViolations("budgets", "budget_id")).toBe(0);
+      const orphans = await scalar(sql.raw(
+        `SELECT COUNT(*) AS n FROM budgets b
+         LEFT JOIN jurisdictions j ON j.jurisdiction_id = b.jurisdiction_id
+         WHERE j.jurisdiction_id IS NULL`,
+      ));
+      expect(orphans).toBe(0);
+    });
+    it("officials: rows present, natural key unique", async () => {
+      expect(await scalar(sql.raw(`SELECT COUNT(*) AS n FROM officials`))).toBeGreaterThanOrEqual(1);
+      expect(await keyViolations("officials", "official_id")).toBe(0);
+    });
+    it("programs: rows present, natural key unique", async () => {
+      expect(await scalar(sql.raw(`SELECT COUNT(*) AS n FROM programs`))).toBeGreaterThanOrEqual(1);
+      expect(await keyViolations("programs", "program_id")).toBe(0);
+    });
+    it("business_registrations: rows present, natural key unique", async () => {
+      expect(await scalar(sql.raw(`SELECT COUNT(*) AS n FROM business_registrations`))).toBeGreaterThanOrEqual(1);
+      expect(await keyViolations("business_registrations", "registration_id")).toBe(0);
+    });
+  });
+
+  describe("evidence-source registry metadata (DM-8)", () => {
+    it("license present on every registered source", async () => {
+      const missing = await scalar(sql.raw(
+        `SELECT COUNT(*) AS n FROM data_sources WHERE license IS NULL OR license = ''`,
+      ));
+      expect(missing).toBe(0);
+    });
+    it("quality_score within 0–100 on every registered source", async () => {
+      const bad = await scalar(sql.raw(
+        `SELECT COUNT(*) AS n FROM data_sources
+         WHERE quality_score IS NULL OR quality_score < 0 OR quality_score > 100`,
+      ));
+      expect(bad).toBe(0);
+    });
+    it("privacy_classification ∈ (public, internal, restricted)", async () => {
+      const bad = await scalar(sql.raw(
+        `SELECT COUNT(*) AS n FROM data_sources
+         WHERE privacy_classification NOT IN ('public','internal','restricted')`,
+      ));
+      expect(bad).toBe(0);
+    });
+  });
 });

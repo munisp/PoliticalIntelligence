@@ -268,6 +268,13 @@ export async function upsertDataSources(
           url: (data.url as string) ?? provenance.url ?? null,
           category: (data.category as string) ?? null,
           accessMethod: (data.access_method as string) ?? null,
+          // §16 EvidenceSource registry metadata (DM-8): loader-registered
+          // sources default to a conservative classification until a data
+          // steward enriches the record via the admin console.
+          license: (data.license as string) ?? "unclassified (pending steward review)",
+          qualityScore:
+            typeof data.quality_score === "number" ? data.quality_score : 50,
+          privacyClassification: (data.privacy_classification as string) ?? "internal",
           lastRefresh: toDate(provenance.fetched_at),
         });
         counts.inserted++;

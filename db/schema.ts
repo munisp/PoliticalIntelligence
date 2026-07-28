@@ -671,6 +671,14 @@ export const dataSources = mysqlTable("data_sources", {
   /** Source contract compliance: {schema_ok, sla_ok, license_ok, notes}. */
   contractCompliance: json("contract_compliance"),
   geographyScope: varchar("geography_scope", { length: 128 }),
+  /** §16 EvidenceSource registry metadata. */
+  license: varchar("license", { length: 255 }),
+  /** Data-quality score 0–100 (freshness/schema/SLA composite). */
+  qualityScore: int("quality_score"),
+  /** Privacy classification: public | internal | restricted. */
+  privacyClassification: varchar("privacy_classification", { length: 32 })
+    .default("internal")
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
