@@ -42,7 +42,7 @@ describe("§9.2 contract validator (TS port of services/ai contract.py)", () => 
   });
 
   it("repairs fenced/prose-wrapped JSON exactly once (repaired flag)", () => {
-    const raw = `Here is the recommendation:\n```json\n${JSON.stringify(validRec)}\n```\nHope this helps.`;
+    const raw = `Here is the recommendation:\n\`\`\`json\n${JSON.stringify(validRec)}\n\`\`\`\nHope this helps.`;
     const res = validateRecommendationContract(raw);
     expect(res.ok).toBe(true);
     expect(res.repaired).toBe(true);
