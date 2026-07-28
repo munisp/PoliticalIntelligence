@@ -20,6 +20,7 @@ const ha: Dict = {
     auditLog: "Rajistar bincike",
     settings: "Saitunan",
     help: "Taimako & gajerun hanyoyi",
+    geo3d: "Iɗo 3D na Ƙasa",
     explorer: "Bincike",
     workbench: "Teburin aiki",
     studio: "Studio",
@@ -444,6 +445,27 @@ const ha: Dict = {
     bannerBody:
       "Mafi yawan bayanan wannan yanki bayanan kira na demo ne. Haɗa tushen kai tsaye a Lafiyar Tushen Bayanai don maye gurbinsu da bayanan da aka auna.",
     bannerCta: "Buɗe Lafiyar Tushen Bayanai",
+  },
+  geo3d: {
+    caption: "Jihar Kaduna · Hankalin ƙasa",
+    title: "Iɗo 3D na Ƙasa",
+    subtitle:
+      "An ɗaga manyan yankunan LGA bisa yawan cibiyoyi a kan taswirar OpenStreetMap — ba a buƙatar alamar taswira.",
+    view2d: "Taswira 2D",
+    view3d: "Iɗo 3D",
+    loading3d: "Ana loda injin 3D…",
+    load3dTitle: "Akwai iɗo 3D",
+    load3dBody:
+      "Haɗin ku na iyakance ko a hankali, don haka aka nuna taswira 2D mai sauƙi. Iɗo 3D yana saukar da inji mafi girma da hotunan taswira.",
+    load3dCta: "Duk da haka loda 3D",
+    terrainNote: "Ƙasa: ellipsoid WGS84 (babu alama). Taswira: OpenStreetMap.",
+    boundariesFallback: "Ana nuna bayanan iyaka na ciki (sabis bai samu ba).",
+    selectLga: "Zaɓi siffar LGA don duba ta.",
+    infoboxFacilities: "Cibiyoyi",
+    infoboxOpportunities: "Damammaki da aka tsara (matakin jiha)",
+    infoboxByType: "Bisa nau'i",
+    infoboxNoData: "Babu bayanan cibiya don wannan LGA tukuna.",
+    close: "Rufe",
   },
   onboarding: {
     title: "Shigar da Yanki",

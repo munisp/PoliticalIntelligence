@@ -11,6 +11,7 @@ import Copilot from "./pages/Copilot";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import InnovationsRouter from "./pages/innovations";
+import Geo3D from "./pages/Geo3D";
 
 export default function App() {
   return (
@@ -27,6 +28,8 @@ export default function App() {
         <Route path="/briefs" element={<Briefs />} />
         <Route path="/data-health" element={<DataHealth />} />
         <Route path="/copilot" element={<Copilot />} />
+        {/* GEO3D-ROUTE */}
+        <Route path="/geo3d" element={<Geo3D />} />
         {/* INNOVATIONS-ROUTE */}
         <Route path="/innovations/*" element={<InnovationsRouter />} />
         {/* Secondary-nav destinations (stubbed) */}

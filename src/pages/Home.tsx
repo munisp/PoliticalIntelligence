@@ -416,6 +416,7 @@ export default function Home() {
       {/* Topo background, 20% opacity, fading out after hero */}
       <div
         aria-hidden
+        data-decorative
         className="pointer-events-none fixed inset-0 z-0 opacity-20"
         style={{
           backgroundImage: "url(/auth-topo.png)",

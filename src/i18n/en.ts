@@ -24,6 +24,7 @@ const en = {
     auditLog: "Audit log",
     settings: "Settings",
     help: "Help & shortcuts",
+    geo3d: "3D Geospatial",
     /* Short bottom-nav labels */
     explorer: "Explorer",
     workbench: "Workbench",
@@ -448,6 +449,27 @@ const en = {
     bannerBody:
       "Most of this jurisdiction's data is seed/demo data. Connect live sources in Data Source Health to replace it with measured data.",
     bannerCta: "Open Data Source Health",
+  },
+  geo3d: {
+    caption: "Kaduna State · Geospatial intelligence",
+    title: "3D Geospatial View",
+    subtitle:
+      "LGA boundary polygons extruded by facility density over OpenStreetMap imagery — no map token required.",
+    view2d: "2D map",
+    view3d: "3D view",
+    loading3d: "Loading 3D engine…",
+    load3dTitle: "3D view available",
+    load3dBody:
+      "Your connection is metered or slow, so the lightweight 2D map is shown. The 3D view downloads a larger engine and tile imagery.",
+    load3dCta: "Load 3D anyway",
+    terrainNote: "Terrain: WGS84 ellipsoid (no token). Imagery: OpenStreetMap.",
+    boundariesFallback: "Showing built-in boundary data (service unavailable).",
+    selectLga: "Select an LGA polygon to inspect it.",
+    infoboxFacilities: "Facilities",
+    infoboxOpportunities: "Ranked opportunities (state-wide)",
+    infoboxByType: "By type",
+    infoboxNoData: "No facility data for this LGA yet.",
+    close: "Close",
   },
   onboarding: {
     title: "Jurisdiction Onboarding",

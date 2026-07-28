@@ -105,6 +105,15 @@
   }
 }
 
+/* Reduced data (Data-Saver): hide purely decorative imagery. Elements opt in
+   via the [data-decorative] attribute (e.g. the landing topo background).
+   Content images and iconography are never hidden. */
+@media (prefers-reduced-data: reduce) {
+  [data-decorative] {
+    display: none !important;
+  }
+}
+
 /* Print stylesheet (design.md §6): light-on-white inversion, hide chrome,
    expand collapsed evidence, citation footer appended by print templates. */
 @media print {

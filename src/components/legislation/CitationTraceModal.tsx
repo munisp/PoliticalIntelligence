@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, FileScan, GitBranch, Landmark, Quote, ScrollText, X } from "lucide-react";
 import type { ClauseDetail, LawDetail } from "./types";
 import { RELATION_LABELS } from "./types";
+import { useFocusReturn } from "@/hooks/use-focus-return";
 
 export interface CitationTraceModalProps {
   open: boolean;
@@ -34,6 +35,8 @@ export default function CitationTraceModal({
   requestId,
 }: CitationTraceModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  // a11y: restore focus to the triggering element when the modal closes.
+  useFocusReturn(open);
 
   useEffect(() => {
     if (open) closeRef.current?.focus();

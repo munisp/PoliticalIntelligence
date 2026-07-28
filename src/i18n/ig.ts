@@ -20,6 +20,7 @@ const ig: Dict = {
     auditLog: "Ndekọ nleba anya",
     settings: "Ntọala",
     help: "Enyemaka & ụzọ mkpirikpi",
+    geo3d: "Nhụzi 3D Ala",
     explorer: "Nchọpụta",
     workbench: "Tebụl ọrụ",
     studio: "Studio",
@@ -444,6 +445,27 @@ const ig: Dict = {
     bannerBody:
       "Ọtụtụ data mpaghara a bụ data nlereanya. Jikọọ isi iyi ndụ na Ahụ Ike Isi Iyi Data iji dochie ha data e tụrụ.",
     bannerCta: "Mepee Ahụ Ike Isi Iyi Data",
+  },
+  geo3d: {
+    caption: "Steeti Kaduna · Ọgụgụ isi ala",
+    title: "Nhụzi 3D Ala",
+    subtitle:
+      "E buliri ókèala LGA dịka ọnụ ọgụgụ ụlọ ọrụ si dị n'elu foto OpenStreetMap — achọghị ihe nrịbama map.",
+    view2d: "Map 2D",
+    view3d: "Nhụzi 3D",
+    loading3d: "Na-ebudata engine 3D…",
+    load3dTitle: "Nhụzi 3D dị",
+    load3dBody:
+      "Njikọ gị dị oke ma ọ bụ nwayọ, yabụ a gosiri map 2D dị fechaa. Nhụzi 3D na-ebudata engine buru ibu na foto map.",
+    load3dCta: "Budata 3D ka o dị",
+    terrainNote: "Ala: ellipsoid WGS84 (enweghị ihe nrịbama). Foto: OpenStreetMap.",
+    boundariesFallback: "Na-egosi data ókèala e tinyere n'ime (ọrụ adịghị).",
+    selectLga: "Họrọ polygon LGA iji nyochaa ya.",
+    infoboxFacilities: "Ụlọ ọrụ",
+    infoboxOpportunities: "Ohere edepụtara (n'ọnụ steeti)",
+    infoboxByType: "Dịka ụdị",
+    infoboxNoData: "Enweghị data ụlọ ọrụ maka LGA a ugbu a.",
+    close: "Mechie",
   },
   onboarding: {
     title: "Nbubata Mpaghara",
