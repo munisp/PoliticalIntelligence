@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { ApprovalBadge, EmptyState, SkeletonTable, type ApprovalState } from "@/components/shared";
 import InnovationPage, { InnovationError } from "@/components/innovations/InnovationPage";
+import { useT } from "@/lib/LocaleContext";
 import { approvalStateLabel, unwrap } from "@/lib/trpc-data";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -52,6 +53,7 @@ function toBadgeState(dbState: string | null): ApprovalState {
 }
 
 export default function LegalQa() {
+  const t = useT();
   const { isAuthenticated } = useAuth();
   const [lowConfOnly, setLowConfOnly] = useState(false);
 
@@ -73,7 +75,7 @@ export default function LegalQa() {
 
   return (
     <InnovationPage
-      title="Legal QA / IAA Board"
+      title={t.innovations.legalQaTitle}
       description="Legislation clause review queue with inter-annotator agreement. Two-annotator agreement is computed client-side from dual annotation entries when present."
       Icon={Scale}
       actions={
