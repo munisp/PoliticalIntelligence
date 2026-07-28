@@ -38,12 +38,22 @@ ENTITY_KEYS = {
     "facility": "facilities",
     "procurement_record": "procurement_records",
     "data_source": "data_sources",
+    # G2: realized outcome observations -> outcomes.upsertObservations
+    # (docs/OUTCOMES.md). Routed to a dedicated tRPC procedure (see
+    # _PROCEDURE below) because the outcome store keys observations by
+    # series id rather than by the canonical-batch natural keys.
+    "outcome_observation": "observations",
+}
+
+# Entity batch key -> tRPC loader procedure.
+_PROCEDURE = {
+    "observations": "outcomes.upsertObservations",
 }
 
 
-def _platform_url() -> str:
+def _platform_url(procedure: str = "jurisdictions.loadCanonical") -> str:
     base = os.getenv("PLATFORM_API_URL", "http://localhost:3000").rstrip("/")
-    return f"{base}/api/trpc/jurisdictions.loadCanonical"
+    return f"{base}/api/trpc/{procedure}"
 
 
 def _api_key() -> str:
@@ -52,9 +62,11 @@ def _api_key() -> str:
 
 def _post_batch(batch: dict[str, Any], jurisdiction: str) -> dict[str, Any]:
     """POST one batch (tRPC+superjson wire shape); returns counts dict."""
+    key = next(iter(batch))
+    procedure = _PROCEDURE.get(key, "jurisdictions.loadCanonical")
     body = json.dumps({"json": {"jurisdiction_id": jurisdiction, **batch}}).encode()
     req = urllib.request.Request(
-        _platform_url(),
+        _platform_url(procedure),
         data=body,
         headers={
             "content-type": "application/json",
