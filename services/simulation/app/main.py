@@ -9,12 +9,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app import CODE_VERSION
+from app.backtest import (BacktestRequest, persist_report,
+                          recalibrate_from_backtest, run_backtest)
 from app.config import settings
+from app.engines import resolve_jurisdiction
 from app.errors import ServiceError
 from app.logging_setup import configure_logging, get_logger
 from app.models import (Audit, Envelope, ErrorEnvelope, Meta, ScenarioConfig,
                         ScenarioRunPublic, ScenarioRunResults, utcnow)
 from app.worker import RunManager
+from app.metrics import instrument, setup_tracing
 
 configure_logging(settings.log_level)
 log = get_logger("api")
@@ -37,6 +41,9 @@ app = FastAPI(
                 "and the four-layer digital twin.",
     lifespan=lifespan,
 )
+
+instrument(app, settings.service_name)
+setup_tracing(app, settings.service_name)
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +166,24 @@ async def cancel_scenario_run(run_id: str, request: Request):
     run = await manager.cancel(run_id)
     return _envelope(request, {"simulation_run_id": run.simulation_run_id,
                                "status": run.status.value}).model_dump(mode="json")
+
+
+@app.post("/v1/backtests")
+async def run_backtest_endpoint(req: BacktestRequest, request: Request):
+    """SIM-5: walk-forward backtest of all engines vs historical outcomes.
+
+    Returns the calibration report (per-engine MAPE / RMSE / 80%-band
+    coverage / skill vs naive across multiple cutoff windows), persists the
+    report artifact, and — when ``recalibrate`` is set — applies
+    backtest-derived prior adjustments to the digital twin."""
+    manager: RunManager = request.app.state.runs
+    resolve_jurisdiction(req.jurisdiction_id)  # fail fast with 4xx
+    report = run_backtest(req)
+    persist_report(report, manager.store)
+    if req.recalibrate:
+        manager.twins.get_or_create(req.jurisdiction_id)
+        recalibrate_from_backtest(report, manager.twins)
+    return _envelope(request, report.model_dump(mode="json")).model_dump(mode="json")
 
 
 @app.get("/v1/twins/{jurisdiction_id}")
