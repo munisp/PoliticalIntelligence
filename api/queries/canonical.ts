@@ -328,6 +328,9 @@ export async function upsertBudgets(
           appropriatedNgn:
             data.amount_ngn !== undefined ? Number(data.amount_ngn) : null,
           source: [
+            // Optional budget tier (state / development_partner) from
+            // feat-conn-subnat-firms connectors; absent for federal lines.
+            data.tier ?? "",
             data.appropriation_type ?? "capital",
             data.program_code ?? "",
           ]

@@ -13,6 +13,7 @@ from app.connectors.ubec_factsheet import UbecFactsheetConnector
 from app.connectors.nbs_outcomes import NbsOutcomesConnector
 from app.connectors.budget_office import BudgetOfficeConnector
 from app.connectors.nass_bills import NassBillsConnector
+from app.connectors.state_budgets import StateBudgetsConnector
 
 REGISTRY: dict[str, type[BaseConnector]] = {
     c.name: c
@@ -28,6 +29,7 @@ REGISTRY: dict[str, type[BaseConnector]] = {
         NbsOutcomesConnector,
         BudgetOfficeConnector,
         NassBillsConnector,
+        StateBudgetsConnector,
     )
 }
 

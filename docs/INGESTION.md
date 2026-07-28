@@ -38,6 +38,7 @@ including failures.
 | `file_harvester` | Budget Office / Open Treasury downloads | **DOWNLOAD class** — scheduled fetch + checksum; stdlib XLSX/CSV parsing (no pandas) | `data_sources`, derived rows |
 | `budget_office` | Budget Office of the Federation (budgetoffice.gov.ng) appropriation/MTEF publications | **HYBRID** — attempts the live publications listing; falls back to bundled 2025-appropriation fixture stamped `origin=derived` when unreachable | `budget_line` → `budgets` |
 | `nass_bills` | National Assembly bills tracker (nass.gov.ng / placbillstrack) | **HYBRID** — attempts the live bills listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `bill_document` → `policy_documents` (`doc_type="bill"`, stage/sponsor/chamber in `metadata`) |
+| `state_budgets` | State budget portals — Lagos/Kaduna/Kano first-class, generic `https://<state>state.gov.ng/budget` fallback | **HYBRID** — attempts each state's approved-budget listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `budget_line` (`tier="state"`, state→jurisdiction FK) → `budgets` |
 
 Live-captured payloads are committed under
 `onboarding/packs/kaduna-ng/live_samples/` and
@@ -95,7 +96,9 @@ structured errors, async jobs with idempotency, pytest, Dockerfile).
 
 Scheduler cadences (defaults, `SCHEDULER_CADENCE` override): worldbank/hdx/budeshi daily;
 overpass/nada/nbs_bulletin/ubec_factsheet/nass_bills weekly; file_harvester hourly;
-nbs_outcomes/budget_office quarterly (90d).
+nbs_outcomes/budget_office quarterly (90d);
+state_budgets/state_procurement/state_irs/cac/bpp/smedan/npopc/afdb/afreximbank/iati monthly (30d);
+state_assembly_bills weekly.
 
 Pipeline: `fetch → contract_check → normalize → dedupe → emit`.
 Canonical JSONL artifacts at `./artifacts/ingestion/<source>/<date>.jsonl`
