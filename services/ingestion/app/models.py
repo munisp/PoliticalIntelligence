@@ -82,6 +82,7 @@ class CanonicalRecord(BaseModel):
         "facility",
         "procurement_record",
         "data_source",
+        "outcome_observation",
     ]
     data: dict
     provenance: Provenance
