@@ -4,6 +4,8 @@ namespace: policy-twin
 resources:
   - ../../base
   - networkpolicy.yaml
+  - ../../base/cert-manager.yaml
+  - ../../base/external-secrets.yaml
 nameSuffix: -prod
 images:
   - name: ghcr.io/munisp/politicalintelligence/app
