@@ -1,0 +1,11 @@
+{
+  "note": "State procurement award records (OCDS-shaped) used as the deterministic offline fallback for the state_procurement connector.",
+  "records": [
+    {"state": "lagos", "ocid": "ocds-9x2qla-lasg-2024-014", "title": "Rehabilitation of Eti-Osa General Hospital", "buyer": {"name": "Lagos State Ministry of Health"}, "awards": [{"suppliers": [{"name": "Cranburg Healthcare Services Ltd"}], "value": {"amount": 1250000000, "currency": "NGN"}, "date": "2024-03-22"}], "status": "active"},
+    {"state": "lagos", "ocid": "ocds-9x2qla-lasg-2024-021", "title": "Supply of 200 CNG buses for LAMATA", "buyer": {"name": "Lagos Metropolitan Area Transport Authority"}, "awards": [{"suppliers": [{"name": "Oando Clean Energy Ltd"}], "value": {"amount": 18900000000, "currency": "NGN"}, "date": "2024-05-30"}], "status": "complete"},
+    {"state": "kaduna", "ocid": "ocds-213f4a-kdsg-2024-009", "title": "Construction of 6.2km Rigachikun-Kawo road", "buyer": {"name": "Kaduna State Ministry of Public Works and Infrastructure"}, "awards": [{"suppliers": [{"name": "Reynolds Construction Company"}], "value": {"amount": 4750000000, "currency": "NGN"}, "date": "2024-02-14"}], "status": "active"},
+    {"state": "kaduna", "ocid": "ocds-213f4a-kdsg-2024-017", "title": "Procurement of CT scanners for Barau Dikko Teaching Hospital", "buyer": {"name": "Kaduna State Ministry of Health"}, "awards": [{"suppliers": [{"name": "Medtrust Equipment Nigeria Ltd"}], "value": {"amount": 890000000, "currency": "NGN"}, "date": "2024-06-05"}], "status": "complete"},
+    {"state": "kano", "ocid": "ocds-77b1mk-knsg-2024-006", "title": "Dambatta irrigation scheme rehabilitation", "buyer": {"name": "Kano State Ministry of Agriculture"}, "awards": [{"suppliers": [{"name": "Hadejia Valley Agro Services"}], "value": {"amount": 2150000000, "currency": "NGN"}, "date": "2024-04-18"}], "status": "active"},
+    {"state": "kano", "ocid": "ocds-77b1mk-knsg-2024-012", "title": "Solar street lighting — Kano metropolis Phase 3", "buyer": {"name": "Kano State Ministry of Works and Housing"}, "awards": [{"suppliers": [{"name": "Blue Camel Energy Ltd"}], "value": {"amount": 1340000000, "currency": "NGN"}, "date": "2024-07-09"}], "status": "complete"}
+  ]
+}
