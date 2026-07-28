@@ -5,14 +5,28 @@ import type { TrpcContext } from "./context";
 import { authenticateRequest } from "./kimi/auth";
 import type { ErrorEnvelope } from "@contracts/entities";
 import { envelope } from "./utils/envelope";
+import {
+  mountAdminRest,
+  mountBriefsRest,
+  mountDocumentsGatewayRest,
+  mountJurisdictionsRest,
+  mountLegislationRest,
+  mountOpportunitiesRest,
+  mountOpsRest,
+  mountScenariosRest,
+  type RestDeps,
+  type RestMount,
+} from "./services/rest-domains";
 
 /**
  * Canonical REST /v1 facade (docs/API.md) over the same procedures the tRPC
  * router exposes. Same envelope + error envelope; RBAC/ABAC identical
  * because the handlers are shared.
+ *
+ * API-9: the route table is composed from per-domain mounts
+ * (api/services/rest-domains.ts) — the monolith mounts ALL of them, each
+ * domain service (api/services/<domain>.ts) mounts only its own.
  */
-
-const rest = new Hono();
 
 const HTTP_STATUS: Record<string, number> = {
   BAD_REQUEST: 400,
@@ -113,149 +127,33 @@ function requireIdempotencyKey(c: Context): {
   return { key, error: null };
 }
 
-/* Auth (spec §7) ------------------------------------------------------------ */
+/** Shared deps handed to every domain REST mount. */
+const REST_DEPS: RestDeps = {
+  handle,
+  requireIdempotencyKey,
+  num,
+  envelope,
+};
 
-rest.get("/auth/me", handle(async (c, caller, ctx) => {
-  const user = await caller.auth.me();
-  return c.json(envelope(user, ctx), 200);
-}));
+/** All domain mounts, in stable order (monolith gateway route table). */
+export const ALL_REST_MOUNTS: RestMount[] = [
+  mountAdminRest,
+  mountJurisdictionsRest,
+  mountOpportunitiesRest,
+  mountScenariosRest,
+  mountLegislationRest,
+  mountBriefsRest,
+  mountDocumentsGatewayRest,
+  mountOpsRest,
+];
 
-rest.get("/auth/permissions", handle(async (c, caller) => {
-  const data = await caller.auth.permissions();
-  return c.json(data, 200);
-}));
+/** Build a REST /v1 app from an explicit set of domain mounts. */
+export function buildRestApp(mounts: RestMount[]): Hono {
+  const app = new Hono();
+  for (const mount of mounts) mount(app, REST_DEPS);
+  return app;
+}
 
-rest.get("/jurisdictions", handle(async (c, caller) => {
-  const data = await caller.jurisdictions.list({
-    country_code: c.req.query("country_code"),
-    admin_level: c.req.query("admin_level") as never,
-    cursor: c.req.query("cursor"),
-    limit: num(c.req.query("limit")) ?? 25,
-  });
-  return c.json(data, 200);
-}));
-
-rest.get("/jurisdictions/:id/profile", handle(async (c, caller) => {
-  const data = await caller.jurisdictions.profile({
-    jurisdiction_id: c.req.param("id")!,
-    profile_date: c.req.query("profile_date"),
-  });
-  return c.json(data, 200);
-}));
-
-rest.get("/opportunities/rankings", handle(async (c, caller) => {
-  const data = await caller.opportunities.rankings({
-    jurisdiction_id: c.req.query("jurisdiction_id"),
-    sector_code: c.req.query("sector_code"),
-    geography: c.req.query("geography"),
-    horizon_max_months: num(c.req.query("horizon_max_months")),
-    confidence_floor: num(c.req.query("confidence_floor")),
-    cursor: c.req.query("cursor"),
-    limit: num(c.req.query("limit")) ?? 25,
-  });
-  return c.json(data, 200);
-}));
-
-rest.post("/opportunities/generate", handle(async (c, caller) => {
-  const idk = requireIdempotencyKey(c);
-  if (!idk.key) return c.json({ error: idk.error }, 400);
-  const body = await c.req.json().catch(() => ({}));
-  const data = await caller.opportunities.generate({
-    opportunity_id: body.opportunity_id,
-    idempotency_key: idk.key,
-  });
-  return c.json(data, 202);
-}));
-
-rest.get("/jobs/:id", handle(async (c, caller) => {
-  const data = await caller.opportunities.generateStatus({ job_id: c.req.param("id")! });
-  return c.json(data, 200);
-}));
-
-rest.post("/scenarios", handle(async (c, caller) => {
-  const idk = requireIdempotencyKey(c);
-  if (!idk.key) return c.json({ error: idk.error }, 400);
-  const body = await c.req.json().catch(() => ({}));
-  const data = await caller.scenarios.create({ ...body, idempotency_key: idk.key });
-  return c.json(data, 202);
-}));
-
-rest.post("/scenarios/:id/runs", handle(async (c, caller) => {
-  const idk = requireIdempotencyKey(c);
-  if (!idk.key) return c.json({ error: idk.error }, 400);
-  const body = await c.req.json().catch(() => ({}));
-  const data = await caller.scenarios.addRun({
-    ...body,
-    scenario_id: c.req.param("id")!,
-    idempotency_key: idk.key,
-  });
-  return c.json(data, 202);
-}));
-
-rest.get("/scenario-runs/:id", handle(async (c, caller) => {
-  const data = await caller.scenarios.runStatus({ simulation_run_id: c.req.param("id")! });
-  return c.json(data, 200);
-}));
-
-rest.get("/legislation/laws", handle(async (c, caller) => {
-  const data = await caller.legislation.laws({
-    jurisdiction_id: c.req.query("jurisdiction_id"),
-    category: c.req.query("category"),
-    cursor: c.req.query("cursor"),
-    limit: num(c.req.query("limit")) ?? 25,
-  });
-  return c.json(data, 200);
-}));
-
-rest.post("/legislation/graph-query", handle(async (c, caller) => {
-  const body = await c.req.json().catch(() => ({}));
-  const data = await caller.legislation.graphQuery(body);
-  return c.json(data, 200);
-}));
-
-// SR-8: clause-level law comparison (deterministic alignment engine).
-rest.post("/legislation/compare", handle(async (c, caller) => {
-  const body = await c.req.json().catch(() => ({}));
-  const data = await caller.legislation.compare({
-    law_id_a: body.law_id_a,
-    law_id_b: body.law_id_b,
-  });
-  return c.json(data, 200);
-}));
-
-rest.get("/search", handle(async (c, caller) => {
-  const data = await caller.search.query({
-    q: c.req.query("q") ?? "-",
-    jurisdiction_id: c.req.query("jurisdiction_id"),
-    limit: num(c.req.query("limit")) ?? 20,
-  });
-  return c.json(data, 200);
-}));
-
-rest.get("/sectors", handle(async (c, caller) => {
-  const data = await caller.sectors.list();
-  return c.json(data, 200);
-}));
-
-rest.get("/briefs/:id", handle(async (c, caller) => {
-  const data = await caller.briefs.get({ brief_id: c.req.param("id")! });
-  return c.json(data, 200);
-}));
-
-rest.post("/briefs", handle(async (c, caller) => {
-  const idk = requireIdempotencyKey(c);
-  if (!idk.key) return c.json({ error: idk.error }, 400);
-  const body = await c.req.json().catch(() => ({}));
-  const data = await caller.briefs.generate({
-    ...body,
-    idempotency_key: idk.key,
-  });
-  return c.json(data, 202);
-}));
-
-rest.get("/health", handle(async (c, caller) => {
-  const data = await caller.ops.health();
-  return c.json(data, 200);
-}));
+const rest = buildRestApp(ALL_REST_MOUNTS);
 
 export default rest;
