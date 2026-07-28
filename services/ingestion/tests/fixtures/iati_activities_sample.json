@@ -1,0 +1,11 @@
+{
+  "note": "IATI Datastore activity documents for Nigeria used as the deterministic offline fallback for the iati connector (datastore /activity/select docs shape).",
+  "docs": [
+    {"iati_identifier": "XI-IATI-DFID-107735", "title": "Partnership for Learning for All in Nigerian Education (PLANE)", "reporting_org": "UK Foreign, Commonwealth & Development Office", "sector_code": "education", "start_year": 2021, "commitment_usd": 95000000, "exchange_rate_ngn_per_usd": 420.0, "activity_status": "implementation", "state": "Kaduna"},
+    {"iati_identifier": "US-GOV-19-442-NGA-HEALTH", "title": "USAID Integrated Health Program — Kaduna and Lagos", "reporting_org": "United States Agency for International Development", "sector_code": "health", "start_year": 2019, "commitment_usd": 225000000, "exchange_rate_ngn_per_usd": 360.0, "activity_status": "implementation"},
+    {"iati_identifier": "XM-DAC-41122-NGA-2120", "title": "UNICEF Nigeria Country Programme 2023-2027 — child protection and WASH", "reporting_org": "UNICEF", "sector_code": "water", "start_year": 2023, "commitment_ngn": 48750000000, "activity_status": "implementation", "state": "Kano"},
+    {"iati_identifier": "46002-P-NG-001", "title": "World Bank Nigeria for Women Project (scale-up)", "reporting_org": "World Bank", "sector_code": "social_protection", "start_year": 2023, "commitment_usd": 500000000, "exchange_rate_ngn_per_usd": 760.0, "activity_status": "implementation"},
+    {"iati_identifier": "XM-DAC-5-52-NGA-AGRI", "title": "EU Agri-Food Systems Support in Northern Nigeria", "reporting_org": "European Union", "sector_code": "agriculture", "start_year": 2024, "commitment_usd": 45000000, "exchange_rate_ngn_per_usd": 1500.0, "activity_status": "pipeline", "state": "Kano"},
+    {"iati_identifier": "XI-IATI-GAVI-NGA-2025", "title": "Gavi Health System Strengthening support — Nigeria immunization", "reporting_org": "Gavi, the Vaccine Alliance", "sector_code": "health", "start_year": 2025, "commitment_usd": 180000000, "exchange_rate_ngn_per_usd": 1500.0, "activity_status": "implementation"}
+  ]
+}
