@@ -65,3 +65,79 @@ resources, `profiles: ["gpu"]`). Enable with
 `VLLM_BASE_URL=http://vllm:8000` on the `ai` service. Per-tier production
 topologies (separate GPU pools per MODEL_STRATEGY.md) map to multiple such
 services with `VLLM_BASE_URL_{DEFAULT,PREMIUM,SPECIALIST}`.
+
+## Passage indexer + OpenSearch k-NN, end-to-end (AI-1/AI-2/AI-4/AI-12)
+
+`app/retrieval/indexer.py` is the DEFAULT embedding indexer — no GPU, no
+downloads required:
+
+1. **Collect** passages from the retrieval corpus (laws/clauses/policy
+   briefs/evidence) plus optional platform exports listed in
+   `INDEXER_EXTRA_JSONL` (comma-separated JSONL files, one
+   `{"id","type","jurisdiction","title","citation","content"}` per line —
+   e.g. a nightly export of `laws`, `clauses`, `documents`, `briefs`,
+   `evidence_sources`; dedup by id, corpus wins).
+2. **Embed** in batches (`--batch-size`, default 64) with the deterministic
+   hashing embedding (or sentence-transformers when installed).
+3. **Persist** vectors to a JSONL artifact (`INDEXER_OUT`, default
+   `artifacts/passage-vectors.jsonl`) AND, when `OPENSEARCH_URL` is set,
+   bulk-index them into the k-NN index (`OPENSEARCH_KNN_INDEX`, default
+   `policy-embeddings`, mapping: `knn_vector` dim 384 + keyword
+   jurisdiction/type filters) via the plain `_bulk` HTTP API.
+
+Run it:
+
+```bash
+cd services/ai
+python -m app.retrieval.indexer reindex [--backend auto|hashing|sentence-transformers] [--out PATH]
+python -m app.retrieval.indexer schedule --interval 86400   # blocking loop
+INDEXER_INTERVAL_SECONDS=86400 uvicorn app.main:app          # in-service hook
+```
+
+**Query path:** with `OPENSEARCH_URL` set, `VectorAdapter` issues a native
+k-NN query (`knn.embedding.vector` = hashing-embedded query text, `k`,
+jurisdiction filter) against the indexer index; on any failure it falls
+back to BM25, then to the in-process TF-IDF index. The gateway
+(`api/search.ts`) delegates `/v1/search`-class queries to the AI service
+`/v1/retrieve` and marks `retrieval_mode: "hybrid" | "fallback"` in the
+response meta.
+
+## Pointing at a real vLLM endpoint (AI-5)
+
+The serving layer (`app/llm/serving.py`) speaks the OpenAI chat-completions
+protocol; any vLLM server works. Env:
+
+| Env | Meaning | Example |
+| --- | --- | --- |
+| `VLLM_BASE_URL` | default endpoint for all tiers | `http://vllm:8000` |
+| `VLLM_BASE_URL_DEFAULT` | interactive/batch tier (qwen3-32b, qwen3-small) | `http://vllm-small:8000` |
+| `VLLM_BASE_URL_PREMIUM` | synthesis tier (qwen3-235b) | `http://vllm-large:8000` |
+| `VLLM_BASE_URL_SPECIALIST` | analysis tier (deepseek-r1) | `http://vllm-r1:8000` |
+| `VLLM_API_KEY` | optional bearer token | — |
+| `LLM_TIMEOUT_SECONDS` | per-request timeout (default 30) | `30` |
+| `LLM_HEDGE_AFTER_MS` | fire a duplicate request after N ms (0 = off) | `800` |
+| `LLM_BREAKER_FAILURES` | consecutive failures before the tier breaker opens (default 3) | `3` |
+| `LLM_BREAKER_RESET_SECONDS` | open → half-open cooldown (default 30) | `30` |
+
+Smoke test against a live server:
+
+```bash
+curl -s $VLLM_BASE_URL/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "qwen3-32b",
+  "messages": [{"role": "user", "content": "Say OK"}],
+  "max_tokens": 8
+}'
+# streaming
+curl -N $VLLM_BASE_URL/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "qwen3-32b", "stream": true,
+  "messages": [{"role": "user", "content": "Count to three"}]
+}'
+# then verify the platform picked it up:
+curl -s localhost:8081/health | jq .llm_mode            # "online"
+curl -s localhost:8081/v1/serving/metrics | jq .data    # per-tier requests/p95/breakers
+```
+
+The mock-endpoint integration suite (`tests/test_serving_live.py`) exercises
+this exact path without a GPU: tier routing, breaker-on-5xx-storm → fallback
+chain → offline synthesizer, SSE streaming, and §9.2 contract validation of
+served JSON.
