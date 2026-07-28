@@ -1,0 +1,45 @@
+# Service + HPA for the vLLM go-live tier (Qwen3-8B).
+# The HPA scales on CPU utilisation as a portable proxy; production GPU
+# fleets should swap in the vLLM `vllm:num_requests_running` Prometheus
+# metric via the custom-metrics adapter.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen3-8b
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: vllm-qwen3-8b
+    app.kubernetes.io/part-of: policy-twin
+    app.kubernetes.io/component: model-serving
+spec:
+  selector:
+    app.kubernetes.io/name: vllm-qwen3-8b
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vllm-qwen3-8b
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: vllm-qwen3-8b
+    app.kubernetes.io/part-of: policy-twin
+    app.kubernetes.io/component: model-serving
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vllm-qwen3-8b
+  # Bounded by the GPU ResourceQuota (8 GPUs) in base/gpu-nodepool.yaml.
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

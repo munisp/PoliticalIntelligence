@@ -418,6 +418,111 @@ function validateCopilotObject(obj: unknown): string[] {
   return errors;
 }
 
+/* ------------------------------------------------------------------ */
+/* Brief section drafting (G5): serving-tier path with template fallback */
+/* ------------------------------------------------------------------ */
+
+export const BRIEF_SECTION_HEADINGS = [
+  "Executive summary",
+  "Situation",
+  "Options",
+  "Recommendation",
+] as const;
+
+/** Deterministic template bodies — the pre-G5 behavior, kept as the
+ *  offline fallback so generated briefs never depend on GPU availability. */
+export function templateBriefSections(): { heading: string; body: string }[] {
+  return [
+    {
+      heading: "Executive summary",
+      body: "This brief was generated from the current evidence base and ranked opportunities for the jurisdiction. All figures carry confidence scores and provenance in the citations rail.",
+    },
+    {
+      heading: "Situation",
+      body: "Sector metrics and pipeline freshness indicate a viable intervention window. See Evidence drawer for source-level detail.",
+    },
+    {
+      heading: "Options",
+      body: "Options are ranked by opportunity score, estimated jobs, and legal readiness. Human review is required before sign-off.",
+    },
+    {
+      heading: "Recommendation",
+      body: "Proceed with the top-ranked option under phased procurement, subject to executive sign-off.",
+    },
+  ];
+}
+
+export interface DraftedBriefSections {
+  sections: { heading: string; body: string }[];
+  bridge: "remote" | "fallback";
+  routing: ModelRoutingRecord;
+}
+
+/**
+ * Draft brief section bodies through the serving tier. Builds one grounded
+ * copilot query per section over the retrieval bundle (evidence rail); when
+ * the serving tier responds offline (or is unreachable) the deterministic
+ * template bodies are used instead — keeping tests and GPU-less
+ * environments fully deterministic.
+ *
+ * `queryFn` is injectable so tests can mock the serving client.
+ */
+export async function draftBriefSections(body: {
+  title: string;
+  template: string;
+  jurisdiction_id: string;
+  section_headings?: string[];
+  evidence: EvidenceSnippet[];
+  queryFn?: typeof copilotQuery;
+}): Promise<DraftedBriefSections> {
+  const headings = body.section_headings ?? [...BRIEF_SECTION_HEADINGS];
+  const query = body.queryFn ?? copilotQuery;
+  const { llmRoutingDecisions } = await import("../utils/metrics");
+  const fallback: DraftedBriefSections = {
+    sections: templateBriefSections().filter((t) => headings.includes(t.heading)),
+    bridge: "fallback",
+    routing: {
+      tier: "offline-fallback",
+      model: "deterministic",
+      fallback: true,
+      decided_at: new Date().toISOString(),
+    },
+  };
+  try {
+    const sections: { heading: string; body: string }[] = [];
+    for (const heading of headings) {
+      const resp = await query({
+        query:
+          `Draft the "${heading}" section of the ${body.template} brief ` +
+          `"${body.title}". Two to four sentences, grounded only in the ` +
+          `provided evidence, with [n] citation markers.`,
+        jurisdiction_id: body.jurisdiction_id,
+        evidence: body.evidence,
+      });
+      if (resp.bridge !== "remote" || !resp.answer.trim()) {
+        // Offline tier responded — deterministic template fallback.
+        llmRoutingDecisions.inc({ tier: "offline-fallback" });
+        return fallback;
+      }
+      sections.push({ heading, body: resp.answer.trim() });
+    }
+    llmRoutingDecisions.inc({ tier: "remote" });
+    return {
+      sections,
+      bridge: "remote",
+      routing: {
+        tier: "remote",
+        model: "serving-tier",
+        fallback: false,
+        decided_at: new Date().toISOString(),
+      },
+    };
+  } catch {
+    llmRoutingDecisions.inc({ tier: "offline-fallback" });
+    return fallback;
+  }
+}
+
 export async function copilotQuery(body: {
   query: string;
   jurisdiction_id?: string;

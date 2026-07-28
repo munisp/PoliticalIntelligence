@@ -134,7 +134,13 @@ class ServingConfig:
         prefix = "RAY_SERVE_URL" if transport == "ray" else "VLLM_BASE_URL"
         key_var = "RAY_SERVE_API_KEY" if transport == "ray" else "VLLM_API_KEY"
         urls: dict[str, str] = {}
+        # G1: LLM_REMOTE_BASE_URL is the documented go-live alias for the
+        # default (vllm) transport — one env var flips offline -> remote;
+        # the router's fallback chain + circuit breakers degrade back to
+        # the offline synthesizer automatically (docs/GPU-GOLIVE.md).
         default = os.getenv(prefix)
+        if not default and transport == "vllm":
+            default = os.getenv("LLM_REMOTE_BASE_URL")
         for tier in ("DEFAULT", "PREMIUM", "SPECIALIST"):
             url = os.getenv(f"{prefix}_{tier}") or default
             if url:

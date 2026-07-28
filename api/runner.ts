@@ -308,28 +308,28 @@ jobRunner.register("briefs.generate", async ({ input, reportProgress }) => {
   }));
   await reportProgress(40);
 
+  // G5: draft section bodies through the serving tier (remote LLM) when
+  // available; the deterministic template bodies are the offline fallback.
+  const { draftBriefSections } = await import("./bridges/ai");
+  const drafted = await draftBriefSections({
+    title: brief.title,
+    template: brief.template,
+    jurisdiction_id: brief.jurisdictionId,
+    evidence: evidence.slice(0, 10).map((e) => ({
+      evidence_source_id: e.evidenceSourceId,
+      source_type: e.sourceType,
+      citation: e.citation,
+      confidence: e.confidence,
+      excerpt: e.contentExcerpt,
+    })),
+  });
+  await reportProgress(60);
+
   // Structured, IBM-Plex-Serif-ready brief content with a citations rail.
   const content = {
     title: brief.title,
     template: brief.template,
-    sections: [
-      {
-        heading: "Executive summary",
-        body: "This brief was generated from the current evidence base and ranked opportunities for the jurisdiction. All figures carry confidence scores and provenance in the citations rail.",
-      },
-      {
-        heading: "Situation",
-        body: "Sector metrics and pipeline freshness indicate a viable intervention window. See Evidence drawer for source-level detail.",
-      },
-      {
-        heading: "Options",
-        body: "Options are ranked by opportunity score, estimated jobs, and legal readiness. Human review is required before sign-off.",
-      },
-      {
-        heading: "Recommendation",
-        body: "Proceed with the top-ranked option under phased procurement, subject to executive sign-off.",
-      },
-    ],
+    sections: drafted.sections,
     citations_rail: citationsRail,
     approval: { state: "in_review", handoff: "executive" },
   };
@@ -345,12 +345,7 @@ jobRunner.register("briefs.generate", async ({ input, reportProgress }) => {
       : (redactPayload(content, undefined, piiCounts) as typeof content);
   logRedactionEvent("runner.briefs.generate.output", piiCounts);
 
-  const briefRouting = {
-    tier: "offline-fallback",
-    model: "deterministic",
-    fallback: true,
-    decided_at: new Date().toISOString(),
-  };
+  const briefRouting = drafted.routing;
   await updateBrief(brief_id, {
     content: safeContent as never,
     reviewState: "in_review",
