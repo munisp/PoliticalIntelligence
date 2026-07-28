@@ -38,6 +38,31 @@ including failures.
 | `file_harvester` | Budget Office / Open Treasury downloads | **DOWNLOAD class** — scheduled fetch + checksum; stdlib XLSX/CSV parsing (no pandas) | `data_sources`, derived rows |
 | `budget_office` | Budget Office of the Federation (budgetoffice.gov.ng) appropriation/MTEF publications | **HYBRID** — attempts the live publications listing; falls back to bundled 2025-appropriation fixture stamped `origin=derived` when unreachable | `budget_line` → `budgets` |
 | `nass_bills` | National Assembly bills tracker (nass.gov.ng / placbillstrack) | **HYBRID** — attempts the live bills listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `bill_document` → `policy_documents` (`doc_type="bill"`, stage/sponsor/chamber in `metadata`) |
+| `cbn` | Central Bank of Nigeria (cbn.gov.ng) monetary statistics — MPR, official FX rate, credit to private sector | **HYBRID** — attempts the live statistics endpoint; falls back to bundled fixture stamped `origin=derived` when unreachable | `sector_metric` → `sector_metrics` (indicator codes `CBN_*`) |
+| `dmo` | Debt Management Office (dmo.gov.ng) — total public debt, domestic/external split, debt service | **HYBRID** — live statistics endpoint + derived-stamped fixture fallback | `sector_metric` → `sector_metrics` (indicator codes `DMO_*`) |
+| `nbs_series` | NBS headline indicator series (nigerianstat.gov.ng published data) — CPI inflation, real GDP growth, unemployment | **HYBRID** — live published-data endpoint + derived-stamped fixture fallback. **Distinct from `nbs_bulletin`** (portal index metadata only) — this ingests indicator *series values* | `sector_metric` → `sector_metrics` (indicator codes `NBS_*`) |
+| `faac` | FAAC monthly disbursements to federal/state/local-government tiers | **HYBRID** — live disbursements endpoint + derived-stamped fixture fallback | `budget_line` → `budgets` (`tier="faac_allocation"`, recipient tier + period in data) |
+| `oagf` | OAGF budget execution / implementation releases (oagf.gov.ng) — execution vs appropriation per MDA per quarter | **HYBRID** — live implementation endpoint + derived-stamped fixture fallback | `budget_line` → `budgets` (`tier="budget_execution"`, `appropriated_ngn`/`executed_ngn`/`execution_rate`) |
+| `gazettes` | Federal + state gazettes — laws as published | **HYBRID** — live gazette listing + derived-stamped fixture fallback | `policy_document` → `policy_documents` (`document_type="gazette"`; level/gazette_no/volume/state in `metadata`) |
+| `judgments` | Policy-relevant court judgments (open sources, e.g. NigeriaLII) | **HYBRID** — live judgments listing + derived-stamped fixture fallback | `policy_document` → `policy_documents` (`document_type="judgment"`; court/citation/subject_sectors in `metadata`) |
+| `nitda` | NITDA (nitda.gov.ng) digital-economy frameworks, NDPR/NDPA guidance, Startup Act notices | **HYBRID** — live listing attempt; bundled fixture stamped `origin=derived` fallback | `bill_document` → `policy_documents` (`doc_type="regulation"`); quantitative instruments also → `sector_metrics` |
+| `cbn_fintech` | CBN fintech/payments circulars (cbn.gov.ng) — PSSP/PTSP/PSB licensing, open banking, agent banking | **HYBRID** — live listing attempt; bundled fixture stamped `origin=derived` fallback | `bill_document` → `policy_documents` (`doc_type="regulation"`); quantitative instruments also → `sector_metrics` |
+| `ncc` | Nigerian Communications Commission (ncc.gov.ng) — licences, spectrum, QoS regulations | **HYBRID** — live listing attempt; bundled fixture stamped `origin=derived` fallback | `bill_document` → `policy_documents` (`doc_type="regulation"`); quantitative instruments also → `sector_metrics` |
+| `nerc` | Nigerian Electricity Regulatory Commission (nerc.gov.ng) — MYTO tariff orders, mini-grid/embedded generation, metering regs | **HYBRID** — live listing attempt; bundled fixture stamped `origin=derived` fallback | `bill_document` → `policy_documents` (`doc_type="regulation"`); quantitative instruments also → `sector_metrics` |
+| `nafdac` | NAFDAC (nafdac.gov.ng) — food/drug/cosmetics registration guidelines and regulations | **HYBRID** — live listing attempt; bundled fixture stamped `origin=derived` fallback | `bill_document` → `policy_documents` (`doc_type="regulation"`) |
+| `son` | Standards Organisation of Nigeria (son.gov.ng) — MANCAP/SONCAP conformity assessment, product standards | **HYBRID** — live listing attempt; bundled fixture stamped `origin=derived` fallback | `bill_document` → `policy_documents` (`doc_type="regulation"`) |
+| `ncaa` | Nigerian Civil Aviation Authority (ncaa.gov.ng) — NigCARs, drone/RPAS rules, aerodrome licensing | **HYBRID** — live listing attempt; bundled fixture stamped `origin=derived` fallback | `bill_document` → `policy_documents` (`doc_type="regulation"`); quantitative instruments also → `sector_metrics` |
+| `state_budgets` | State budget portals — Lagos/Kaduna/Kano first-class, generic `https://<state>state.gov.ng/budget` fallback | **HYBRID** — attempts each state's approved-budget listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `budget_line` (`tier="state"`, state→jurisdiction FK) → `budgets` |
+| `state_procurement` | State procurement portals — Lagos PPA / Kaduna KDPPA / Kano PPB, generic state fallback | **HYBRID** — attempts each state's awards listing (OCDS-shaped); falls back to bundled fixture stamped `origin=derived` when unreachable | `procurement_record` (buyer/supplier/value/ocid, state in payload) → `procurement_records` |
+| `state_assembly_bills` | State Houses of Assembly bills — Lagos/Kaduna/Kano first-class, generic state fallback | **HYBRID** — attempts each assembly's bills listing; falls back to bundled fixture stamped `origin=derived` when unreachable (weekly cadence) | `bill_document` → `policy_documents` (`doc_type="bill"`; state/chamber/stage in `metadata`) |
+| `state_irs` | State Internal Revenue Services — LIRS/KADIRS/KIRS first-class, generic fallback | **HYBRID** — attempts each SIRS publications listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `sector_metric` (`SIRS_*` revenue series) → `sector_metrics`; tax guides/revenue codes as `bill_document` (`doc_type="legal_instrument"`) → `policy_documents` |
+| `cac` | Corporate Affairs Commission public search (publicsearch.cac.gov.ng) | **HYBRID** — portal is captcha/session-gated (HTTP 403 to non-browser clients at probe time); connector attempts the live registrations endpoint and falls back to bundled fixture stamped `origin=derived` | `business_registration` (name, RC number, entity type, state/LGA, sector) → `business_registrations` |
+| `bpp` | Bureau of Public Procurement NOCOPO award notices (bpp.gov.ng) | **HYBRID** — attempts the live awards listing; falls back to bundled fixture stamped `origin=derived` when unreachable (complements `budeshi` OCDS with the federal NOCOPO feed) | `procurement_record` (federal MDA buyer, NOCOPO no., `tier="federal"`) → `procurement_records` |
+| `smedan` | SMEDAN/NBS MSME survey highlights (smedan.gov.ng) | **HYBRID** — attempts the live survey highlights endpoint; falls back to bundled fixture stamped `origin=derived` when unreachable | `sector_metric` (`SMEDAN_*` — MSME count, employment, GDP share, informal/women-owned shares; national + state rows) → `sector_metrics` |
+| `npopc` | National Population Commission projections (nationalpopulation.gov.ng) | **HYBRID** — attempts the live state/LGA projections endpoint; falls back to bundled fixture stamped `origin=derived` when unreachable | `sector_metric` (`POP_*` — total, growth rate, age structure, density; state + LGA rows, confidence 0.7) → `sector_metrics` |
+| `afdb` | African Development Bank projects portal — Nigeria portfolio | **HYBRID** — attempts the live portfolio query; falls back to bundled fixture stamped `origin=derived` when unreachable (USD amounts converted at the appraisal exchange rate) | `budget_line` (`tier="development_partner"`) → `budgets`; project appraisal citations as `evidence_source` → `evidence_sources` |
+| `afreximbank` | Afreximbank project/trade finance announcements (afreximbank.com) | **HYBRID** — attempts the live announcements endpoint (`country=Nigeria`); falls back to bundled fixture stamped `origin=derived` when unreachable | `budget_line` (`tier="development_partner"`, instrument type carried) → `budgets` |
+| `iati` | IATI Datastore activity data (api.iatistandard.org, Nigeria query) | **HYBRID** — attempts the live `/activity/select` query (`recipient_country_code:NG`); falls back to bundled fixture stamped `origin=derived` when unreachable | `budget_line` (`tier="development_partner"`, reporting org as partner) → `budgets` |
 
 Live-captured payloads are committed under
 `onboarding/packs/kaduna-ng/live_samples/` and
@@ -94,8 +119,14 @@ structured errors, async jobs with idempotency, pytest, Dockerfile).
 - `GET /health`.
 
 Scheduler cadences (defaults, `SCHEDULER_CADENCE` override): worldbank/hdx/budeshi daily;
-overpass/nada/nbs_bulletin/ubec_factsheet/nass_bills weekly; file_harvester hourly;
+overpass/nada/nbs_bulletin/ubec_factsheet/nass_bills/gazettes/judgments weekly; file_harvester hourly;
+cbn/dmo/nbs_series/faac/oagf monthly (30d);
 nbs_outcomes/budget_office quarterly (90d).
+overpass/nada/nbs_bulletin/ubec_factsheet/nass_bills weekly; file_harvester hourly;
+nbs_outcomes/budget_office quarterly (90d);
+nitda/cbn_fintech/ncc/nerc/nafdac/son/ncaa monthly (30d).
+state_budgets/state_procurement/state_irs/cac/bpp/smedan/npopc/afdb/afreximbank/iati monthly (30d);
+state_assembly_bills weekly.
 
 Pipeline: `fetch → contract_check → normalize → dedupe → emit`.
 Canonical JSONL artifacts at `./artifacts/ingestion/<source>/<date>.jsonl`
@@ -106,7 +137,7 @@ producer adapter: Redpanda/Kafka when `KAFKA_BROKERS` is set and
 stdout adapter (default, fully functional offline).
 
 Run: `pip install -r requirements.txt && uvicorn app.main:app --port 8300`.
-Tests (no network — recorded fixtures): `python -m pytest` (101 tests, 1 skipped).
+Tests (no network — recorded fixtures): `python -m pytest` (157 tests, 1 skipped).
 
 ## 6. Connector developer guide
 
