@@ -1,0 +1,23 @@
+# Optional heavy extras — install only when the corresponding infra exists.
+# The service runs fully on stdlib fallbacks without any of these.
+
+# PaddleOCR backend (scanned pages/images). CPU notes: paddlepaddle CPU wheel
+# is ~200MB; on Linux x86_64 `pip install paddlepaddle` is enough — no CUDA
+# needed for inference. First run downloads detection/recognition models.
+paddleocr==2.9.1
+paddlepaddle==2.6.2
+
+# Docling backend (structure-aware PDF/DOCX parsing: sections, tables,
+# reading order). Pulls torch + layout models (~1.5GB first run).
+docling==2.14.0
+
+# S3/MinIO artifact store adapter (DOCUMENTS_S3_BUCKET set).
+boto3==1.35.90
+
+# MIME sniffing of uploads (optional; magic bytes are used otherwise).
+python-magic==0.4.27
+# OBS-3: OpenTelemetry SDK — only needed when OTEL_SDK_ENABLED=true
+# (lazy-imported by app/metrics.py setup_tracing; noop without these).
+opentelemetry-sdk>=1.29,<2
+opentelemetry-exporter-otlp-proto-http>=1.29,<2
+opentelemetry-instrumentation-fastapi>=0.50b0

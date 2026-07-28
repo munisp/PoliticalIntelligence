@@ -1,0 +1,1 @@
+"""OCR backends: PaddleOCR, Docling, VLM + deterministic fallbacks."""
