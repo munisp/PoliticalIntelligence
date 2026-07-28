@@ -15,6 +15,7 @@ import {
   type RouterOutputs,
 } from "@/components/legislation/types";
 import { useOnlineStatus } from "@/hooks/use-pwa";
+import { useT } from "@/lib/LocaleContext";
 import ConversationRail from "@/components/copilot/ConversationRail";
 import MessageThread from "@/components/copilot/MessageThread";
 import Composer from "@/components/copilot/Composer";
@@ -38,34 +39,14 @@ const JURISDICTION_LABEL = "Kaduna State";
 const REFUSAL_PATTERN =
   /\b(approve|approval|publish|sign[ -]?off|auto[ -]?publish|enact)\b/i;
 
-const PHASES = [
-  "Searching sources…",
-  "Reading retrieved documents…",
-  "Assembling answer…",
-];
+
 
 const SUGGESTED = [
-  {
-    role: "Executive",
-    Icon: Landmark,
-    prompt: "Which sectors are furthest from their job targets?",
-  },
-  {
-    role: "Policy analyst",
-    Icon: FlaskConical,
-    prompt: "Compare SME credit uptake scenarios from last month",
-  },
-  {
-    role: "Legal analyst",
-    Icon: Scale,
-    prompt: "What does the Procurement Law say about SME set-asides?",
-  },
-  {
-    role: "Data steward",
-    Icon: Database,
-    prompt: "Which sources feeding the education model are stale?",
-  },
-];
+  { roleKey: "roleExecutive", Icon: Landmark, prompt: "Which sectors are furthest from their job targets?" },
+  { roleKey: "rolePolicyAnalyst", Icon: FlaskConical, prompt: "Compare SME credit uptake scenarios from last month" },
+  { roleKey: "roleLegalAnalyst", Icon: Scale, prompt: "What does the Procurement Law say about SME set-asides?" },
+  { roleKey: "roleDataSteward", Icon: Database, prompt: "Which sources feeding the education model are stale?" },
+] as const;
 
 const SECTOR_KEYWORDS: [RegExp, string][] = [
   [/\beducation\b|school|teacher/i, "Education"],
@@ -102,6 +83,8 @@ function deriveEntities(messages: ChatMessage[]): ContextEntity[] {
 }
 
 export default function Copilot() {
+  const t = useT();
+  const PHASES = [t.copilot.phaseSearching, t.copilot.phaseReading, t.copilot.phaseAssembling];
   const online = useOnlineStatus();
   const utils = trpc.useUtils();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -159,7 +142,7 @@ export default function Copilot() {
     setConversations((cs) => [
       {
         id,
-        title: "New conversation",
+        title: t.copilot.newConversation,
         jurisdiction: JURISDICTION_LABEL,
         createdAt: new Date().toISOString(),
         messages: [],
@@ -169,7 +152,7 @@ export default function Copilot() {
     setActiveId(id);
     setSearchParams({ c: id }, { replace: true });
     return id;
-  }, [setSearchParams]);
+  }, [setSearchParams, t]);
 
   /* ---------------- Ask flow ---------------- */
   const send = useCallback(
@@ -209,8 +192,7 @@ export default function Copilot() {
           id: assistantId,
           role: "assistant",
           refusal: true,
-          content:
-            "I can't approve, publish, or sign off outputs — the copilot is read-only and advisory. Route this through the approval workflow, where a legal analyst or executive reviews and signs off.",
+          content: t.copilot.refusal,
           createdAt: new Date().toISOString(),
         };
         setConversations((cs) =>
@@ -330,10 +312,10 @@ export default function Copilot() {
       } catch (err) {
         if (cancelledRef.current) return;
         patchMessage(convId, assistantId, {
-          content:
-            "The copilot could not assemble an answer — retrieval failed. " +
-            `(${err instanceof Error ? err.message : "unknown error"}). ` +
-            "Check connectivity and data-source health, then try again.",
+          content: t.copilot.retrievalFailed.replace(
+            "{error}",
+            err instanceof Error ? err.message : "unknown error",
+          ),
           streaming: false,
           answer: {
             confidence: 0,
@@ -355,7 +337,7 @@ export default function Copilot() {
         setSending(false);
       }
     },
-    [sending, activeId, newConversation, entityFilter, pinnedIds, patchMessage, utils],
+    [sending, activeId, newConversation, entityFilter, pinnedIds, patchMessage, utils, t],
   );
 
   /* Deep-linked prefill (?q=) — auto-send once. */
@@ -471,14 +453,14 @@ ${transcript}
         className="mb-4"
       >
         <p className="caption-label text-ink-muted">
-          Kaduna State · Grounded decision support
+          {t.copilot.caption}
         </p>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-semibold tracking-[-0.01em] text-ink-primary md:text-[32px] md:leading-10">
             Copilot
           </h1>
           <p className="rounded-full border border-ink-subtle bg-ink-surface px-3 py-1 text-xs text-ink-secondary">
-            Read-only · never publishes · hybrid retrieval (SQL + vector + graph)
+            {t.copilot.badge}
           </p>
         </div>
       </motion.header>
@@ -513,11 +495,10 @@ ${transcript}
                     className="opacity-90"
                   />
                   <h2 className="mt-4 text-xl font-semibold text-ink-primary">
-                    Ask with evidence
+                    {t.copilot.emptyTitle}
                   </h2>
                   <p className="mt-1.5 max-w-md text-[13px] leading-5 text-ink-secondary">
-                    Answers cite their sources and show confidence. Copilot never
-                    publishes or approves.
+                    {t.copilot.emptyBody}
                   </p>
                   <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
                     {SUGGESTED.map((s, i) => (
@@ -534,7 +515,7 @@ ${transcript}
                       >
                         <span className="caption-label flex items-center gap-1.5 text-civic">
                           <s.Icon aria-hidden className="h-3.5 w-3.5" />
-                          {s.role}
+                          {t.copilot[s.roleKey]}
                         </span>
                         <span className="mt-1.5 block text-[13px] font-medium leading-5 text-ink-primary">
                           {s.prompt}
@@ -547,8 +528,7 @@ ${transcript}
                       role="status"
                       className="mt-4 rounded-md border border-status-warning/40 bg-status-warning/10 px-3 py-1.5 text-xs font-medium text-status-warning"
                     >
-                      Offline — copilot requires connectivity; cached
-                      conversations remain readable.
+                      {t.copilot.offlineEmpty}
                     </p>
                   )}
                 </div>
@@ -605,8 +585,7 @@ ${transcript}
             className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-md border border-status-warning/40 bg-ink-elevated px-4 py-2 text-[13px] text-status-warning shadow-overlay"
           >
             <Sparkles aria-hidden className="mr-1.5 inline h-3.5 w-3.5" />
-            Offline — showing cached conversation. New questions need
-            connectivity.
+            {t.copilot.offlineThread}
           </motion.p>
         )}
       </AnimatePresence>
