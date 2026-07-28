@@ -9,6 +9,9 @@ metadata:
   labels:
     app.kubernetes.io/part-of: policy-twin
   annotations:
+    # SEC-5: TLS via cert-manager (issuers in base/cert-manager.yaml)
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "25m"
     nginx.ingress.kubernetes.io/limit-rps: "50"
     # ── OIDC placeholder (oauth2-proxy style) ──

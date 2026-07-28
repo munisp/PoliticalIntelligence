@@ -187,3 +187,20 @@ the `audit_worm_exports` table; `verifyWormExports` re-validates manifests,
 per-event hashes, and cross-file chain continuity. Local artifacts are
 written with the `wx` flag — an attempt to rewrite a sealed export is
 rejected (tested in `api/tests/worm.test.ts`).
+
+## TLS + Vault secrets (SEC-5)
+
+- **In transit:** `infra/k8s/base/ingress.yaml` terminates TLS with
+  cert-manager (`infra/k8s/base/cert-manager.yaml`: letsencrypt-prod ACME
+  ClusterIssuer + selfsigned/internal-CA chain for service-to-service
+  certs); `force-ssl-redirect` is on. Issuers are wired into the prod
+  overlay (`overlays/prod/kustomization.yaml`).
+- **Secrets:** `infra/k8s/base/external-secrets.yaml` — External Secrets
+  Operator ClusterSecretStore against Vault (kubernetes auth role
+  `policy-twin`) materializing the `platform-secrets` Secret consumed by
+  all Deployments (DATABASE_URL, NEO4J_PASSWORD, S3 keys, LOADER_API_KEY,
+  KIMI_CLIENT_SECRET), 1h refresh. Hand-managed secrets-template.yaml
+  remains the dev path.
+- Structural assertions: `api/tests/k8s-manifests.test.ts` (SEC-5 suite).
+  *Limit:* cert-manager/ESO/Vault are cluster addons — manifests are
+  CI-validated, not applied in this sandbox.

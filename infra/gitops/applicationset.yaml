@@ -1,0 +1,53 @@
+# ENV-4: Argo CD ApplicationSet — one Application per environment overlay
+# (dev/staging/prod) with ordered sync waves and automated policy per env.
+# Replaces the single hand-maintained Application (argocd-app.yaml stays as
+# the minimal example).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: policy-twin
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - env: dev
+            overlay: infra/k8s/overlays/dev
+            autoSync: "true"
+            prune: "true"
+            wave: "0"
+          - env: staging
+            overlay: infra/k8s/overlays/staging
+            autoSync: "true"
+            prune: "false"
+            wave: "1"
+          - env: prod
+            overlay: infra/k8s/overlays/prod
+            autoSync: "false"        # prod stays manual-approval
+            prune: "false"
+            wave: "2"
+  template:
+    metadata:
+      name: "policy-twin-{{.env}}"
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{.wave}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/meridian/policy-twin.git
+        targetRevision: "{{.env}}"
+        path: "{{.overlay}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: policy-twin
+      syncPolicy:
+        {{if eq .autoSync "true"}}
+        automated:
+          prune: {{.prune}}
+          selfHeal: true
+        {{end}}
+        syncOptions:
+          - CreateNamespace=true
+          - RespectIgnoreDifferences=true
+      revisionHistoryLimit: 5
