@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --external:@opentelemetry/* --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\"",
+    "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --external:@opentelemetry/* --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\" && npm run build:services",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "NODE_ENV=production node dist/boot.js",
@@ -14,7 +14,16 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "dev:service:jurisdictions": "tsx api/services/jurisdictions.ts",
+    "dev:service:opportunities": "tsx api/services/opportunities.ts",
+    "dev:service:scenarios": "tsx api/services/scenarios.ts",
+    "dev:service:legislation": "tsx api/services/legislation.ts",
+    "dev:service:documents-gateway": "tsx api/services/documents-gateway.ts",
+    "dev:service:briefs": "tsx api/services/briefs.ts",
+    "dev:service:admin": "tsx api/services/admin.ts",
+    "dev:service:ops": "tsx api/services/ops.ts",
+    "build:services": "esbuild api/services/jurisdictions.ts api/services/opportunities.ts api/services/scenarios.ts api/services/legislation.ts api/services/documents-gateway.ts api/services/briefs.ts api/services/admin.ts api/services/ops.ts --platform=node --bundle --format=esm --external:@opentelemetry/* --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\" --outdir=dist/services"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.965.0",
@@ -52,6 +61,7 @@
     "@trpc/client": "^11.8.1",
     "@trpc/react-query": "^11.8.1",
     "@trpc/server": "^11.8.1",
+    "cesium": "^1.140.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -82,6 +92,7 @@
     "superjson": "^2.2.6",
     "tailwind-merge": "^3.4.0",
     "vaul": "^1.1.2",
+    "vite-plugin-static-copy": "^3.4.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
