@@ -146,6 +146,13 @@ jobs:
       - name: Seed e2e identities
         run: npx tsx tests/e2e/seed-users.ts
 
+      # Data contract assertions (DM-2, DM-5) against the freshly seeded
+      # database — dbt-style not-null/unique/referential/provenance/
+      # freshness/seed-floor checks. The suite self-skips without
+      # DATABASE_URL, so it runs here and not in the unit-test job.
+      - name: Data contracts (dbt-style)
+        run: npx vitest run api/tests/data-contracts.test.ts
+
       - name: Build
         run: npm run build
 
