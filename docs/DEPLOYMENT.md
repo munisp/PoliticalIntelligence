@@ -79,3 +79,14 @@ The backup/restore rows above now have concrete automation:
 Remaining ops steps: schedule `scripts/backup.sh` (cron/CronJob), enable
 object-lock on the backup bucket for the 7-year audit retention, and execute
 the first quarterly drill.
+
+## Canary releases + GitOps (ENV-2, ENV-4)
+
+- **ENV-2:** staging overlay ships a weighted nginx canary
+  (`overlays/staging/canary-ingress.yaml`): a dedicated `app-canary`
+  Service selects `track: canary` pods; `canary-weight` starts at 10% and
+  is patched by CI during a release (100 → promote, 0 → abort).
+- **ENV-4:** `infra/gitops/applicationset.yaml` — one Argo CD
+  ApplicationSet generating dev/staging/prod Applications from the k8s
+  overlays with ordered sync waves (dev 0 → staging 1 → prod 2); dev and
+  staging auto-sync, prod stays manual-approval.
