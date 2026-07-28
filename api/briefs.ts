@@ -252,4 +252,72 @@ export const briefsRouter = createRouter({
         ctx,
       );
     }),
+
+  /**
+   * G5 / SR-5: rendered export artifacts. Returns the rendered document
+   * (standalone print-optimized HTML, or Word-compatible .doc) and records
+   * the export in the WORM-consistent audit chain exactly like exportMeta.
+   * The .doc format is Word-compatible HTML — no DOCX library is available
+   * in node_modules and heavy dependencies are intentionally not added.
+   */
+  exportRendered: authedQuery
+    .input(
+      z.object({
+        brief_id: z.string().min(1),
+        format: z.enum(["html", "doc"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx, ["policy_analyst", "executive"]);
+      const brief = await findBrief(input.brief_id);
+      if (!brief)
+        throw apiError(ctx, {
+          http: "NOT_FOUND",
+          code: "BRIEF_NOT_FOUND",
+          message: `Brief ${input.brief_id} not found`,
+        });
+      await assertJurisdictionRead(ctx, brief.jurisdictionId);
+      const meta = requestMeta(ctx);
+      const { renderBrief } = await import("./utils/render");
+      const artifact = renderBrief(brief as never, input.format, {
+        requestId: meta.request_id,
+      });
+      await insertAuditEvent({
+        actorId: ctx.user.id,
+        action: "briefs.exported",
+        entityType: "brief",
+        entityId: input.brief_id,
+        scopes: ["briefs:export"],
+        requestId: meta.request_id,
+        correlationId: meta.correlation_id,
+        payload: {
+          topic: "audit.events",
+          data: {
+            format: input.format,
+            rendered: true,
+            filename: artifact.filename,
+            bytes: artifact.content.length,
+            review_state: brief.reviewState,
+            request_id: meta.request_id,
+          },
+        },
+      });
+      audit(ctx, "briefs.exported.rendered", {
+        type: "brief",
+        id: input.brief_id,
+        scopes: ["briefs:export"],
+        payload: { format: input.format, filename: artifact.filename },
+      });
+      return envelope(
+        {
+          brief_id: input.brief_id,
+          format: artifact.format,
+          filename: artifact.filename,
+          mime_type: artifact.mimeType,
+          content: artifact.content,
+          request_id: meta.request_id,
+        },
+        ctx,
+      );
+    }),
 });
