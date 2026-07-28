@@ -171,6 +171,30 @@ export default function Briefs() {
     },
   });
 
+  // G5: rendered export (server-rendered HTML / Word .doc) → download.
+  const exportRenderedM = trpc.briefs.exportRendered.useMutation({
+    onSuccess: (payload) => {
+      const data = unwrap(payload) as {
+        filename: string;
+        mime_type: string;
+        content: string;
+      };
+      const blob = new Blob([data.content], { type: data.mime_type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = data.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Export ready", { description: data.filename });
+    },
+    onError: (err) => {
+      toast.error(t.briefs.toastExportError, { description: err.message });
+    },
+  });
+
   /* --------------------------- effects --------------------------------- */
   // Auto-select the first brief.
   useEffect(() => {
@@ -481,6 +505,12 @@ export default function Briefs() {
                 pendingAction={pendingAction}
                 lastExported={lastExported}
                 onExport={handleExport}
+                onExportRendered={(format) => {
+                  if (isAuthenticated && brief) {
+                    exportRenderedM.mutate({ brief_id: brief.briefId, format });
+                  }
+                }}
+                exportRenderedPending={exportRenderedM.isPending}
               />
             )
           ) : (
