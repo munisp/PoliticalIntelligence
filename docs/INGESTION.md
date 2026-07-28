@@ -119,7 +119,7 @@ producer adapter: Redpanda/Kafka when `KAFKA_BROKERS` is set and
 stdout adapter (default, fully functional offline).
 
 Run: `pip install -r requirements.txt && uvicorn app.main:app --port 8300`.
-Tests (no network — recorded fixtures): `python -m pytest` (101 tests, 1 skipped).
+Tests (no network — recorded fixtures): `python -m pytest` (157 tests, 1 skipped).
 
 ## 6. Connector developer guide
 
