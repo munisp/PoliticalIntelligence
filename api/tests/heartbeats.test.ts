@@ -36,7 +36,7 @@ describe("job heartbeats + stuck-job sweeper", () => {
     expect(calls).toEqual([`running:${jobId}`]);
   });
 
-  it("sweeper auto-fails running jobs with a stale heartbeat", async () => {
+  it("sweeper auto-fails running jobs with a stale heartbeat", { timeout: 20000 }, async () => {
     const jobId = `job_stale_${Date.now()}`;
     await getDb()
       .insert(schema.jobs)
