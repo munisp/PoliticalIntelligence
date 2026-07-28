@@ -4,6 +4,7 @@ import { RefreshCw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { unwrapData, type OpportunityItem, type SectorRow } from "./types";
+import { useFocusReturn } from "@/hooks/use-focus-return";
 
 export interface GenerateModalProps {
   open: boolean;
@@ -42,6 +43,8 @@ export default function GenerateModal({
   const [note, setNote] = useState("");
   const [idemKey, setIdemKey] = useState(newIdempotencyKey);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // a11y: restore focus to the triggering element when the modal closes.
+  useFocusReturn(open);
 
   // Reset form each time the modal opens.
   useEffect(() => {
