@@ -1,0 +1,10 @@
+{
+  "note": "SMEDAN/NBS MSME survey highlights used as the deterministic offline fallback for the smedan connector.",
+  "rows": [
+    {"scope": "national", "period": "2021", "msme_count": 39654654, "msme_employment": 62641258, "msme_gdp_share_pct": 46.3, "informal_share_pct": 96.7, "women_owned_share_pct": 32.0},
+    {"scope": "national", "period": "2017", "msme_count": 37286475, "msme_employment": 59931031, "msme_gdp_share_pct": 49.8, "informal_share_pct": 97.1},
+    {"scope": "state", "jurisdiction_id": "ng-la", "state": "Lagos", "period": "2021", "msme_count": 4463800, "msme_employment": 7412000},
+    {"scope": "state", "jurisdiction_id": "ng-kd", "state": "Kaduna", "period": "2021", "msme_count": 1194500, "msme_employment": 1862000},
+    {"scope": "state", "jurisdiction_id": "ng-kn", "state": "Kano", "period": "2021", "msme_count": 1887200, "msme_employment": 2910400}
+  ]
+}
