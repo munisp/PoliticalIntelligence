@@ -22,9 +22,11 @@ const BASE_URL = process.env.AI_BASE_URL ?? "http://localhost:8200";
 const TIMEOUT_MS = 5000;
 
 export class DraftingContractError extends Error {
-  constructor(public readonly errors: string[]) {
+  readonly errors: string[];
+  constructor(errors: string[]) {
     super(`drafting clause-set contract violation: ${errors.join("; ")}`);
     this.name = "DraftingContractError";
+    this.errors = errors;
   }
 }
 
