@@ -90,12 +90,12 @@ def test_schedule_specs_cover_all_connectors_with_cadence():
 def test_build_definitions_with_fake_dagster():
     dg = FakeDagster()
     defs = dd.build_definitions(dg)
-    assert len(defs.jobs) == len(REGISTRY) == 13
+    assert len(defs.jobs) == len(REGISTRY) == 14
     assert {s.cron_schedule for s in defs.schedules} == {
         "0 6 * * *", "0 6 * * 0", "0 * * * *", "0 6 */90 * *",
         "0 6 */30 * *",
     }
-    assert len(defs.schedules) == 13
+    assert len(defs.schedules) == 14
     assert len(defs.sensors) == 1
     assert defs.sensors[0].dagster_name == "new_data_source_sensor"
     assert defs.sensors[0].dagster_interval == 60

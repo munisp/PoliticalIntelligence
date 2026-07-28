@@ -1,0 +1,11 @@
+{
+  "note": "State House of Assembly bills used as the deterministic offline fallback for the state_assembly_bills connector.",
+  "bills": [
+    {"state": "lagos", "title": "Lagos State Primary Healthcare Development Agency Bill 2025", "sponsor": "Hon. A. Desmond (Health Committee)", "chamber": "House of Assembly", "stage": "second_reading", "date": "2025-02-11", "sector": "health", "source_url": "https://lagoshouseofassembly.gov.ng/bills/phcda-2025"},
+    {"state": "lagos", "title": "Lagos State Electricity Bill 2024", "sponsor": "Executive Bill", "chamber": "House of Assembly", "stage": "assented", "date": "2024-12-05", "sector": "energy", "source_url": "https://lagoshouseofassembly.gov.ng/bills/electricity-2024"},
+    {"state": "kaduna", "title": "Kaduna State Investment Promotion Agency (Amendment) Bill 2025", "sponsor": "Hon. S. Yakubu", "chamber": "House of Assembly", "stage": "committee", "date": "2025-03-04", "sector": "trade", "source_url": "https://kdsha.kdsg.gov.ng/bills/kadipa-amendment-2025"},
+    {"state": "kaduna", "title": "Kaduna State Contributory Health Insurance Authority Bill 2024", "sponsor": "Executive Bill", "chamber": "House of Assembly", "stage": "passed", "date": "2024-10-22", "sector": "health", "source_url": "https://kdsha.kdsg.gov.ng/bills/kadchia-2024"},
+    {"state": "kano", "title": "Kano State Rural Access Roads Authority Bill 2025", "sponsor": "Hon. M. Getso", "chamber": "House of Assembly", "stage": "first_reading", "date": "2025-04-15", "sector": "infrastructure", "source_url": "https://kanosha.gov.ng/bills/rara-2025"},
+    {"state": "kano", "title": "Kano State Public Procurement Bureau (Amendment) Bill 2024", "sponsor": "Executive Bill", "chamber": "House of Assembly", "stage": "assented", "date": "2024-09-30", "sector": "governance", "source_url": "https://kanosha.gov.ng/bills/ppb-amendment-2024"}
+  ]
+}
