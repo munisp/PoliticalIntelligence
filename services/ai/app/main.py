@@ -28,6 +28,12 @@ async def lifespan(app: FastAPI):
     app.state.retriever = HybridRetriever()
     app.state.serving = ServingClient()  # env-driven; unconfigured -> offline
     app.state.router = ModelRouter(serving=app.state.serving)
+    # Embedding indexer scheduler hook (AI-12): when INDEXER_INTERVAL_SECONDS
+    # is set, reindex passages on that cadence in a daemon thread.
+    import os
+    if os.getenv("INDEXER_INTERVAL_SECONDS"):
+        from app.retrieval import indexer
+        app.state.indexer_thread = indexer.start_index_scheduler()
     log.info("service started", extra={
         "request_id": "startup",
         "model_tier": "offline" if not app.state.router.online else "online",

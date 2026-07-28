@@ -110,9 +110,62 @@ class VectorAdapter:
                 break
         return out
 
+    def _search_knn(self, query: str, jurisdiction_id: str,
+                    filters: dict, top_k: int) -> list[EvidenceSource]:
+        """OpenSearch k-NN query over the indexer embedding index (AI-2).
+
+        Uses the same deterministic hashing embedding as
+        app.retrieval.indexer, so query and passage vectors live in the same
+        space. Raises on any failure so the caller can fall back to BM25.
+        """
+        import httpx
+
+        from app.llm.embeddings import hashing_embed
+        from app.retrieval.indexer import knn_index_name
+
+        vector = [float(x) for x in hashing_embed(query)]
+        body = {
+            "size": top_k,
+            "query": {
+                "knn": {
+                    "embedding": {
+                        "vector": vector,
+                        "k": top_k,
+                        "filter": {"terms": {"jurisdiction":
+                                             [jurisdiction_id, "jur:ng"]}},
+                    }
+                }
+            },
+        }
+        resp = httpx.post(f"{settings.opensearch_url}/{knn_index_name()}/_search",
+                          json=body, timeout=10.0)
+        resp.raise_for_status()
+        hits = resp.json()["hits"]["hits"]
+        return [
+            EvidenceSource(
+                evidence_source_id=h["_source"].get("passage_id", h["_id"]),
+                source_type=SourceType(h["_source"].get("type", "legal")),
+                citation=h["_source"].get("citation", ""),
+                retrieval_path=RetrievalPath.vector,
+                confidence=0.0,
+                content=h["_source"].get("content", ""),
+                attributes={"knn_score": h["_score"],
+                            "jurisdiction": h["_source"].get("jurisdiction"),
+                            "title": h["_source"].get("title")},
+            )
+            for h in hits
+        ]
+
     def _search_opensearch(self, query: str, jurisdiction_id: str,
                            filters: dict, top_k: int) -> list[EvidenceSource]:
         import httpx
+
+        # Prefer the k-NN embedding index written by app.retrieval.indexer;
+        # fall back to BM25 text search when it is absent/fails.
+        try:
+            return self._search_knn(query, jurisdiction_id, filters, top_k)
+        except Exception as exc:
+            log.warning("opensearch k-NN failed, falling back to BM25: %s", exc)
 
         body = {
             "size": top_k,
