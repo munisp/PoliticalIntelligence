@@ -386,6 +386,12 @@ export const simulationRuns = mysqlTable(
     resultSummary: json("result_summary"),
     artifactUri: varchar("artifact_uri", { length: 512 }),
     seed: int("seed").default(42).notNull(),
+    /** DM-3: persisted run manifest (everything needed to re-run). */
+    manifest: json("manifest"),
+    /** Content-addressed snapshot of run inputs: snap:<sha256-16>. */
+    datasetSnapshotId: varchar("dataset_snapshot_id", { length: 96 }),
+    /** sha256(manifest + result_summary) — recomputed to verify reproducibility. */
+    reproducibilityHash: varchar("reproducibility_hash", { length: 64 }),
     startedAt: timestamp("started_at"),
     finishedAt: timestamp("finished_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

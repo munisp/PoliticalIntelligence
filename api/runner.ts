@@ -22,6 +22,10 @@ import { generateRecommendation } from "./bridges/ai";
 import { executeScenarioRun, runFallbackEngine } from "./bridges/simulation";
 import { emitEvent, emitJobLifecycle } from "./utils/events";
 import {
+  buildSimulationRunManifest,
+  computeReproducibilityHash,
+} from "./utils/manifest";
+import {
   jobsTotal,
   jobsFailedTotal,
   simulationRunsTotal,
@@ -190,7 +194,7 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
   const scenario = await findScenario(run.scenarioId);
   await reportProgress(20);
 
-  const { result, bridge } = await executeScenarioRun({
+  const runParams = {
     scenario_id: run.scenarioId,
     engine: run.engine as SimulationEngine,
     seed: run.seed,
@@ -198,9 +202,27 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
     baseline_employment: 3_600_000, // Kaduna labour force scale
     intervention_strength: scenario?.modelPlan ? 0.6 : 0.4,
     execution_profile: (run.executionProfile as Record<string, unknown>) ?? {},
-  });
+  };
+  const { result, bridge } = await executeScenarioRun(runParams);
   await reportProgress(75);
   simulationRunsTotal.inc({ engine: run.engine, bridge });
+
+  // DM-3: persist the reproducibility manifest + content hashes so any run
+  // can be re-executed and verified (TEST-5 re-run harness recomputes this).
+  const manifest = buildSimulationRunManifest({
+    simulation_run_id,
+    scenario_id: run.scenarioId,
+    jurisdiction_id: scenario?.jurisdictionId ?? null,
+    engine: run.engine,
+    seed: run.seed,
+    horizon_months: runParams.horizon_months,
+    baseline_employment: runParams.baseline_employment,
+    intervention_strength: runParams.intervention_strength,
+    execution_profile: runParams.execution_profile,
+    model_versions: (run.modelVersions as Record<string, unknown>) ?? {},
+  });
+  const reproducibilityHash = computeReproducibilityHash(manifest, result);
+
   await emitEvent(
     EventTopics.simulationsRunCompleted,
     {
@@ -209,6 +231,7 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
       engine: run.engine,
       bridge,
       seed: run.seed,
+      reproducibility_hash: reproducibilityHash,
     },
     run.scenarioId,
   );
@@ -217,6 +240,9 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
     status: "succeeded",
     progress: 100,
     resultSummary: result as never,
+    manifest: manifest as never,
+    datasetSnapshotId: manifest.dataset_snapshot_id,
+    reproducibilityHash,
     artifactUri: `artifacts://${run.scenarioId}/${simulation_run_id}.json`,
     finishedAt: new Date(),
   });
