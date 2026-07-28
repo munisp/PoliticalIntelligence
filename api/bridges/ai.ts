@@ -289,6 +289,52 @@ export async function generateRecommendation(body: {
 }
 
 /* ------------------------------------------------------------------ */
+/* Hybrid retrieval (AI-4): gateway search → AI service /v1/retrieve   */
+/* ------------------------------------------------------------------ */
+
+export interface RetrievedEvidence {
+  evidence_source_id: string;
+  source_type: "metric" | "legal" | "policy" | "profile";
+  citation: string;
+  retrieval_path: "sql" | "vector" | "graph";
+  confidence: number;
+  content: string;
+  attributes: Record<string, unknown>;
+}
+
+export interface EvidenceBundle {
+  bundle_id: string;
+  query: string;
+  jurisdiction_id: string;
+  evidence: RetrievedEvidence[];
+  retrieval_paths_used: string[];
+  adapter_modes: Record<string, string>;
+}
+
+/**
+ * POST /v1/retrieve on the AI service (hybrid SQL+vector+graph with RRF
+ * fusion). Throws when the service is unreachable/errors — callers fall
+ * back to the SQL LIKE path.
+ */
+export async function retrieveBundle(body: {
+  query: string;
+  jurisdiction_id?: string;
+  filters?: Record<string, unknown>;
+  top_k?: number;
+}): Promise<EvidenceBundle> {
+  const resp = await postJson<{ data: EvidenceBundle }>("/v1/retrieve", {
+    query: body.query,
+    jurisdiction_id: body.jurisdiction_id ?? "jur:ng",
+    filters: body.filters ?? {},
+    top_k: body.top_k ?? 10,
+  });
+  if (!resp?.data || !Array.isArray(resp.data.evidence)) {
+    throw new Error("ai service returned malformed EvidenceBundle");
+  }
+  return resp.data;
+}
+
+/* ------------------------------------------------------------------ */
 /* Copilot                                                             */
 /* ------------------------------------------------------------------ */
 

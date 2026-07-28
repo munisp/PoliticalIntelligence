@@ -3,15 +3,17 @@ import { createRouter, publicQuery } from "./middleware";
 import { envelope, apiError } from "./utils/envelope";
 import { searchLike } from "./queries/admin";
 import { findEvidence } from "./queries/opportunities";
-import { copilotQuery } from "./bridges/ai";
+import { copilotQuery, retrieveBundle } from "./bridges/ai";
 import { evidenceByIds } from "./queries/opportunities";
 
 export const searchRouter = createRouter({
   /**
    * Fused search across opportunities / laws / clauses / briefs with
-   * provenance. This is the SQL LIKE + naive-scoring fallback; the hybrid
-   * retrieval service (vector + graph adapters) plugs in at
-   * services/ai POST /v1/copilot/query — see api/bridges/ai.ts.
+   * provenance (AI-4). PRIMARY path: the AI service hybrid retriever
+   * (SQL + vector + graph, RRF fusion) via POST /v1/retrieve, with the
+   * EvidenceBundle mapped into the fused result shape. FALLBACK path: the
+   * in-process SQL LIKE search when the AI service is unreachable. The
+   * response meta marks `retrieval_mode: "hybrid" | "fallback"`.
    */
   query: publicQuery
     .input(
@@ -22,6 +24,60 @@ export const searchRouter = createRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      // --- hybrid retrieval path (AI service) ---------------------------
+      try {
+        const bundle = await retrieveBundle({
+          query: input.q,
+          jurisdiction_id: input.jurisdiction_id,
+          top_k: input.limit,
+        });
+        // Map retrieval source types onto the legacy fused-result kind
+        // union (front-end citation panel contract); the true type is
+        // preserved in `source_type`.
+        const KIND_BY_SOURCE_TYPE = {
+          legal: "law",
+          policy: "brief",
+          metric: "opportunity",
+          profile: "brief",
+        } as const;
+        const results = bundle.evidence
+          .map((e) => ({
+            kind: KIND_BY_SOURCE_TYPE[e.source_type] ?? ("brief" as const),
+            source_type: e.source_type,
+            id: e.evidence_source_id,
+            title:
+              (e.attributes?.title as string | undefined) ?? e.citation,
+            snippet: e.content.slice(0, 200),
+            score: e.confidence,
+            provenance: {
+              retrieval_path: e.retrieval_path,
+              citation: e.citation,
+              jurisdiction_id:
+                (e.attributes?.jurisdiction as string | undefined) ??
+                bundle.jurisdiction_id,
+            },
+          }))
+          .slice(0, input.limit);
+        const env = envelope(
+          {
+            q: input.q,
+            results,
+            adapter: "hybrid-retrieval",
+            adapter_modes: bundle.adapter_modes,
+            retrieval_paths_used: bundle.retrieval_paths_used,
+            retrieval_mode: "hybrid" as const,
+          },
+          ctx,
+        );
+        return {
+          ...env,
+          meta: { ...env.meta, retrieval_mode: "hybrid" as const },
+        };
+      } catch {
+        // AI service unreachable/misconfigured → SQL LIKE fallback below.
+      }
+
+      // --- SQL LIKE fallback ---------------------------------------------
       const raw = await searchLike({
         q: input.q,
         jurisdictionId: input.jurisdiction_id,
@@ -63,7 +119,19 @@ export const searchRouter = createRouter({
       ]
         .sort((a, b) => b.score - a.score)
         .slice(0, input.limit);
-      return envelope({ q: input.q, results, adapter: "sql-like-fallback" }, ctx);
+      const env = envelope(
+        {
+          q: input.q,
+          results,
+          adapter: "sql-like-fallback",
+          retrieval_mode: "fallback" as const,
+        },
+        ctx,
+      );
+      return {
+        ...env,
+        meta: { ...env.meta, retrieval_mode: "fallback" as const },
+      };
     }),
 
   /** Copilot-style grounded Q&A (AI bridge with DB-evidence fallback). */
