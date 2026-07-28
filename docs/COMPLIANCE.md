@@ -206,3 +206,20 @@ Legend: ✅ fully implemented (works end-to-end, cited) · 🟡 partial/scaffold
 8. **Simulation validity (SIM-4 🟡, SIM-5 ✅, DM-3 🟡, TEST-5 🟡).** Backtesting vs realized outcomes now exists: walk-forward validation with per-engine calibration metrics (MAPE/RMSE/80%-band coverage/skill vs naive), a content-hashed calibration-report artifact per jurisdiction/metric, and a twin recalibration hook (`services/simulation/app/backtest.py`, `POST /v1/backtests`, `innovations.calibrationReport`). *Remaining:* wire the report into the release gate as a blocking artifact; persist scenario-run manifest + `reproducibility_hash`.
 9. **Geospatial near-complete (GEO-1 🟡, GEO-2 ✅).** CesiumJS 3D view landed as a lazy-loaded, token-free OSM route (`Geo3D.tsx`); PostGIS adapter still off the default path and MapLibre remains the default map UX. *Next:* enable PostGIS in staging with a mirror job; promote 3D where it adds value.
 10. **Ops hardening (SEC-5, SEC-6, ENV-4, OBS-3 🟡).** No TLS/Vault, no dependency/container scan gate, minimal ArgoCD, OTel default-off. *Next:* cert-manager + ESO, trivy/npm-audit gates, ApplicationSets, enable OTel in staging.
+
+---
+
+## Post-certification capability addendum (G1–G5)
+
+The 90-requirement matrix above is **unchanged and not renumbered**. The
+following items close capability gaps identified after the 2026-07-28
+certification; they exceed the original spec scope and do not alter any
+matrix row's status.
+
+| # | Capability | Evidence |
+| --- | --- | --- |
+| G1 | GPU go-live code-complete (manifests + eval gate + runbook; no infra apply, no live model) | `infra/k8s/model-serving/`, `infra/k8s/overlays/{staging,prod}`, `services/ai/app/evals/`, `docs/GPU-GOLIVE.md` |
+| G2 | Realized-outcomes store; causal `data_mode: realized`; backtest actuals | `api/queries/outcomes.ts`, `services/simulation/app/outcomes.py`, `services/simulation/app/engines/causal.py`, `services/simulation/app/backtest.py`, `services/simulation/tests/test_outcomes_realized.py`, `docs/OUTCOMES.md` |
+| G3 | Legal→parameter mapper | `services/documents/app/param_mapper.py`, `services/documents/tests/test_param_mapper.py`, `docs/PARAM-MAPPER.md` |
+| G4 | Bill drafting + RIA annex + Akoma Ntoso | `api/tests/drafting.test.ts`, `api/lib/akn.ts`, `services/documents/app/akn.py`, `services/documents/tests/test_akn.py`, `docs/DRAFTING.md` |
+| G5 | Rendered brief exports | `api/utils/render.ts`, `api/tests/render.test.ts` |
