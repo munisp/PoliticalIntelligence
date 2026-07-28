@@ -24,6 +24,9 @@ class Settings:
     neo4j_password: str | None = None
 
     # LLM endpoints (OpenAI-compatible, vLLM / Ray Serve). Empty -> offline.
+    # G1: LLM_REMOTE_BASE_URL is the documented go-live switch alias —
+    # setting it flips the default tier from the offline synthesizer to the
+    # remote serving tier (VLLM_BASE_URL takes precedence when both set).
     vllm_base_url: str | None = None
     vllm_api_key: str | None = None
     llm_timeout_seconds: float = 30.0
@@ -42,7 +45,8 @@ class Settings:
             neo4j_uri=os.getenv("NEO4J_URI"),
             neo4j_user=os.getenv("NEO4J_USER", "neo4j"),
             neo4j_password=os.getenv("NEO4J_PASSWORD"),
-            vllm_base_url=os.getenv("VLLM_BASE_URL"),
+            vllm_base_url=(os.getenv("VLLM_BASE_URL")
+                           or os.getenv("LLM_REMOTE_BASE_URL")),
             vllm_api_key=os.getenv("VLLM_API_KEY"),
             llm_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "30")),
             default_seed=int(os.getenv("DEFAULT_SEED", "42")),
