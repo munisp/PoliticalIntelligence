@@ -48,6 +48,14 @@ app.get("/metrics", async (c) => {
 });
 
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+
+// API-9: api-gateway delegation. SERVICES_MODE=monolith (default) keeps the
+// in-process route table; SERVICES_MODE=micro forwards /v1/* and
+// /api/trpc/* to the per-domain services (api/services/index.ts registry).
+const { gatewayDelegation } = await import("./services/gateway");
+app.use("/v1/*", gatewayDelegation());
+app.use("/api/trpc/*", gatewayDelegation());
+
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
