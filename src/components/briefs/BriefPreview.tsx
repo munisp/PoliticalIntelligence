@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
+  FileCode2,
+  FileText,
   History,
   Presentation,
   ScrollText,
@@ -38,6 +40,9 @@ export interface BriefPreviewProps {
   pendingAction: "approve" | "return" | "signoff" | "resolve" | null;
   lastExported: Partial<Record<ExportKind, string>>;
   onExport: (kind: ExportKind) => void;
+  /** G5: rendered export (server-rendered HTML / Word .doc download). */
+  onExportRendered?: (format: "html" | "doc") => void;
+  exportRenderedPending?: boolean;
 }
 
 const CHAIN: { role: string; states: string[] }[] = [
@@ -94,6 +99,8 @@ export default function BriefPreview({
   pendingAction,
   lastExported,
   onExport,
+  onExportRendered,
+  exportRenderedPending = false,
 }: BriefPreviewProps) {
   const content = useMemo(() => parseBriefContent(brief.content), [brief.content]);
   const routing = useMemo(() => parseModelRouting(brief.modelRouting), [brief.modelRouting]);
@@ -209,6 +216,37 @@ export default function BriefPreview({
             requestId={requestId ?? brief.requestId ?? undefined}
           />
         </span>
+        {onExportRendered && (
+          <div
+            role="group"
+            aria-label="Rendered export"
+            className="flex rounded-md border border-ink-subtle p-0.5"
+          >
+            {(
+              [
+                { format: "html", label: "Export HTML", Icon: FileCode2 },
+                { format: "doc", label: "Export Word", Icon: FileText },
+              ] as const
+            ).map(({ format, label, Icon }) => (
+              <button
+                key={format}
+                type="button"
+                onClick={() => onExportRendered(format)}
+                disabled={exportRenderedPending}
+                title={`${label} — server-rendered, audit-logged download`}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                  exportRenderedPending
+                    ? "cursor-not-allowed text-ink-muted"
+                    : "text-ink-secondary hover:text-ink-primary",
+                )}
+              >
+                <Icon aria-hidden className="h-3.5 w-3.5" />
+                {exportRenderedPending ? "Exporting…" : label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {routing?.fallback && (
