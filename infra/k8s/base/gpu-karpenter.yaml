@@ -1,0 +1,89 @@
+# AI-9 (spec §37): Karpenter provisioner example for the GPU pools (AWS/EKS;
+# Karpenter >= v1 NodePool API). For AKS use NAP, for GKE use node
+# auto-provisioning with equivalent labels/taints — the k8s contract is in
+# gpu-nodepool.yaml.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-interactive
+spec:
+  template:
+    metadata:
+      labels:
+        role: gpu-inference
+        gpu-pool: interactive
+    spec:
+      taints:
+        - key: role
+          value: gpu-inference
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu
+      requirements:
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["g6", "g5"]          # L4 / A10G — interactive tier
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]          # latency SLO — no spot for interactive
+  limits:
+    nvidia.com/gpu: "4"
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-batch
+spec:
+  template:
+    metadata:
+      labels:
+        role: gpu-inference
+        gpu-pool: batch
+    spec:
+      taints:
+        - key: role
+          value: gpu-inference
+          effect: NoSchedule
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu
+      requirements:
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["g5", "g4dn"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot"]               # batch pool is spot-first
+  limits:
+    nvidia.com/gpu: "8"
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 1m
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: gpu
+spec:
+  amiFamily: AL2
+  role: policy-twin-eks-gpu-node
+  subnetSelector:
+    tags:
+      karpenter.sh/discovery: policy-twin
+  securityGroupSelector:
+    tags:
+      karpenter.sh/discovery: policy-twin
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 200Gi   # model weights cache
+        volumeType: gp3
