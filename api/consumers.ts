@@ -27,6 +27,16 @@ import { exportWormNow, startWormExporter } from "./utils/worm";
 const handles: ConsumerHandle[] = [];
 let sweeperTimer: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Observability/test hook: the currently registered consumer handles
+ * (topic, group, transport mode). Empty before startConsumers().
+ */
+export function registeredConsumers(): ReadonlyArray<
+  Pick<ConsumerHandle, "topic" | "group" | "mode">
+> {
+  return handles.map((h) => ({ topic: h.topic, group: h.group, mode: h.mode }));
+}
+
 /* ------------------------- job heartbeats (SR-9) ------------------------ */
 
 /** Stamp a heartbeat row for a job (runner lifecycle transition). */
