@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll } from "vitest";
+import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
 import { SaxesParser } from "saxes";
@@ -89,6 +89,20 @@ beforeAll(async () => {
   await enqueuePersistedJob(jobId);
   await jobRunner.drain();
 }, 60_000);
+
+/** Remove G4 test rows so findFirst()-based tests elsewhere are unaffected. */
+afterAll(async () => {
+  const db = getDb();
+  const { like } = await import("drizzle-orm");
+  await db.delete(schema.clauses).where(like(schema.clauses.lawId, "law:ng-kd:draft:%"));
+  await db.delete(schema.laws).where(like(schema.laws.lawId, "law:ng-kd:draft:%"));
+  await db
+    .delete(schema.simulationRuns)
+    .where(like(schema.simulationRuns.scenarioId, "scn:ng-kd:g4-%"));
+  await db
+    .delete(schema.scenarios)
+    .where(like(schema.scenarios.scenarioId, "scn:ng-kd:g4-%"));
+});
 
 describe("G4 drafting — auth & role gates", () => {
   it("anonymous callers are UNAUTHORIZED", async () => {
