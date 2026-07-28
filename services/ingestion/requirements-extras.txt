@@ -6,3 +6,9 @@ kafka-python==2.0.2
 opentelemetry-sdk>=1.29,<2
 opentelemetry-exporter-otlp-proto-http>=1.29,<2
 opentelemetry-instrumentation-fastapi>=0.50b0
+
+# DM-4: Iceberg lakehouse export (app/lakehouse). Lazy-imported; the pipeline
+# and its unit tests run WITHOUT these (JSONL preview fallback writer).
+pyiceberg[sql-sqlite,pyarrow]>=0.8,<1
+# MySQL row source for `python -m app.lakehouse export` (default: --source-jsonl)
+PyMySQL>=1.1,<2

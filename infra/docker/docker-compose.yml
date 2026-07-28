@@ -37,6 +37,7 @@ volumes:
   redpanda-data:
   prometheus-data:
   grafana-data:
+  trino-data:
   vllm-cache:
 
 services:
@@ -935,6 +936,32 @@ services:
       timeout: 10s
       retries: 20
       start_period: 300s
+    restart: unless-stopped
+
+  # DM-4/DM-5: Trino analytical fabric over the Iceberg lakehouse (MinIO
+  # warehouse). Catalogs mounted from infra/docker/trino/catalog. Smoke
+  # query: docs/LAKEHOUSE.md.
+  trino:
+    image: trinodb/trino:latest
+    ports:
+      - "${TRINO_PORT:-8080}:8080"
+    environment:
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+      - trino-data:/var/lib/trino
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
     restart: unless-stopped
 
   otel-collector:
