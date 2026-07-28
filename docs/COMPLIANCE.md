@@ -131,7 +131,7 @@ Legend: ✅ fully implemented (works end-to-end, cited) · 🟡 partial/scaffold
 
 | # | Requirement | Status | Delta | Evidence | Gap | Fix |
 | --- | --- | --- | --- | --- | --- | --- |
-| EVT-1 | Redpanda backbone with topic catalog | 🟡 | improved | `api/utils/events.ts` (kafkajs producer when `KAFKA_BROKERS` set, durable outbox fallback), consumers booted from `api/consumers.ts registeredConsumers()` + `api/tests/events-boot.test.ts` | Consumers exist and boot with the app; topic provisioning still not codified (no topic catalog manifest) | Topic provisioning in Terraform/helm |
+| EVT-1 | Redpanda backbone with topic catalog | ✅ | improved | `api/utils/events.ts` (kafkajs producer when `KAFKA_BROKERS` set, durable outbox fallback), consumers booted from `api/consumers.ts`; **codified topic catalog manifest** `infra/events/topics.json` (partitions, partition keys, DLQ policy) consumed by `scripts/kafka-topics.sh` (rpk, idempotent, smoke-tested 20 topic creates incl. DLQs); parity manifest↔`EventTopics`↔provisioner enforced by `api/tests/topic-catalog.test.ts` (4 tests pass) | Broker-side provisioning is script-driven, not yet a Terraform/helm resource | Terraform redpanda-topic resource when a provider is adopted |
 | EVT-2 | Producers/consumers, DLQs, retries, replay | ✅ | improved | `api/utils/events.ts`: consumer registry with retry semantics, `<topic>.dlq` Kafka sink + `event_dlq` table, replay that skips already-replayed DLQ rows; `api/tests/events-consumers.test.ts`, `events-replay.test.ts` pass; webhook fan-out HMAC + backoff | — | — |
 
 ### Security & audit (§27)

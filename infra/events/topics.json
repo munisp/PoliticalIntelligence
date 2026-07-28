@@ -1,0 +1,22 @@
+{
+  "$comment": "Redpanda/Kafka topic catalog manifest (EVT-1). Codified source for topic provisioning; kept in parity with EventTopics in contracts/entities.ts by api/tests/topic-catalog.test.ts. Applied by scripts/kafka-topics.sh.",
+  "defaults": {
+    "partitions": 6,
+    "replication_factor": 1,
+    "cleanup_policy": "delete",
+    "retention_ms": 604800000
+  },
+  "dlq": { "suffix": ".dlq", "partitions": 3, "retention_ms": 2592000000 },
+  "topics": [
+    { "name": "ingest.raw.received", "partition_key": "document_id" },
+    { "name": "documents.parse.requested", "partition_key": "document_id" },
+    { "name": "graph.index.updated", "partition_key": "jurisdiction_id" },
+    { "name": "features.materialized", "partition_key": "jurisdiction_id" },
+    { "name": "scenarios.run.requested", "partition_key": "scenario_id" },
+    { "name": "simulations.run.completed", "partition_key": "scenario_id" },
+    { "name": "recommendations.generated", "partition_key": "jurisdiction_id" },
+    { "name": "reports.generated", "partition_key": "jurisdiction_id" },
+    { "name": "audit.events", "partition_key": "month", "cleanup_policy": "compact", "retention_ms": -1 },
+    { "name": "ops.alerts", "partition_key": "job_id", "partitions": 3 }
+  ]
+}

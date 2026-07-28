@@ -17,19 +17,21 @@ BROKERS="${1:-${RPK_BROKERS:-redpanda:9092}}"
 PARTITIONS="${PARTITIONS:-3}"
 REPLICAS="${REPLICAS:-1}"
 
-# Topic catalog — keep in sync with contracts/entities.ts EventTopics.
-TOPICS="
-ingest.raw.received
-documents.parse.requested
-graph.index.updated
-features.materialized
-scenarios.run.requested
-simulations.run.completed
-recommendations.generated
-reports.generated
-audit.events
-ops.alerts
-"
+# Topic catalog comes from the codified manifest infra/events/topics.json
+# (parity with contracts/entities.ts EventTopics enforced by
+# api/tests/topic-catalog.test.ts). Node extracts the topic names; a grep
+# fallback keeps the script usable where node is absent.
+MANIFEST="$(cd "$(dirname "$0")" && pwd)/../infra/events/topics.json"
+MANIFEST="${TOPICS_MANIFEST:-$MANIFEST}"
+if command -v node >/dev/null 2>&1; then
+  TOPICS="$(node -e "console.log(require('$MANIFEST').topics.map(t=>t.name).join(' '))")"
+else
+  TOPICS="$(grep -o '"name": "[^"]*"' "$MANIFEST" | sed 's/"name": "//;s/"//' | tr '\n' ' ')"
+fi
+if [ -z "$TOPICS" ]; then
+  echo "kafka-topics: no topics parsed from $MANIFEST" >&2
+  exit 1
+fi
 
 echo "kafka-topics: provisioning catalog on ${BROKERS} (p=${PARTITIONS} r=${REPLICAS})"
 
