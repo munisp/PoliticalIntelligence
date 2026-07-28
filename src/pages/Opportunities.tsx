@@ -11,8 +11,15 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { Toaster } from "@/components/ui/sonner";
+import type { FeatureCollection } from "geojson";
 import FilterBar, { type FilterBarValue } from "@/components/shared/FilterBar";
-import MapPanel, { type LgaDatum } from "@/components/shared/MapPanel";
+import MapPanel, {
+  type LgaDatum,
+  type MapMarker,
+} from "@/components/shared/MapPanel";
+import { isProcedureMissing } from "@/lib/innovations-client";
+import { useT } from "@/lib/LocaleContext";
+import OfflineBoundary from "@/lib/OfflineBoundary";
 import EvidenceDrawer, {
   type EvidenceSource,
 } from "@/components/shared/EvidenceDrawer";
@@ -26,6 +33,7 @@ import GenerateModal from "@/components/opportunities/GenerateModal";
 import {
   baseOpportunityScore,
   costPerJob,
+  facilityCountByType,
   formatDate,
   lgaLayerValue,
   metaOf,
@@ -53,12 +61,7 @@ const DEFAULT_FILTERS: FilterBarValue = {
 
 type SortId = "score" | "jobs" | "cost" | "freshness";
 
-const SORT_OPTIONS: { id: SortId; label: string }[] = [
-  { id: "score", label: "Score" },
-  { id: "jobs", label: "Jobs impact" },
-  { id: "cost", label: "Cost-efficiency" },
-  { id: "freshness", label: "Freshness" },
-];
+const SORT_OPTION_IDS = ["score", "jobs", "cost", "freshness"] as const;
 
 const SAVED_VIEWS = [
   { id: "sme-pipeline", label: "My views: SME pipeline" },
@@ -66,6 +69,33 @@ const SAVED_VIEWS = [
 ];
 
 const TERMINAL_JOB_STATES: JobStatus[] = ["succeeded", "failed", "canceled"];
+
+/** Per-LGA facility summary row (geo.lgaSummary envelope payload). */
+interface LgaSummaryRow {
+  unit_id: string;
+  name: string;
+  centroid_lat: number | null;
+  centroid_lon: number | null;
+  facility_count: number;
+  by_type: Record<string, number>;
+}
+
+/** Facility row (geo.facilitiesNear envelope payload). */
+interface FacilityNearRow {
+  facility_id: string;
+  type: string;
+  name: string;
+  lat: number;
+  lon: number;
+  distance_km: number;
+}
+
+/** Retry policy: never retry when the geo router is not deployed yet —
+ *  the map then degrades gracefully to the derived SVG grid. */
+const geoRetry = (count: number, err: unknown) =>
+  isProcedureMissing(err) ? false : count < 2;
+
+const bareLga = (name: string) => name.replace(/ LGA$/, "");
 
 /** Parse a citation string into drawer source fields. */
 function toEvidenceSource(row: {
@@ -93,25 +123,35 @@ function toEvidenceSource(row: {
   };
 }
 
-function freshnessFor(updatedAt: string | Date): {
+function freshnessFor(
+  updatedAt: string | Date,
+  t: ReturnType<typeof useT>,
+): {
   status: "healthy" | "stale" | "failing";
   label: string;
 } {
   const d = typeof updatedAt === "string" ? new Date(updatedAt) : updatedAt;
   const days = (Date.now() - d.getTime()) / 86_400_000;
   if (days <= 7)
-    return { status: "healthy", label: `Evidence fresh — updated ${formatDate(d)}` };
+    return {
+      status: "healthy",
+      label: t.opportunities.freshEvidence.replace("{date}", formatDate(d)),
+    };
   if (days <= 30)
-    return { status: "stale", label: `Newest evidence ${formatDate(d)} — within 30 days` };
+    return {
+      status: "stale",
+      label: t.opportunities.staleEvidence.replace("{date}", formatDate(d)),
+    };
   return {
     status: "failing",
-    label: `Evidence older than 30 days (${formatDate(d)}) — refresh recommended`,
+    label: t.opportunities.failingEvidence.replace("{date}", formatDate(d)),
   };
 }
 
 export default function Opportunities() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
+  const t = useT();
 
   /* ------------------------------ state ------------------------------ */
   const [filters, setFilters] = useState<FilterBarValue>(DEFAULT_FILTERS);
@@ -153,6 +193,62 @@ export default function Opportunities() {
     { staleTime: 300_000 },
   );
   const geoUnits = unwrapData<AdminUnitNode[]>(geoQuery.data) ?? [];
+
+  /* ---------------- geo API: real boundaries + facility summary -------- */
+  const boundariesQuery = trpc.geo.boundaries.useQuery(
+    { jurisdiction_id: JURISDICTION_ID },
+    { staleTime: 600_000, retry: geoRetry },
+  );
+  const boundaries = unwrapData<FeatureCollection>(boundariesQuery.data);
+  const boundariesOk =
+    !boundariesQuery.isError && (boundaries?.features?.length ?? 0) > 0;
+  const provenanceUrl = useMemo(() => {
+    const u = boundaries?.features?.[0]?.properties?.source_url;
+    return typeof u === "string" ? u : null;
+  }, [boundaries]);
+
+  const lgaSummaryQuery = trpc.geo.lgaSummary.useQuery(
+    { jurisdiction_id: JURISDICTION_ID },
+    { staleTime: 300_000, retry: geoRetry },
+  );
+  const lgaSummary = unwrapData<{ items: LgaSummaryRow[] }>(
+    lgaSummaryQuery.data,
+  );
+  const summaryByName = useMemo(() => {
+    const m = new Map<string, LgaSummaryRow>();
+    for (const row of lgaSummary?.items ?? []) m.set(bareLga(row.name), row);
+    return m;
+  }, [lgaSummary]);
+
+  /** Real per-LGA facility counts (drives choropleth + tooltips). */
+  const facilityCounts = useMemo<Record<string, number> | undefined>(() => {
+    if (summaryByName.size === 0) return undefined;
+    const rec: Record<string, number> = {};
+    for (const [name, row] of summaryByName) rec[name] = row.facility_count;
+    return rec;
+  }, [summaryByName]);
+
+  /** Real per-LGA school counts from the facility type breakdown. */
+  const schoolCounts = useMemo<Record<string, number> | undefined>(() => {
+    if (summaryByName.size === 0) return undefined;
+    const rec: Record<string, number> = {};
+    let any = false;
+    for (const [name, row] of summaryByName) {
+      rec[name] = facilityCountByType(row.by_type, /school|education|academy/i);
+      if (rec[name] > 0) any = true;
+    }
+    return any ? rec : undefined;
+  }, [summaryByName]);
+
+  /** Raw values that drive the real choropleth where the geo API provides
+   *  them; other layers keep the deterministic derived 0–1 index. */
+  const mapValues = useMemo<Record<string, number> | undefined>(() => {
+    if (layer === "facilities") return facilityCounts;
+    if (layer === "schools") return schoolCounts;
+    return undefined;
+  }, [layer, facilityCounts, schoolCounts]);
+
+
   const lgaUnits = useMemo(
     () => geoUnits.filter((u) => u.adminLevel === "lga" || u.children.length === 0),
     [geoUnits],
@@ -160,7 +256,7 @@ export default function Opportunities() {
 
   const geographies = useMemo(
     () => [
-      { id: JURISDICTION_ID, label: "Kaduna State (all 23 LGAs)" },
+      { id: JURISDICTION_ID, label: t.opportunities.allLgas },
       ...lgaUnits.map((u) => ({ id: u.adminUnitId, label: `› ${u.name}` })),
     ],
     [lgaUnits],
@@ -168,6 +264,48 @@ export default function Opportunities() {
 
   const selectedLga = lgaUnits.find((u) => u.adminUnitId === filters.geography);
   const selectedLgaName = selectedLga?.name.replace(/ LGA$/, "") ?? null;
+
+  /* ------------- facilities-near-me markers (facilities layer) --------- */
+  const nearCenter = useMemo(() => {
+    const sel = selectedLgaName ? summaryByName.get(selectedLgaName) : undefined;
+    if (sel?.centroid_lat != null && sel.centroid_lon != null)
+      return { lat: sel.centroid_lat, lon: sel.centroid_lon, radius: 25 };
+    const pts = [...summaryByName.values()].filter(
+      (r) => r.centroid_lat != null && r.centroid_lon != null,
+    );
+    if (pts.length === 0) return null;
+    return {
+      lat: pts.reduce((a, r) => a + (r.centroid_lat ?? 0), 0) / pts.length,
+      lon: pts.reduce((a, r) => a + (r.centroid_lon ?? 0), 0) / pts.length,
+      radius: 60,
+    };
+  }, [summaryByName, selectedLgaName]);
+
+  const facilitiesNearQuery = trpc.geo.facilitiesNear.useQuery(
+    {
+      lat: nearCenter?.lat ?? 0,
+      lon: nearCenter?.lon ?? 0,
+      radius_km: nearCenter?.radius ?? 25,
+      limit: 100,
+    },
+    {
+      enabled: layer === "facilities" && nearCenter != null,
+      staleTime: 300_000,
+      retry: geoRetry,
+    },
+  );
+  const facilityMarkers = useMemo<MapMarker[]>(() => {
+    const rows =
+      (unwrapData<FacilityNearRow[]>(facilitiesNearQuery.data) ?? []).filter(
+        (f) => Number.isFinite(f.lat) && Number.isFinite(f.lon),
+      );
+    return rows.map((f) => ({
+      lat: f.lat,
+      lon: f.lon,
+      label: f.name,
+      type: f.type,
+    }));
+  }, [facilitiesNearQuery.data]);
 
   /* --------------------- filtering, sorting, mapping ------------------ */
   const visibleItems = useMemo(() => {
@@ -227,8 +365,8 @@ export default function Opportunities() {
       setCompareIds((prev) => {
         if (prev.includes(id)) return prev.filter((x) => x !== id);
         if (prev.length >= 3) {
-          toast.warning("Compare tray is full (3/3).", {
-            description: "Remove an opportunity before adding another.",
+          toast.warning(t.opportunities.compareTrayFull, {
+            description: t.opportunities.compareTrayFullDesc,
           });
           return prev;
         }
@@ -269,15 +407,15 @@ export default function Opportunities() {
     if (!jobStatus || !activeJobId || notifiedJob.current === activeJobId) return;
     if (jobStatus.status === "succeeded") {
       notifiedJob.current = activeJobId;
-      toast.success("Opportunity generation complete.", {
-        description: "The ranking list has been refreshed.",
+      toast.success(t.opportunities.generationComplete, {
+        description: t.opportunities.generationCompleteDesc,
       });
       void utils.opportunities.rankings.invalidate();
       setActiveJobId(null);
     } else if (jobStatus.status === "failed" || jobStatus.status === "canceled") {
       notifiedJob.current = activeJobId;
-      toast.error(`Generation job ${jobStatus.status}.`, {
-        description: jobStatus.error ?? "See the Jobs indicator for details.",
+      toast.error(t.opportunities.generationFailed.replace("{status}", jobStatus.status), {
+        description: jobStatus.error ?? t.opportunities.generationFailedDesc,
       });
       setActiveJobId(null);
     }
@@ -320,9 +458,20 @@ export default function Opportunities() {
   const simulate = (id: string) =>
     navigate(`/simulation?opportunity=${encodeURIComponent(id)}`);
 
+  /** Click on a boundary polygon → scope the explorer to that LGA. */
+  const onSelectUnit = useCallback(
+    (name: string) => {
+      const unit = lgaUnits.find((u) => bareLga(u.name) === name);
+      if (unit)
+        applyFilters({ ...filters, geography: unit.adminUnitId });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lgaUnits, filters],
+  );
+
   const geographyPath = selectedLgaName
-    ? `Kaduna State › ${selectedLgaName}`
-    : "Kaduna State › All LGAs";
+    ? `${t.common.jurisdiction} › ${selectedLgaName}`
+    : t.opportunities.allLgasPath;
 
   /* ----------------------- keyboard list navigation --------------------- */
   const onListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -354,24 +503,24 @@ export default function Opportunities() {
 
   /* ------------------------------ render ------------------------------ */
   const rankingList = (
-    <div className="space-y-2" onKeyDown={onListKeyDown} aria-label="Ranked opportunities">
+    <div className="space-y-2" onKeyDown={onListKeyDown} aria-label={t.opportunities.rankedOpportunities}>
       {rankingsQuery.isLoading &&
         Array.from({ length: 6 }).map((_, i) => <SkeletonRankingRow key={i} />)}
 
       {rankingsQuery.isError && (
         <EmptyState
-          title="Rankings failed to load"
+          title={t.opportunities.errorRankings}
           guidance={rankingsQuery.error.message}
           showSpotArt={false}
-          action={{ label: "Retry", onClick: () => void rankingsQuery.refetch() }}
+          action={{ label: t.action.retry, onClick: () => void rankingsQuery.refetch() }}
         />
       )}
 
       {!rankingsQuery.isLoading && !rankingsQuery.isError && visibleItems.length === 0 && (
         <EmptyState
-          title="No opportunities match these filters"
-          guidance="Lower the confidence floor or generate a new analysis for this sector and geography."
-          action={{ label: "Reset filters", onClick: resetFilters }}
+          title={t.opportunities.emptyTitle}
+          guidance={t.opportunities.emptyGuidance}
+          action={{ label: t.action.reset, onClick: resetFilters }}
         />
       )}
 
@@ -416,7 +565,7 @@ export default function Opportunities() {
     <div className="space-y-2 lg:sticky lg:top-[88px]">
       <div
         role="group"
-        aria-label="Map layers"
+        aria-label={t.opportunities.mapLayers}
         className="flex flex-wrap items-center gap-1.5"
       >
         {MAP_LAYERS.map((l) => (
@@ -437,10 +586,22 @@ export default function Opportunities() {
         ))}
       </div>
       <MapPanel
-        title="Kaduna State — LGA choropleth"
+        title={t.opportunities.mapTitle}
         data={mapData}
+        geoJson={boundariesOk && boundaries ? boundaries : undefined}
+        values={mapValues}
+        facilityCounts={facilityCounts}
+        onSelectUnit={onSelectUnit}
+        selectedUnit={selectedLgaName}
+        markers={layer === "facilities" ? facilityMarkers : undefined}
+        provenanceUrl={provenanceUrl}
         legendLabel={MAP_LAYERS.find((l) => l.id === layer)?.legend}
       />
+      {layer === "facilities" && facilitiesNearQuery.isError && (
+        <p className="text-[11px] text-ink-muted" role="status">
+          {t.opportunities.markersUnavailable}
+        </p>
+      )}
     </div>
   );
 
@@ -457,14 +618,14 @@ export default function Opportunities() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="caption-label text-ink-muted">
-            Kaduna State · Opportunity Explorer
+            {t.opportunities.caption}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.01em] text-ink-primary">
-            Sector Opportunity Explorer
+            {t.opportunities.title}
           </h1>
           <p className="mt-1 text-[13px] text-ink-secondary">
-            {allItems.length} ranked opportunities · Scoring model v2.4
-            {generatedDate ? ` · Generated ${formatDate(new Date(generatedDate))}` : ""}
+            {t.opportunities.subtitle.replace("{count}", String(allItems.length))}
+            {generatedDate ? ` · ${t.opportunities.generatedAt.replace("{date}", formatDate(new Date(generatedDate)))}` : ""}
           </p>
           {/* Live async job status (aria-live per design.md §6) */}
           <div aria-live="polite" className="mt-1.5 min-h-5">
@@ -488,16 +649,14 @@ export default function Opportunities() {
             onClick={() => {
               if (compareIds.length >= 2) setCompareOpen(true);
               else if (compareIds.length > 0)
-                toast.info("Select at least 2 opportunities to compare.");
+                toast.info(t.opportunities.compareMinTwo);
               else
-                toast.info(
-                  "Add opportunities to the compare tray from a row (keyboard: C).",
-                );
+                toast.info(t.opportunities.compareHowTo);
             }}
             className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle bg-ink-surface px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors hover:border-ink-strong hover:text-ink-primary"
           >
             <GitCompareArrows aria-hidden className="h-4 w-4" />
-            Compare ({compareIds.length}/3)
+            {t.opportunities.compare} ({compareIds.length}/3)
           </button>
           <button
             type="button"
@@ -505,7 +664,7 @@ export default function Opportunities() {
             className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3.5 py-1.5 text-sm font-medium text-ink-base transition-transform hover:bg-civic-strong active:scale-[0.98]"
           >
             <Sparkles aria-hidden className="h-4 w-4" />
-            Generate opportunities
+            {t.opportunities.generate}
           </button>
         </div>
       </header>
@@ -532,22 +691,22 @@ export default function Opportunities() {
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
               <label className="flex items-center gap-2">
                 <ArrowUpDown aria-hidden className="h-3.5 w-3.5 text-ink-muted" />
-                <span className="caption-label text-ink-muted">Sort</span>
+                <span className="caption-label text-ink-muted">{t.opportunities.sort}</span>
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value as SortId)}
                   className="rounded-md border border-ink-subtle bg-ink-surface px-2 py-1 text-xs text-ink-primary"
                 >
-                  {SORT_OPTIONS.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
+                  {SORT_OPTION_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {{ score: t.opportunities.sortScore, jobs: t.opportunities.sortJobs, cost: t.opportunities.sortCost, freshness: t.opportunities.sortFreshness }[id]}
                     </option>
                   ))}
                 </select>
               </label>
               <span className="text-xs text-ink-secondary" aria-live="polite">
                 <span className="font-mono text-ink-primary">{visibleItems.length}</span>{" "}
-                opportunities
+                {t.opportunities.resultsCount}
               </span>
               {selectedLgaName && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-civic/50 bg-civic/10 px-2.5 py-0.5 text-[11px] font-medium text-civic">
@@ -555,7 +714,7 @@ export default function Opportunities() {
                   <button
                     type="button"
                     onClick={() => applyFilters({ ...filters, geography: JURISDICTION_ID })}
-                    aria-label={`Clear ${selectedLgaName} geography filter`}
+                    aria-label={t.opportunities.clearGeography.replace("{name}", selectedLgaName)}
                     className="rounded-full text-civic/80 hover:text-civic-strong"
                   >
                     ×
@@ -564,7 +723,7 @@ export default function Opportunities() {
               )}
               {floorAboveData && (
                 <span className="text-[11px] text-status-warning">
-                  Confidence floor is above all available scores — lower it to see results.
+                  {t.opportunities.floorAboveData}
                 </span>
               )}
               <button
@@ -573,27 +732,27 @@ export default function Opportunities() {
                 className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink-primary"
               >
                 <RotateCcw aria-hidden className="h-3 w-3" />
-                Reset
+                {t.action.reset}
               </button>
             </div>
           </div>
 
           {/* Mobile / tablet: List | Map tabs (map is sticky side panel ≥1280px) */}
-          <div className="flex gap-1.5 lg:hidden" role="tablist" aria-label="Explorer view">
-            {(["list", "map"] as const).map((t) => (
+          <div className="flex gap-1.5 lg:hidden" role="tablist" aria-label={t.opportunities.explorerView}>
+            {(["list", "map"] as const).map((tab) => (
               <button
-                key={t}
+                key={tab}
                 role="tab"
-                aria-selected={mobileTab === t}
-                onClick={() => setMobileTab(t)}
+                aria-selected={mobileTab === tab}
+                onClick={() => setMobileTab(tab)}
                 className={cn(
                   "rounded-full border px-3 py-1 text-xs font-medium capitalize",
-                  mobileTab === t
+                  mobileTab === tab
                     ? "border-civic bg-civic/10 text-civic"
                     : "border-ink-subtle bg-ink-surface text-ink-secondary",
                 )}
               >
-                {t === "list" ? "List" : "Map"}
+                {tab === "list" ? t.opportunities.listTab : t.opportunities.mapTab}
               </button>
             ))}
           </div>
@@ -601,13 +760,20 @@ export default function Opportunities() {
           {/* --------------------- Main: list (7) + map (5) --------------------- */}
           <div className="grid gap-4 lg:grid-cols-12">
             <section
-              aria-label="Ranked opportunities list"
+              aria-label={t.opportunities.rankedListAria}
               className={cn("lg:col-span-7", mobileTab === "map" && "hidden lg:block")}
             >
-              {rankingList}
+              <OfflineBoundary
+                isLoading={rankingsQuery.isLoading}
+                hasData={allItems.length > 0}
+                onRetry={() => void rankingsQuery.refetch()}
+                label={t.opportunities.rankedOpportunities}
+              >
+                {rankingList}
+              </OfflineBoundary>
             </section>
             <section
-              aria-label="Opportunity map"
+              aria-label={t.opportunities.mapAria}
               className={cn("lg:col-span-5", mobileTab === "list" && "hidden lg:block")}
             >
               {mapPanel}
@@ -627,7 +793,7 @@ export default function Opportunities() {
       <EvidenceDrawer
         open={evidenceFor != null}
         onClose={() => setEvidenceFor(null)}
-        title={evidenceItem?.title ?? "Opportunity evidence"}
+        title={evidenceItem?.title ?? t.opportunities.evidenceTitle}
         sources={(evidenceDetail?.evidence_bundle ?? []).map(toEvidenceSource)}
         excerpts={(evidenceDetail?.evidence_bundle ?? [])
           .filter((e) => e.contentExcerpt)
@@ -636,15 +802,15 @@ export default function Opportunities() {
             text: e.contentExcerpt as string,
           }))}
         freshness={
-          evidenceItem ? freshnessFor(evidenceItem.updatedAt) : undefined
+          evidenceItem ? freshnessFor(evidenceItem.updatedAt, t) : undefined
         }
         requestId={evidenceMeta?.request_id}
         onOpenDocument={(s) =>
-          toast.info("Source retrieval path", {
+          toast.info(t.opportunities.sourceRetrievalPath, {
             description:
               (evidenceDetail?.evidence_bundle ?? []).find(
                 (e) => e.evidenceSourceId === s.id,
-              )?.retrievalPath ?? "No retrieval path recorded.",
+              )?.retrievalPath ?? t.opportunities.noRetrievalPath,
           })
         }
       />
