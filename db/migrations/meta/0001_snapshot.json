@@ -1326,7 +1326,7 @@
           "name": "payload",
           "type": "json",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "attempts": {
@@ -2612,7 +2612,7 @@
           "name": "jurisdiction_id",
           "type": "varchar(64)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "indicator_code": {
@@ -3506,7 +3506,7 @@
           "name": "jurisdiction_id",
           "type": "varchar(64)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "sector_code": {
