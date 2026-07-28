@@ -6,6 +6,7 @@ import { unwrap } from "@/lib/trpc-data";
 import { useAuth } from "@/hooks/useAuth";
 import { EmptyState, SkeletonTable } from "@/components/shared";
 import InnovationPage, { InnovationError } from "@/components/innovations/InnovationPage";
+import { useT } from "@/lib/LocaleContext";
 import { useVerifyAuditChain } from "@/lib/innovations-client";
 
 interface AuditEventRow {
@@ -25,6 +26,7 @@ interface AuditPage {
 }
 
 export default function AuditExplorer() {
+  const t = useT();
   const { isAuthenticated } = useAuth();
   const [entityType, setEntityType] = useState("");
   const [actionFilter, setActionFilter] = useState("");
@@ -71,7 +73,7 @@ export default function AuditExplorer() {
 
   return (
     <InnovationPage
-      title="Audit Explorer"
+      title={t.innovations.auditTitle}
       description="Immutable, append-only event timeline. Every mutation on the platform is recorded with actor, request id, and payload — verifiable as a hash chain."
       Icon={ScrollText}
       actions={
