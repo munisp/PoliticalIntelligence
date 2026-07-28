@@ -6,6 +6,7 @@ import {
   TRUST_SCORE_WEIGHTS,
   UNKNOWN_SOURCE_AUTHORITY,
   backtestRunInput,
+  calibrationReportInput,
   optimizePortfolioInput,
   parseScenarioTextInput,
   policyDiffInput,
@@ -56,6 +57,7 @@ import { computePolicyDiff } from "./lib/policy-diff";
 import { findJob, insertJob } from "./queries/admin";
 import { enqueuePersistedJob } from "./runner";
 import { runFallbackEngine } from "./bridges/simulation";
+import { calibrationReport } from "./bridges/backtest";
 import { copilotQuery } from "./bridges/ai";
 import { deliverWebhooks } from "./utils/events";
 import { llmRoutingDecisions } from "./utils/metrics";
@@ -324,6 +326,27 @@ export const innovationsRouter = createRouter({
         );
       }),
   }),
+
+  /* 4b. SIM-5 walk-forward calibration report --------------------------- */
+  calibrationReport: authedQuery
+    .input(calibrationReportInput)
+    .query(async ({ ctx, input }) => {
+      requireRole(ctx, ["simulation_specialist", "policy_analyst"]);
+      await assertJurisdictionAccess(ctx, input.jurisdiction_id, "read");
+      const engines = input.engines ?? [...SIMULATION_ENGINES];
+      const report = calibrationReport(input.jurisdiction_id, engines, input.seed);
+      audit(ctx, "innovations.calibrationReport.viewed", {
+        type: "jurisdiction",
+        id: input.jurisdiction_id,
+        scopes: ["innovations:backtest"],
+        payload: {
+          engines,
+          cutoffs: report.cutoffs,
+          report_hash: report.report_hash,
+        },
+      });
+      return envelope(report, ctx);
+    }),
 
   /* 5. Sector jobs-multiplier library ----------------------------------- */
   multipliers: createRouter({
