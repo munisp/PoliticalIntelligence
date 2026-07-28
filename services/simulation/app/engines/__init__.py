@@ -20,12 +20,19 @@ from app.models import EngineResult, Reproducibility, ScenarioConfig, ModelPlanE
 
 @dataclass
 class EngineContext:
-    """Inputs passed to every engine."""
+    """Inputs passed to every engine.
+
+    ``panel`` (G2): optional realized-data panel — a list of unit records
+    (dicts with treated/outcome/covariates) or aggregated outcome
+    observations (dicts with period/indicator/value). When present, engines
+    that support realized data (causal) use it instead of their synthetic
+    panel and record ``data_mode: "realized"`` in result metadata."""
     config: ScenarioConfig
     plan: ModelPlanEntry
     jurisdiction: seed_data.Jurisdiction
     assumptions: seed_data.AssumptionsSet
     random_seed: int
+    panel: list[dict] | None = None
 
     @property
     def rng(self) -> np.random.Generator:
