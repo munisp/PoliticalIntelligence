@@ -7,6 +7,8 @@ import {
   Loader2,
   FlaskConical,
   CircleAlert,
+  ScrollText,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
@@ -253,6 +255,283 @@ function useQueueRun(onQueued: (info: QueuedRunInfo) => void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* G3: "From legislation" mode — bill → parameter candidates review    */
+/* ------------------------------------------------------------------ */
+
+const PARAM_MAP_INSTRUMENTS = [
+  "tax_credit",
+  "subsidy",
+  "grant",
+  "procurement_quota",
+  "training_levy",
+  "regulatory_threshold",
+  "penalty",
+] as const;
+const PARAM_MAP_SECTORS = [
+  "",
+  "agriculture",
+  "manufacturing",
+  "ICT",
+  "construction",
+  "energy",
+  "health",
+  "education",
+] as const;
+
+export interface BillCandidate {
+  instrument: string;
+  scale_percent?: number | null;
+  amount_ngn?: number | null;
+  duration_months?: number | null;
+  sector?: string | null;
+  target_population: string[];
+  confidence: number;
+  rationale: {
+    clause_id: string;
+    section_path: string;
+    span: string;
+    parameter: string;
+  }[];
+  requires_analyst_review: true;
+}
+
+interface BillMapData {
+  law_id: string | null;
+  mapper_source: "service" | "fallback";
+  candidates: BillCandidate[];
+  clause_count: number;
+  requires_analyst_review: true;
+}
+
+function rationaleTooltip(c: BillCandidate): string {
+  return c.rationale
+    .map((r) => `${r.section_path} · ${r.parameter}: "${r.span}"`)
+    .join("\n");
+}
+
+function LegislationMode({
+  onApply,
+}: {
+  onApply: (c: BillCandidate, lawTitle: string) => void;
+}) {
+  const lawsQuery = trpc.legislation.laws.useQuery(
+    { limit: 100 },
+    { staleTime: 60_000 },
+  );
+  const laws = useMemo(
+    () =>
+      unwrapApi<{ items: { lawId: string; title: string }[] } | undefined>(
+        lawsQuery.data,
+      )?.items ?? [],
+    [lawsQuery.data],
+  );
+  const [lawId, setLawId] = useState("");
+  const [candidates, setCandidates] = useState<BillCandidate[]>([]);
+  const [meta, setMeta] = useState<{ source: string; clauseCount: number } | null>(null);
+  const [applied, setApplied] = useState<number | null>(null);
+  const mapMut = trpc.scenarios.mapBillToParameters.useMutation();
+
+  const lawTitle = laws.find((l) => l.lawId === lawId)?.title ?? lawId;
+  const busy = mapMut.isPending;
+
+  const fetchCandidates = async () => {
+    if (!lawId || busy) return;
+    setApplied(null);
+    try {
+      const res = await mapMut.mutateAsync({ law_id: lawId });
+      const data = unwrapApi<BillMapData | undefined>(res);
+      setCandidates(data?.candidates ?? []);
+      setMeta(
+        data
+          ? { source: data.mapper_source, clauseCount: data.clause_count }
+          : null,
+      );
+    } catch {
+      setCandidates([]);
+      setMeta(null);
+    }
+  };
+
+  const edit = (i: number, patch: Partial<BillCandidate>) =>
+    setCandidates((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+
+  return (
+    <div className="space-y-3">
+      <p className="flex items-center gap-2 rounded-md border border-civic/30 bg-civic/5 px-3 py-2 text-[13px] text-ink-secondary">
+        <ScrollText aria-hidden className="h-3.5 w-3.5 text-civic" />
+        Simulate this bill — deterministic rule mapping, no LLM. Every
+        candidate requires analyst review before it touches the scenario.
+      </p>
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <FieldLabel htmlFor="bill-law">Law</FieldLabel>
+          <select
+            id="bill-law"
+            value={lawId}
+            onChange={(e) => {
+              setLawId(e.target.value);
+              setCandidates([]);
+              setApplied(null);
+            }}
+            className={inputCls}
+          >
+            <option value="">Select a law…</option>
+            {laws.map((l) => (
+              <option key={l.lawId} value={l.lawId}>
+                {l.title}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          disabled={!lawId || busy}
+          onClick={fetchCandidates}
+          className="rounded-md border border-civic/50 px-3 py-2 text-xs font-medium text-civic hover:bg-civic/10 disabled:opacity-50"
+        >
+          {busy ? (
+            <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            "Fetch candidates"
+          )}
+        </button>
+      </div>
+
+      {mapMut.isError && (
+        <p role="alert" className="flex items-start gap-1.5 rounded border border-status-danger/40 bg-status-danger/10 px-2 py-1.5 text-xs text-status-danger">
+          <CircleAlert aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Could not map this bill — check role and law access.
+        </p>
+      )}
+
+      {meta && (
+        <p className="font-mono text-[11px] text-ink-muted">
+          {candidates.length} candidate{candidates.length === 1 ? "" : "s"} from{" "}
+          {meta.clauseCount} clauses · mapper: {meta.source} · review required
+        </p>
+      )}
+
+      {candidates.length > 0 && (
+        <div className="overflow-x-auto rounded-md border border-ink-subtle">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-ink-subtle bg-ink-inset/60 font-mono text-[10px] uppercase tracking-wide text-ink-muted">
+                <th className="px-2 py-2">Instrument</th>
+                <th className="px-2 py-2">Scale %</th>
+                <th className="px-2 py-2">Sector</th>
+                <th className="px-2 py-2">Months</th>
+                <th className="px-2 py-2">Confidence</th>
+                <th className="px-2 py-2" aria-label="Apply" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-subtle/60">
+              {candidates.map((c, i) => (
+                <tr key={i} className="bg-ink-surface">
+                  <td className="px-2 py-1.5">
+                    <select
+                      aria-label={`Instrument for candidate ${i + 1}`}
+                      value={c.instrument}
+                      onChange={(e) => edit(i, { instrument: e.target.value })}
+                      className="w-full rounded border border-ink-subtle bg-ink-inset px-1.5 py-1 font-mono text-[11px] text-ink-primary"
+                    >
+                      {PARAM_MAP_INSTRUMENTS.map((inst) => (
+                        <option key={inst} value={inst}>
+                          {inst}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="number"
+                      aria-label={`Scale percent for candidate ${i + 1}`}
+                      value={c.scale_percent ?? ""}
+                      placeholder="—"
+                      onChange={(e) =>
+                        edit(i, {
+                          scale_percent:
+                            e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                      className="w-20 rounded border border-ink-subtle bg-ink-inset px-1.5 py-1 font-mono text-[11px] text-ink-primary"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <select
+                      aria-label={`Sector for candidate ${i + 1}`}
+                      value={c.sector ?? ""}
+                      onChange={(e) =>
+                        edit(i, { sector: e.target.value || null })
+                      }
+                      className="rounded border border-ink-subtle bg-ink-inset px-1.5 py-1 font-mono text-[11px] text-ink-primary"
+                    >
+                      {PARAM_MAP_SECTORS.map((s) => (
+                        <option key={s} value={s}>
+                          {s || "—"}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="number"
+                      aria-label={`Duration months for candidate ${i + 1}`}
+                      value={c.duration_months ?? ""}
+                      placeholder="—"
+                      onChange={(e) =>
+                        edit(i, {
+                          duration_months:
+                            e.target.value === ""
+                              ? null
+                              : Math.trunc(Number(e.target.value)),
+                        })
+                      }
+                      className="w-16 rounded border border-ink-subtle bg-ink-inset px-1.5 py-1 font-mono text-[11px] text-ink-primary"
+                    />
+                  </td>
+                  <td
+                    className="px-2 py-1.5 font-mono text-[11px] text-civic"
+                    title={rationaleTooltip(c)}
+                  >
+                    {(c.confidence * 100).toFixed(0)}%
+                    <span className="ml-1 cursor-help text-ink-muted underline decoration-dotted">
+                      why
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {applied === i ? (
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-civic">
+                        <Check aria-hidden className="h-3 w-3" /> Applied
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onApply(c, lawTitle);
+                          setApplied(i);
+                        }}
+                        className="rounded border border-civic/50 px-2 py-1 text-[11px] font-medium text-civic hover:bg-civic/10"
+                      >
+                        Approve
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {meta && candidates.length === 0 && (
+        <p className="text-[13px] text-ink-muted">
+          No instrument clauses detected in this law — map parameters manually.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Executive limited mode — template picker                            */
 /* ------------------------------------------------------------------ */
 
@@ -476,6 +755,42 @@ function SpecialistBuilder({
   const busy = phase !== "idle";
   const nameValid = name.trim().length >= 3;
 
+  /* G3: apply an approved bill-derived candidate to the scenario form. */
+  const applyCandidate = (c: BillCandidate, lawTitle: string) => {
+    const src = c.rationale.find((r) => r.parameter === "instrument");
+    const parts = [
+      `Derived from ${lawTitle}${src ? ` (${src.section_path})` : ""}`,
+      `instrument=${c.instrument}`,
+      c.sector ? `sector=${c.sector}` : null,
+      c.scale_percent != null ? `scale=${c.scale_percent}%` : null,
+      c.amount_ngn != null ? `amount=₦${formatNumber(c.amount_ngn)}` : null,
+      c.target_population.length
+        ? `population=${c.target_population.join("/")}`
+        : null,
+    ].filter(Boolean);
+    setDescription(parts.join(" · "));
+    if (name.trim().length < 3 || name === "Teacher recruitment surge FY25")
+      setName(`${lawTitle.slice(0, 60)} — simulation`);
+    if (c.scale_percent != null) {
+      const lever = meta.levers.find((l) => l.key === "intervention_strength");
+      if (lever)
+        setLevers((s) => ({
+          ...s,
+          intervention_strength: Math.min(
+            lever.max,
+            Math.max(lever.min, c.scale_percent! / 100),
+          ),
+        }));
+    }
+    if (c.duration_months != null) {
+      const years = c.duration_months / 12;
+      const nearest = HORIZONS.reduce((a, b) =>
+        Math.abs(b - years) < Math.abs(a - years) ? b : a,
+      );
+      setHorizon(nearest);
+    }
+  };
+
   const submit = () => {
     if (busy || !nameValid) return;
     const overrides = Object.fromEntries(
@@ -528,7 +843,14 @@ function SpecialistBuilder({
         animate="show"
         variants={{ show: { transition: { staggerChildren: 0.05 } } }}
       >
-        {/* 1. Basics */}
+        {/* 1. From legislation (G3) */}
+        <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }} transition={{ duration: 0.24, ease: EASE }}>
+          <AccordionSection id="legislation" title="From legislation" step={++step} open={open.has("legislation")} onToggle={toggleSection}>
+            <LegislationMode onApply={applyCandidate} />
+          </AccordionSection>
+        </motion.div>
+
+        {/* 2. Basics */}
         <motion.div variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }} transition={{ duration: 0.24, ease: EASE }}>
           <AccordionSection id="basics" title="Basics" step={++step} open={open.has("basics")} onToggle={toggleSection}>
             <div className="space-y-3">
