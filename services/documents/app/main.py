@@ -1,19 +1,22 @@
 """FastAPI surface: document upload → pipeline jobs, artifacts, quality."""
 from __future__ import annotations
 
+import json
 import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Form, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
 
 from app import CODE_VERSION
 from app.config import settings
 from app.errors import ServiceError
 from app.jobs import JobManager
 from app.logging_setup import configure_logging, get_logger
-from app.models import Audit, Envelope, ErrorEnvelope, Meta
+from app.models import Audit, Clause, Envelope, ErrorEnvelope, Meta
+from app.param_mapper import map_clauses_to_parameters
 from app.metrics import instrument, setup_tracing
 
 configure_logging(settings.log_level)
@@ -132,6 +135,44 @@ async def upload_document(
     })
 
 
+@app.post("/v1/akn/draft")
+async def render_draft_akn(request: Request):
+    """G4: Akoma Ntoso 3.0 for an evidence-grounded draft bill.
+
+    Body: {title, clauses: [{section_path, heading?, text, kind?}], ria?,
+           country?, doc_type?, year?, language?}
+    Returns {akn_xml, problems} — problems lists structural-check violations
+    (empty = well-formed per the AKN checklist).
+    """
+    from typing import Any
+
+    from app import akn as akn_mod
+
+    body: dict[str, Any] = await request.json()
+    title = body.get("title")
+    clauses = body.get("clauses")
+    if not title or not isinstance(clauses, list) or not clauses:
+        raise ServiceError(code="INVALID_DRAFT",
+                           message="title and a non-empty clauses list are required",
+                           http_status=422)
+    for c in clauses:
+        if not c.get("section_path") or not c.get("text"):
+            raise ServiceError(code="INVALID_DRAFT",
+                               message="each clause requires section_path and text",
+                               http_status=422)
+    xml = akn_mod.build_draft_akn(
+        title,
+        clauses,
+        ria=body.get("ria"),
+        country=body.get("country", "ng"),
+        doc_type=body.get("doc_type", "bill"),
+        year=body.get("year"),
+        language=body.get("language", "eng"),
+    )
+    problems = akn_mod.structural_check(xml)
+    return _envelope(request, {"akn_xml": xml, "problems": problems})
+
+
 @app.get("/v1/documents/{document_id}")
 async def get_document(document_id: str, request: Request):
     manager: JobManager = request.app.state.jobs
@@ -154,6 +195,38 @@ async def get_artifact(document_id: str, kind: str, request: Request):
 async def get_quality(document_id: str, request: Request):
     manager: JobManager = request.app.state.jobs
     return _envelope(request, manager.quality(document_id))
+
+
+class ParamMapRequest(BaseModel):
+    document_id: str | None = None
+    clauses: list[Clause] | None = None
+    top_k: int = 10
+
+
+@app.post("/v1/param-map")
+async def param_map(request: Request, body: ParamMapRequest):
+    """G3: map extracted legal constructs to ranked simulation-parameter
+    candidates (deterministic rules, analyst review required)."""
+    clauses: list[Clause]
+    if body.clauses is not None:
+        clauses = body.clauses
+    elif body.document_id:
+        manager: JobManager = request.app.state.jobs
+        try:
+            data, _media = manager.artifact(body.document_id, "clauses")
+        except ServiceError:
+            raise
+        except Exception:
+            raise ServiceError(code="DOCUMENT_NOT_FOUND",
+                               message=f"Document {body.document_id} not found",
+                               http_status=404)
+        clauses = [Clause(**c) for c in json.loads(data)]
+    else:
+        raise ServiceError(code="PARAM_MAP_INPUT_REQUIRED",
+                           message="Provide document_id or clauses",
+                           http_status=422)
+    result = map_clauses_to_parameters(clauses, top_k=body.top_k)
+    return _envelope(request, result.model_dump(mode="json"))
 
 
 @app.post("/v1/documents/{document_id}/reprocess", status_code=202)
