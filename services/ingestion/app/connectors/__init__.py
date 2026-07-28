@@ -10,6 +10,7 @@ from app.connectors.budeshi import BudeshiConnector
 from app.connectors.file_harvester import FileHarvesterConnector
 from app.connectors.nbs_bulletin import NbsBulletinConnector
 from app.connectors.ubec_factsheet import UbecFactsheetConnector
+from app.connectors.nbs_outcomes import NbsOutcomesConnector
 
 REGISTRY: dict[str, type[BaseConnector]] = {
     c.name: c
@@ -22,6 +23,7 @@ REGISTRY: dict[str, type[BaseConnector]] = {
         FileHarvesterConnector,
         NbsBulletinConnector,
         UbecFactsheetConnector,
+        NbsOutcomesConnector,
     )
 }
 
