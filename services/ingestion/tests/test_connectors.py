@@ -200,6 +200,7 @@ def test_registry_complete():
     assert set(REGISTRY) == {"worldbank", "hdx", "overpass", "nada",
                              "budeshi", "file_harvester",
                              "nbs_bulletin", "ubec_factsheet",
-                             "nbs_outcomes"}
+                             "nbs_outcomes",
+                             "budget_office", "nass_bills"}
     for name in REGISTRY:
         assert get_connector(name).name == name
