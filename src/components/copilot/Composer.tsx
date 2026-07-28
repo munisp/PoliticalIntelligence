@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Brain, MapPin, Paperclip, SendHorizonal, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/LocaleContext";
 
 export interface ComposerProps {
   /** Pre-filled text (e.g. deep-linked "Ask Copilot…"). */
@@ -22,6 +23,7 @@ export default function Composer({
   pinnedCount,
   onSend,
 }: ComposerProps) {
+  const t = useT();
   const [text, setText] = useState(initialText ?? "");
   const [deep, setDeep] = useState(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -58,19 +60,17 @@ export default function Composer({
             rows={Math.min(4, Math.max(1, text.split("\n").length))}
             disabled={disabled}
             placeholder={
-              online
-                ? "Ask a grounded question about Kaduna State policy…"
-                : "Copilot requires connectivity"
+              online ? t.copilot.composerPlaceholder : t.copilot.composerOffline
             }
-            aria-label="Message the copilot"
+            aria-label={t.copilot.messageCopilot}
             className="max-h-32 flex-1 resize-none bg-transparent px-1.5 py-1 text-sm leading-[22px] text-ink-primary placeholder:text-ink-muted focus:outline-none disabled:cursor-not-allowed"
           />
           <span
             title={
               !online
-                ? "Copilot requires connectivity — cached conversations remain readable."
+                ? t.copilot.composerOfflineTitle
                 : sending
-                  ? "Waiting for the current answer…"
+                  ? t.copilot.waiting
                   : undefined
             }
           >
@@ -78,7 +78,7 @@ export default function Composer({
               type="button"
               onClick={submit}
               disabled={!canSend}
-              aria-label="Send message"
+              aria-label={t.copilot.sendMessage}
               className={cn(
                 "rounded-md p-2 transition-transform",
                 canSend
@@ -104,8 +104,8 @@ export default function Composer({
             className="inline-flex items-center gap-1 text-[11px] text-ink-muted"
             title={
               pinnedCount > 0
-                ? `Grounding against ${pinnedCount} pinned evidence source(s)`
-                : "Pin sources from an evidence bundle to ground follow-ups"
+                ? t.copilot.groundingPinned.replace("{count}", String(pinnedCount))
+                : t.copilot.pinHint
             }
           >
             <Paperclip aria-hidden className="h-3 w-3" />

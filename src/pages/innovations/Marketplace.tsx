@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
 import { ApprovalBadge, EmptyState, SkeletonCard, type ApprovalState } from "@/components/shared";
 import InnovationPage, { InnovationError } from "@/components/innovations/InnovationPage";
+import { useT } from "@/lib/LocaleContext";
 import {
   useMarketplaceList,
   useMarketplaceInstall,
@@ -51,6 +52,7 @@ interface ScenarioRow {
 }
 
 export default function Marketplace() {
+  const t = useT();
   const [installing, setInstalling] = useState<MarketplaceTemplate | null>(null);
   const [installedScenario, setInstalledScenario] = useState<string | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -83,7 +85,7 @@ export default function Marketplace() {
 
   return (
     <InnovationPage
-      title="Scenario Marketplace"
+      title={t.innovations.marketplaceTitle}
       description="Install reviewed scenario templates shared by other jurisdictions, or publish your own. Publishing goes through a human-review gate before templates become visible to others."
       Icon={Store}
       actions={
