@@ -22,6 +22,10 @@ import { generateRecommendation } from "./bridges/ai";
 import { executeScenarioRun, runFallbackEngine } from "./bridges/simulation";
 import { emitEvent, emitJobLifecycle } from "./utils/events";
 import {
+  buildSimulationRunManifest,
+  computeReproducibilityHash,
+} from "./utils/manifest";
+import {
   jobsTotal,
   jobsFailedTotal,
   simulationRunsTotal,
@@ -114,7 +118,12 @@ jobRunner.register("opportunities.generate", async ({ input, reportProgress }) =
   }
   await reportProgress(55);
 
-  const { recommendation, bridge } = await generateRecommendation({
+  // §9.2 contract enforcement: a recommendation that fails validation
+  // (after the bridge's single repair retry) fails the job — it is NEVER
+  // persisted. The failure is recorded in the audit trail.
+  let generated: Awaited<ReturnType<typeof generateRecommendation>>;
+  try {
+    generated = await generateRecommendation({
     opportunity: {
       opportunity_id: opp.opportunityId,
       title: opp.title,
@@ -134,9 +143,23 @@ jobRunner.register("opportunities.generate", async ({ input, reportProgress }) =
       confidence: e.confidence,
       excerpt: e.contentExcerpt,
     })),
-    legal_dependencies: legalDependencies,
-    simulation_scenarios: [],
-  });
+      legal_dependencies: legalDependencies,
+      simulation_scenarios: [],
+    });
+  } catch (err) {
+    const { RecommendationContractError } = await import("./utils/reco-contract");
+    if (err instanceof RecommendationContractError) {
+      await auditBackground(
+        actor_id,
+        "recommendations.contract_validation_failed",
+        "opportunity",
+        opportunity_id,
+        { errors: err.errors },
+      );
+    }
+    throw err; // job fails with the error envelope; nothing is persisted
+  }
+  const { recommendation, bridge, routing } = generated;
   recommendation.generated_at = new Date();
   await reportProgress(80);
 
@@ -149,12 +172,14 @@ jobRunner.register("opportunities.generate", async ({ input, reportProgress }) =
     approvalChain: [{ role: "policy_analyst", state: "generated", at: new Date().toISOString() }] as never,
     createdBy: actor_id,
   });
+  // AI-8: the model routing record is persisted to the immutable audit
+  // store on every generation, alongside the recommendations.generated event.
   await auditBackground(
     actor_id,
     "recommendations.generated",
     "recommendation",
     recommendation.recommendation_id,
-    { topic: EventTopics.recommendationsGenerated, bridge },
+    { topic: EventTopics.recommendationsGenerated, bridge, model_routing: routing },
   );
   return { recommendation_id: recommendation.recommendation_id, bridge };
 });
@@ -171,7 +196,7 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
   const scenario = await findScenario(run.scenarioId);
   await reportProgress(20);
 
-  const { result, bridge } = await executeScenarioRun({
+  const runParams = {
     scenario_id: run.scenarioId,
     engine: run.engine as SimulationEngine,
     seed: run.seed,
@@ -179,9 +204,27 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
     baseline_employment: 3_600_000, // Kaduna labour force scale
     intervention_strength: scenario?.modelPlan ? 0.6 : 0.4,
     execution_profile: (run.executionProfile as Record<string, unknown>) ?? {},
-  });
+  };
+  const { result, bridge } = await executeScenarioRun(runParams);
   await reportProgress(75);
   simulationRunsTotal.inc({ engine: run.engine, bridge });
+
+  // DM-3: persist the reproducibility manifest + content hashes so any run
+  // can be re-executed and verified (TEST-5 re-run harness recomputes this).
+  const manifest = buildSimulationRunManifest({
+    simulation_run_id,
+    scenario_id: run.scenarioId,
+    jurisdiction_id: scenario?.jurisdictionId ?? null,
+    engine: run.engine,
+    seed: run.seed,
+    horizon_months: runParams.horizon_months,
+    baseline_employment: runParams.baseline_employment,
+    intervention_strength: runParams.intervention_strength,
+    execution_profile: runParams.execution_profile,
+    model_versions: (run.modelVersions as Record<string, unknown>) ?? {},
+  });
+  const reproducibilityHash = computeReproducibilityHash(manifest, result);
+
   await emitEvent(
     EventTopics.simulationsRunCompleted,
     {
@@ -190,6 +233,7 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
       engine: run.engine,
       bridge,
       seed: run.seed,
+      reproducibility_hash: reproducibilityHash,
     },
     run.scenarioId,
   );
@@ -198,6 +242,9 @@ jobRunner.register("simulations.run", async ({ input, reportProgress }) => {
     status: "succeeded",
     progress: 100,
     resultSummary: result as never,
+    manifest: manifest as never,
+    datasetSnapshotId: manifest.dataset_snapshot_id,
+    reproducibilityHash,
     artifactUri: `artifacts://${run.scenarioId}/${simulation_run_id}.json`,
     finishedAt: new Date(),
   });
@@ -288,13 +335,31 @@ jobRunner.register("briefs.generate", async ({ input, reportProgress }) => {
   };
   await reportProgress(75);
 
+  // PII redaction on generated brief content BEFORE persistence (AI-11).
+  // Counts only are logged — never the redacted text.
+  const { redactPayload, logRedactionEvent } = await import("./utils/pii");
+  const piiCounts: Record<string, number> = {};
+  const safeContent =
+    process.env.PII_REDACTION === "off"
+      ? content
+      : (redactPayload(content, undefined, piiCounts) as typeof content);
+  logRedactionEvent("runner.briefs.generate.output", piiCounts);
+
+  const briefRouting = {
+    tier: "offline-fallback",
+    model: "deterministic",
+    fallback: true,
+    decided_at: new Date().toISOString(),
+  };
   await updateBrief(brief_id, {
-    content: content as never,
+    content: safeContent as never,
     reviewState: "in_review",
-    modelRouting: { tier: "offline-fallback", model: "deterministic", fallback: true } as never,
+    modelRouting: briefRouting as never,
   });
+  // AI-8: routing record persisted to the immutable audit store.
   await auditBackground(actor_id, "reports.generated", "brief", brief_id, {
     topic: EventTopics.reportsGenerated,
+    model_routing: briefRouting,
   });
   return { brief_id };
 });
