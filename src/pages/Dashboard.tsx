@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import {
@@ -8,6 +8,8 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
+import { useT } from "@/lib/LocaleContext";
+import OfflineBoundary from "@/lib/OfflineBoundary";
 import { approvalStateLabel } from "@/lib/trpc-data";
 import { ProvenanceChipFromInfo } from "@/components/provenance";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +28,9 @@ import JobTargetTracker, {
 } from "@/components/dashboard/JobTargetTracker";
 import TopRisks, { type RiskItem } from "@/components/dashboard/TopRisks";
 import SectorHighlights from "@/components/dashboard/SectorHighlights";
+/* GEO-MINIMAP: additive real-polygon LGA choropleth (lazy — the dashboard
+ * renders fine without it while the chunk / geo API loads). */
+const LgaMiniMap = lazy(() => import("@/components/dashboard/LgaMiniMap"));
 import ScenarioStrip, {
   type ScenarioCardData,
 } from "@/components/dashboard/ScenarioStrip";
@@ -62,6 +67,7 @@ function QueryError({
   onRetry: () => void;
   className?: string;
 }) {
+  const t = useT();
   return (
     <div
       role="alert"
@@ -72,7 +78,7 @@ function QueryError({
     >
       <p className="flex items-center gap-2 text-[13px] text-ink-secondary">
         <AlertTriangle aria-hidden className="h-4 w-4 text-status-danger" />
-        {label} couldn't be loaded — check your connection.
+        {label} {t.dashboard.couldNotLoad}
       </p>
       <button
         type="button"
@@ -80,7 +86,7 @@ function QueryError({
         className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle px-2.5 py-1 text-xs font-medium text-ink-secondary hover:border-ink-strong hover:text-ink-primary"
       >
         <RotateCcw aria-hidden className="h-3.5 w-3.5" />
-        Retry
+        {t.action.retry}
       </button>
     </div>
   );
@@ -101,6 +107,7 @@ const itemAnim = (i: number) => ({
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const t = useT();
 
   /* ------------------------------ queries ------------------------------ */
   const profileQ = trpc.jurisdictions.profile.useQuery({
@@ -403,16 +410,16 @@ export default function Dashboard() {
       >
         <div>
           <p className="caption-label text-ink-muted">
-            Kaduna State · Executive view
+            {t.dashboard.caption}
           </p>
           <h1 className="mt-1 text-[32px] font-semibold leading-10 tracking-[-0.02em] text-ink-primary">
-            Executive Dashboard
+            {t.dashboard.title}
           </h1>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-ink-secondary">
             <StatusDot status={freshnessStatus} />
-            <span>{freshness?.label ?? "Checking data freshness…"}</span>
+            <span>{freshness?.label ?? t.dashboard.checkingFreshness}</span>
             <span aria-hidden>·</span>
-            <span>All figures evidence-traced</span>
+            <span>{t.dashboard.evidenceTraced}</span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -432,7 +439,7 @@ export default function Dashboard() {
               className="inline-flex items-center gap-1.5 rounded-md border border-ink-subtle px-3 py-1.5 text-sm font-medium text-ink-secondary transition-colors duration-150 hover:border-ink-strong hover:text-ink-primary"
             >
               <MessageSquareText aria-hidden className="h-4 w-4" />
-              Ask Copilot about this page
+              {t.dashboard.askCopilot}
             </button>,
             <button
               key="scenario"
@@ -441,7 +448,7 @@ export default function Dashboard() {
               className="inline-flex items-center gap-1.5 rounded-md bg-civic px-3 py-1.5 text-sm font-medium text-ink-base transition-all duration-150 hover:bg-civic-strong active:scale-[0.98]"
             >
               <Plus aria-hidden className="h-4 w-4" />
-              New scenario
+              {t.dashboard.newScenario}
             </button>,
           ].map((el, i) => (
             <motion.div
@@ -463,14 +470,14 @@ export default function Dashboard() {
           className="flex items-center gap-2 rounded-md border border-status-warning/40 bg-status-warning/10 px-4 py-2.5 text-[13px] text-status-warning"
         >
           <AlertTriangle aria-hidden className="h-4 w-4 shrink-0" />
-          Figures older than 30 days — see{" "}
+          {t.dashboard.staleBannerPre}{" "}
           <Link
             to="/data-health"
             className="font-medium underline underline-offset-2 hover:text-ink-primary"
           >
-            Data Source Health
+            {t.dashboard.staleBannerLink}
           </Link>
-          . Last values are shown below with a stale flag.
+          {t.dashboard.staleBannerPost}
         </div>
       )}
 
@@ -478,12 +485,18 @@ export default function Dashboard() {
       {/* INNOVATIONS-PROVENANCE: jurisdiction provenance chip on the KPI row header */}
       {(profile as { provenance?: import("@/lib/innovations-client").ProvenanceInfo } | null)?.provenance && (
         <div className="flex items-center justify-end gap-2">
-          <span className="caption-label text-ink-muted">Jurisdiction data</span>
+          <span className="caption-label text-ink-muted">{t.dashboard.jurisdictionData}</span>
           <ProvenanceChipFromInfo
             provenance={(profile as { provenance?: import("@/lib/innovations-client").ProvenanceInfo }).provenance}
           />
         </div>
       )}
+      <OfflineBoundary
+        isLoading={profileQ.isLoading || runsLoading}
+        hasData={profile != null}
+        onRetry={() => profileQ.refetch()}
+        label={t.dashboard.errorKpis}
+      >
       {profileQ.isLoading || runsLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -492,21 +505,21 @@ export default function Dashboard() {
         </div>
       ) : profileQ.isError ? (
         <QueryError
-          label="Executive KPIs"
+          label={t.dashboard.errorKpis}
           onRetry={() => profileQ.refetch()}
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <motion.div {...itemAnim(0)}>
             <ExecutiveStatCard
-              label="Jobs supported YTD"
+              label={t.dashboard.kpiJobsYtd}
               value={jobsYtd}
               delta={ytdDelta}
-              deltaLabel="vs prior quarter"
+              deltaLabel={t.dashboard.kpiDeltaPriorQuarter}
               sparkline={sparkline}
               confidence={laborConfidence}
               evidenceCount={evidenceSources.length}
-              onOpenEvidence={() => openEvidence("Jobs supported YTD")}
+              onOpenEvidence={() => openEvidence(t.dashboard.kpiJobsYtd)}
             />
           </motion.div>
           <motion.div {...itemAnim(1)}>
@@ -516,7 +529,7 @@ export default function Dashboard() {
               onPace={onPace}
               scenarioCount={trackerRuns.length}
               confidence={laborConfidence}
-              onOpenEvidence={() => openEvidence("2027 target trajectory")}
+              onOpenEvidence={() => openEvidence(t.dashboard.kpiTrajectory)}
             />
           </motion.div>
           <motion.div {...itemAnim(2)}>
@@ -529,16 +542,16 @@ export default function Dashboard() {
               }
               confidence={unemployment.latest?.confidence}
               evidenceCount={evidenceSources.length}
-              caption="NBS LFS proxy · sector metrics"
-              onOpenEvidence={() => openEvidence("Youth unemployment (15–34)")}
+              caption={t.dashboard.kpiUnemploymentCaption}
+              onOpenEvidence={() => openEvidence(t.dashboard.kpiYouthUnemployment)}
             />
           </motion.div>
           <motion.div {...itemAnim(3)}>
             <ApprovalsKpiCard
               count={awaiting.length}
               breakdown={[
-                `${awaiting.filter((b) => b.reviewState === "approved").length} awaiting sign-off`,
-                `${awaiting.filter((b) => b.reviewState === "in_review").length} in review`,
+                `${awaiting.filter((b) => b.reviewState === "approved").length} ${t.dashboard.awaitingSignoff}`,
+                `${awaiting.filter((b) => b.reviewState === "in_review").length} ${t.dashboard.inReview}`,
               ]}
               onOpenQueue={() =>
                 document
@@ -549,10 +562,11 @@ export default function Dashboard() {
           </motion.div>
         </div>
       )}
+      </OfflineBoundary>
       {stale && (
         <p className="-mt-3 flex items-center gap-1.5 text-[11px] text-status-warning">
           <AlertTriangle aria-hidden className="h-3 w-3" />
-          Stale — KPI cards show the last known values.
+          {t.dashboard.staleKpiNote}
         </p>
       )}
 
@@ -563,7 +577,7 @@ export default function Dashboard() {
             <SkeletonTable rows={6} columns={3} />
           ) : scenariosQ.isError ? (
             <QueryError
-              label="Scenario projections"
+              label={t.dashboard.errorScenarios}
               onRetry={() => scenariosQ.refetch()}
             />
           ) : (
@@ -582,7 +596,7 @@ export default function Dashboard() {
         <SkeletonCard metric={false} lines={3} />
       ) : sectorsQ.isError || metricsQ.isError || oppsQ.isError ? (
         <QueryError
-          label="Sector highlights"
+          label={t.dashboard.errorSectors}
           onRetry={() => {
             sectorsQ.refetch();
             metricsQ.refetch();
@@ -596,6 +610,11 @@ export default function Dashboard() {
           opportunities={opportunities}
         />
       )}
+
+      {/* GEO-MINIMAP: real LGA boundary choropleth (220px, lazy, additive) */}
+      <Suspense fallback={<SkeletonCard metric={false} lines={3} />}>
+        <LgaMiniMap />
+      </Suspense>
 
       {/* Section 4 — Scenario summaries */}
       {runsLoading ? (
@@ -625,7 +644,7 @@ export default function Dashboard() {
               items={approvalItems}
               total={awaiting.length}
               canAct={canApprove}
-              disabledReason="Sign in with an executive or policy-analyst role to act on approvals."
+              disabledReason={t.dashboard.approvalsDisabledReason}
               approverName={user?.name ?? "Executive"}
             />
           )}
