@@ -1,0 +1,12 @@
+# G1 model-serving stack: vLLM Qwen3-8B deployment + service/HPA + Ray
+# Serve config. Wired into the staging and prod overlays (GPU clusters
+# only — the dev overlay intentionally excludes it, matching the rayserve
+# convention). See docs/GPU-GOLIVE.md for the eval-gated switch-on.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - vllm-deployment.yaml
+  - service.yaml
+  - rayserve-config.yaml
+commonLabels:
+  app.kubernetes.io/part-of: policy-twin
