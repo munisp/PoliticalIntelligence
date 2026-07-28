@@ -1,0 +1,90 @@
+{
+  "publication": "2025 Appropriation Act — Capital Expenditure by MDA (sample)",
+  "publication_type": "appropriation_act",
+  "fiscal_year": 2025,
+  "source_portal": "https://budgetoffice.gov.ng",
+  "note": "Offline fixture mirroring the 2025 appropriation capital publication shape; used when budgetoffice.gov.ng is unreachable. Records are stamped origin=derived.",
+  "lines": [
+    {
+      "mda": "Federal Ministry of Works",
+      "program_code": "FMW-2025-CAP-0014",
+      "description": "Rehabilitation of Abuja-Kaduna-Zaria-Kano dual carriageway (Section II)",
+      "sector": "works_infrastructure",
+      "amount_ngn": 118500000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Housing and Urban Development",
+      "program_code": "FMHUD-2025-CAP-0007",
+      "description": "Renewed Hope Cities and Estates Programme — Phase 1 (20,000 housing units)",
+      "sector": "housing",
+      "amount_ngn": 86200000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Power",
+      "program_code": "FMP-2025-CAP-0022",
+      "description": "Presidential Power Initiative — transmission substations and grid expansion",
+      "sector": "power",
+      "amount_ngn": 150000000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Agriculture and Food Security",
+      "program_code": "FMAFS-2025-CAP-0003",
+      "description": "National Agricultural Growth Scheme — mechanization and input support",
+      "sector": "agriculture",
+      "amount_ngn": 62500000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Health and Social Welfare",
+      "program_code": "FMHSW-2025-CAP-0011",
+      "description": "Upgrade of federal tertiary hospitals — oncology and diagnostic centres",
+      "sector": "health",
+      "amount_ngn": 98400000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Education",
+      "program_code": "FME-2025-CAP-0005",
+      "description": "Construction and equipping of model science and technical colleges",
+      "sector": "education",
+      "amount_ngn": 47300000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Water Resources and Sanitation",
+      "program_code": "FMWRS-2025-CAP-0009",
+      "description": "Dadin Kowa and Kashimbila multipurpose dam completion works",
+      "sector": "water_resources",
+      "amount_ngn": 38750000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Communications, Innovation and Digital Economy",
+      "program_code": "FMCIDE-2025-CAP-0002",
+      "description": "National broadband fibre backbone expansion (Project Bridge)",
+      "sector": "digital_economy",
+      "amount_ngn": 74100000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    },
+    {
+      "mda": "Federal Ministry of Transportation",
+      "program_code": "FMT-2025-CAP-0018",
+      "description": "Lagos-Kano rail modernization — rolling stock procurement",
+      "sector": "transport",
+      "amount_ngn": 132800000000,
+      "fiscal_year": 2025,
+      "appropriation_type": "capital"
+    }
+  ]
+}
