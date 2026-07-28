@@ -98,3 +98,14 @@ connector through the loader:
 wire shape + loader key, jurisdiction override, 500-record batching,
 entity grouping, disabled-without-key, error recording (not raising),
 replay-reports-updates. Suite total: 33 pytest green.
+
+## 7. Realized outcomes (G2)
+
+`outcome_observation` records (produced by the `nbs_outcomes` connector)
+are routed by the loader to a dedicated endpoint instead of
+`jurisdictions.loadCanonical`: `outcomes.upsertObservations`
+(`POST {PLATFORM_API_URL}/api/trpc/outcomes.upsertObservations`), with the
+same `x-loader-key` auth, 500-record batch cap, per-entity
+`{inserted, updated, errors}` counts, and record-never-raise error
+discipline. See docs/OUTCOMES.md for the store schema, the sim-service
+handoff (`POST /v1/outcomes`), and the causal/backtest consumption paths.
