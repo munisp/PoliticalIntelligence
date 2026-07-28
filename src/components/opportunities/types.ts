@@ -225,14 +225,32 @@ export function baseOpportunityScore(items: OpportunityItem[]): number {
   return den > 0 ? num / den : 0;
 }
 
-export type MapLayer = "opportunity" | "unemployment" | "schools" | "travel";
+export type MapLayer =
+  | "opportunity"
+  | "unemployment"
+  | "schools"
+  | "travel"
+  | "facilities";
 
 export const MAP_LAYERS: { id: MapLayer; label: string; legend: string }[] = [
   { id: "opportunity", label: "Opportunity score", legend: "Opportunity score" },
   { id: "unemployment", label: "Unemployment", legend: "Unemployment (indexed)" },
   { id: "schools", label: "School density", legend: "School density (indexed)" },
   { id: "travel", label: "Travel-time catchments", legend: "45/90-min catchment" },
+  { id: "facilities", label: "Facilities", legend: "Facilities per LGA" },
 ];
+
+/** Sum facility types matching a keyword set from an LGA summary entry. */
+export function facilityCountByType(
+  byType: Record<string, number> | undefined,
+  match: RegExp,
+): number {
+  if (!byType) return 0;
+  let n = 0;
+  for (const [type, count] of Object.entries(byType))
+    if (match.test(type)) n += count;
+  return n;
+}
 
 /** Per-LGA choropleth value for a layer, derived deterministically. */
 export function lgaLayerValue(
@@ -251,5 +269,7 @@ export function lgaLayerValue(
     case "travel":
       // In-catchment LGAs render bright; outside dimmed.
       return j < 0.4 ? 0.9 : 0.15;
+    case "facilities":
+      return clamp01(0.1 + j * 0.85);
   }
 }
