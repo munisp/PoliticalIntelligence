@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/LocaleContext";
 
 export interface FilterBarValue {
   sectors: string[];
@@ -33,6 +34,7 @@ export default function FilterBar({
   onChange,
   className,
 }: FilterBarProps) {
+  const t = useT();
   const [viewsOpen, setViewsOpen] = useState(false);
 
   const toggleSector = (s: string) => {
@@ -49,11 +51,11 @@ export default function FilterBar({
         className,
       )}
       role="region"
-      aria-label="Filters"
+      aria-label={t.filter.filtersAria}
     >
       <fieldset className="flex flex-wrap items-center gap-1.5">
-        <legend className="sr-only">Sectors</legend>
-        <span className="caption-label mr-1 text-ink-muted">Sector</span>
+        <legend className="sr-only">{t.filter.sectors}</legend>
+        <span className="caption-label mr-1 text-ink-muted">{t.filter.sector}</span>
         {sectors.map((s) => {
           const active = value.sectors.includes(s);
           return (
@@ -77,7 +79,7 @@ export default function FilterBar({
       </fieldset>
 
       <label className="flex items-center gap-2">
-        <span className="caption-label text-ink-muted">Geography</span>
+        <span className="caption-label text-ink-muted">{t.filter.geography}</span>
         <select
           value={value.geography}
           onChange={(e) => onChange({ ...value, geography: e.target.value })}
@@ -92,8 +94,8 @@ export default function FilterBar({
       </label>
 
       <fieldset className="flex items-center gap-1.5">
-        <legend className="sr-only">Horizon</legend>
-        <span className="caption-label text-ink-muted">Horizon</span>
+        <legend className="sr-only">{t.filter.horizon}</legend>
+        <span className="caption-label text-ink-muted">{t.filter.horizon}</span>
         {([1, 3, 5] as const).map((h) => (
           <button
             key={h}
@@ -113,7 +115,7 @@ export default function FilterBar({
       </fieldset>
 
       <label className="flex items-center gap-2">
-        <span className="caption-label text-ink-muted">Confidence ≥</span>
+        <span className="caption-label text-ink-muted">{t.filter.confidence}</span>
         <input
           type="range"
           min={0}
@@ -123,7 +125,7 @@ export default function FilterBar({
           onChange={(e) =>
             onChange({ ...value, confidenceFloor: Number(e.target.value) })
           }
-          aria-valuetext={`Confidence floor ${value.confidenceFloor.toFixed(2)}`}
+          aria-valuetext={t.filter.confidenceFloorAria.replace("{value}", value.confidenceFloor.toFixed(2))}
           className="h-1 w-28 accent-civic"
         />
         <span className="w-8 font-mono text-xs text-ink-secondary">
