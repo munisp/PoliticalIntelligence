@@ -251,6 +251,10 @@ export const laws = mysqlTable(
     status: varchar("status", { length: 32 }).default("in_force").notNull(),
     year: int("year"),
     sourceUri: text("source_uri"),
+    /** G4: evidence base for drafted bills (contracts/drafting EvidenceBase). */
+    evidenceBase: json("evidence_base"),
+    /** G4: Regulatory Impact Assessment annex (contracts/drafting RiaAnnex). */
+    riaAnnex: json("ria_annex"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({
@@ -266,7 +270,11 @@ export const clauses = mysqlTable(
     clauseId: varchar("clause_id", { length: 96 }).primaryKey(),
     lawId: varchar("law_id", { length: 64 }).notNull(),
     sectionPath: varchar("section_path", { length: 128 }).notNull(),
+    /** G4: generated-clause heading (null for imported clauses). */
+    heading: varchar("heading", { length: 256 }),
     text: text("text").notNull(),
+    /** G4: evidence grounding per generated clause (ClauseGrounding[]). */
+    grounding: json("grounding"),
     language: varchar("language", { length: 8 }).default("en").notNull(),
     confidence: double("confidence").default(0.9).notNull(),
     reviewState: reviewStateEnum("review_state"),

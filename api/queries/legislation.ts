@@ -175,3 +175,47 @@ export async function approvalEventsFor(entityType: string, entityId: string) {
     )
     .orderBy(asc(schema.approvalEvents.createdAt));
 }
+
+/* ------------------------------------------------------------------ */
+/* G4: evidence-grounded drafting                                      */
+/* ------------------------------------------------------------------ */
+
+/** Insert a new draft law row (status='draft') linked to its evidence base. */
+export async function insertDraftLaw(
+  row: typeof schema.laws.$inferInsert,
+) {
+  await getDb().insert(schema.laws).values(row);
+}
+
+/** Persist the RIA annex artifact on a law (additive json column). */
+export async function updateLawRiaAnnex(lawId: string, ria: unknown) {
+  await getDb()
+    .update(schema.laws)
+    .set({ riaAnnex: ria as never })
+    .where(eq(schema.laws.lawId, lawId));
+}
+
+/** Upsert a generated clause (idempotent by deterministic clause id). */
+export async function upsertGeneratedClause(
+  row: typeof schema.clauses.$inferInsert,
+) {
+  await getDb()
+    .insert(schema.clauses)
+    .values(row)
+    .onDuplicateKeyUpdate({
+      set: {
+        sectionPath: row.sectionPath,
+        heading: row.heading,
+        text: row.text,
+        grounding: row.grounding,
+      },
+    });
+}
+
+/** Edit a generated clause's text (keeps grounding + provenance). */
+export async function updateClauseText(clauseId: string, text: string) {
+  await getDb()
+    .update(schema.clauses)
+    .set({ text })
+    .where(eq(schema.clauses.clauseId, clauseId));
+}
