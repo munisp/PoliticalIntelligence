@@ -8,6 +8,8 @@ from app.connectors.overpass import OverpassConnector
 from app.connectors.nada import NadaConnector
 from app.connectors.budeshi import BudeshiConnector
 from app.connectors.file_harvester import FileHarvesterConnector
+from app.connectors.nbs_bulletin import NbsBulletinConnector
+from app.connectors.ubec_factsheet import UbecFactsheetConnector
 
 REGISTRY: dict[str, type[BaseConnector]] = {
     c.name: c
@@ -18,6 +20,8 @@ REGISTRY: dict[str, type[BaseConnector]] = {
         NadaConnector,
         BudeshiConnector,
         FileHarvesterConnector,
+        NbsBulletinConnector,
+        UbecFactsheetConnector,
     )
 }
 
