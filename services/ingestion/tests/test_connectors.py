@@ -199,6 +199,7 @@ def test_budeshi_procurement_records():
 def test_registry_complete():
     assert set(REGISTRY) == {"worldbank", "hdx", "overpass", "nada",
                              "budeshi", "file_harvester",
-                             "nbs_bulletin", "ubec_factsheet"}
+                             "nbs_bulletin", "ubec_factsheet",
+                             "nbs_outcomes"}
     for name in REGISTRY:
         assert get_connector(name).name == name

@@ -1,0 +1,52 @@
+{
+  "source": "National Bureau of Statistics (NBS) Nigeria — Nigeria Labour Force Survey",
+  "release": "Nigeria Labour Force Statistics Report Q1 2023 - Q1 2024",
+  "url": "https://www.nigerianstat.gov.ng/elibrary/read/1241549",
+  "jurisdiction_id": "jur:ng",
+  "series": [
+    {
+      "indicator_code": "UNEMPLOYMENT_RATE",
+      "indicator_name": "Unemployment rate (ILO, % of labour force)",
+      "unit": "percent",
+      "frequency": "quarterly",
+      "observations": [
+        {"period": "2023-03", "value": 4.1},
+        {"period": "2023-06", "value": 4.2},
+        {"period": "2023-09", "value": 5.0},
+        {"period": "2023-12", "value": 5.0},
+        {"period": "2024-03", "value": 5.3},
+        {"period": "2024-06", "value": 5.2},
+        {"period": "2024-09", "value": 4.9},
+        {"period": "2024-12", "value": 4.8},
+        {"period": "2025-03", "value": null}
+      ]
+    },
+    {
+      "indicator_code": "EMPLOYMENT_TOTAL",
+      "indicator_name": "Employed population (millions)",
+      "unit": "millions",
+      "frequency": "quarterly",
+      "observations": [
+        {"period": "2023-03", "value": 71.1},
+        {"period": "2023-06", "value": 71.4},
+        {"period": "2023-09", "value": 70.6},
+        {"period": "2023-12", "value": 70.9},
+        {"period": "2024-03", "value": 71.6},
+        {"period": "2024-06", "value": 72.0},
+        {"period": "2024-09", "value": 72.5},
+        {"period": "2024-12", "value": 73.0}
+      ]
+    },
+    {
+      "indicator_code": "FIRM_COUNT",
+      "indicator_name": "Registered business enterprises (thousands)",
+      "unit": "thousands",
+      "frequency": "annual",
+      "observations": [
+        {"period": "2022-12", "value": 3891.0},
+        {"period": "2023-12", "value": 4012.0},
+        {"period": "2024-12", "value": 4187.0}
+      ]
+    }
+  ]
+}
