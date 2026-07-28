@@ -46,3 +46,23 @@ Invariants: MySQL holds the **id and current pointer** for anything also represe
 - **Migrations** (Drizzle for MySQL, dbt for the lakehouse) are forward-only, reviewed, and applied by CI/CD — never by hand in staging/prod.
 - Every new entity must declare: owning domain, key, jurisdiction partitioning, privacy classification, and at least one `EvidenceSource` lineage path before merge.
 - Schema changes that affect projections (graph/search/geo) must include a re-index plan.
+
+## Implementation status (feat-v6 gap closure)
+
+- **DM-2 canonical entity coverage:** `budgets`, `officials`, `programs`, and
+  `business_registrations` exist as first-class MySQL tables (`db/schema.ts`)
+  with jurisdiction partitioning, provenance columns, and seed coverage
+  (9 Kaduna budget lines FY2023–25, 6 officials, 4 flagship programs,
+  25 business registrations). Contract assertions in
+  `api/tests/data-contracts.test.ts` ("canonical entity coverage (DM-2)")
+  enforce presence, natural-key uniqueness, and jurisdiction referential
+  integrity on every seeded database.
+- **DM-8 EvidenceSource registry metadata:** `data_sources` now carries
+  `license` (varchar), `quality_score` (int 0–100), and
+  `privacy_classification` (`public`/`internal`/`restricted`, default
+  `internal`). All 13 seeded sources ship curated values; the canonical
+  loader (`api/queries/canonical.ts upsertDataSources`) stamps conservative
+  defaults on newly registered sources pending steward review; the admin
+  console patch path (`updateDataSource`) accepts all three fields. Contract
+  assertions ("evidence-source registry metadata (DM-8)") reject NULL/blank
+  licenses, out-of-range quality scores, and invalid classifications.

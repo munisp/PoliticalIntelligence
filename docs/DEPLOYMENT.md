@@ -61,3 +61,21 @@ Restore runbook: restore object storage → MySQL/PostGIS dumps → replay event
 - First end-to-end opportunity generation workflow (SME sector) incl. async jobs, `recommendations.generated`, governor dashboard cards.
 - Executive brief generator alpha; data source health console live.
 - **Exit demo:** a governor-facing end-to-end walkthrough on Nigerian pilot data — profile → opportunity generation → scenario → brief — with full audit trail.
+
+## Backup/DR implementation status (added with the NFR evidence pack)
+
+The backup/restore rows above now have concrete automation:
+
+- `scripts/backup.sh` — daily MySQL dump (parsed from `DATABASE_URL`) +
+  audit-log WORM export + artifacts tar, sha256 manifest per backup, optional
+  rclone/S3 upload (`BACKUP_UPLOAD_URI`), retention rotation (7 daily, 4 weekly).
+- `scripts/restore.sh` — verified restore into a scratch database
+  (manifest check → load → row-count assertions → audit hash-chain replay);
+  refuses to overwrite the live database.
+- `docs/DR.md` — failure-scenario runbook (DB loss, region loss, service
+  corruption), step-by-step recovery commands, roles, and the quarterly
+  timed drill checklist used to prove RPO ≤ 24h / RTO ≤ 8h.
+
+Remaining ops steps: schedule `scripts/backup.sh` (cron/CronJob), enable
+object-lock on the backup bucket for the 7-year audit retention, and execute
+the first quarterly drill.
