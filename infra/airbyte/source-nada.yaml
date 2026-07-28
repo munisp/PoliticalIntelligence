@@ -1,0 +1,51 @@
+# Airbyte CDK low-code declarative source: NADA microdata catalog (ING-8).
+version: "3.0.0"
+description: "Nigeria NADA (NBS microdata library) — catalog search API"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "https://microdata.nigerianstat.gov.ng/index.php/api/catalog/"
+    http_method: GET
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: ["result", "rows"]
+    paginator:
+      type: DefaultPaginator
+      page_token_option:
+        type: RequestOption
+        inject_into: request_parameter
+        field_name: start
+      pagination_strategy:
+        type: OffsetIncrement
+        page_size: 50
+        inject_on_first_request: true
+  streams:
+    surveys:
+      type: DeclarativeStream
+      name: surveys
+      primary_key: ["id"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: search
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "nada"
+streams:
+  - $ref: "#/definitions/streams/surveys"
+check:
+  type: CheckStream
+  stream_names: ["surveys"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    properties:
+      sk: {type: string, title: "Search keywords"}
