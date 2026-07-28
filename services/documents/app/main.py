@@ -132,6 +132,44 @@ async def upload_document(
     })
 
 
+@app.post("/v1/akn/draft")
+async def render_draft_akn(request: Request):
+    """G4: Akoma Ntoso 3.0 for an evidence-grounded draft bill.
+
+    Body: {title, clauses: [{section_path, heading?, text, kind?}], ria?,
+           country?, doc_type?, year?, language?}
+    Returns {akn_xml, problems} — problems lists structural-check violations
+    (empty = well-formed per the AKN checklist).
+    """
+    from typing import Any
+
+    from app import akn as akn_mod
+
+    body: dict[str, Any] = await request.json()
+    title = body.get("title")
+    clauses = body.get("clauses")
+    if not title or not isinstance(clauses, list) or not clauses:
+        raise ServiceError(code="INVALID_DRAFT",
+                           message="title and a non-empty clauses list are required",
+                           http_status=422)
+    for c in clauses:
+        if not c.get("section_path") or not c.get("text"):
+            raise ServiceError(code="INVALID_DRAFT",
+                               message="each clause requires section_path and text",
+                               http_status=422)
+    xml = akn_mod.build_draft_akn(
+        title,
+        clauses,
+        ria=body.get("ria"),
+        country=body.get("country", "ng"),
+        doc_type=body.get("doc_type", "bill"),
+        year=body.get("year"),
+        language=body.get("language", "eng"),
+    )
+    problems = akn_mod.structural_check(xml)
+    return _envelope(request, {"akn_xml": xml, "problems": problems})
+
+
 @app.get("/v1/documents/{document_id}")
 async def get_document(document_id: str, request: Request):
     manager: JobManager = request.app.state.jobs
