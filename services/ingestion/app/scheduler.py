@@ -45,6 +45,8 @@ DEFAULT_CADENCE_S: dict[str, int] = {
     "nbs_bulletin": 7 * 24 * 3600,
     "ubec_factsheet": 7 * 24 * 3600,
     "nbs_outcomes": 90 * 24 * 3600,
+    "budget_office": 90 * 24 * 3600,   # quarterly budget publications
+    "nass_bills": 7 * 24 * 3600,       # weekly bills tracker
 }
 DEFAULT_JITTER_PCT = 0.10
 DEFAULT_JURISDICTION = "jur:ng-kd"
