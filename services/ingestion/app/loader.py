@@ -43,6 +43,10 @@ ENTITY_KEYS = {
     # _PROCEDURE below) because the outcome store keys observations by
     # series id rather than by the canonical-batch natural keys.
     "outcome_observation": "observations",
+    # feat-ng-connectors: Budget Office appropriation lines -> budgets;
+    # NASS bills -> policy_documents (document_type="bill").
+    "budget_line": "budgets",
+    "bill_document": "policy_documents",
 }
 
 # Entity batch key -> tRPC loader procedure.
