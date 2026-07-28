@@ -47,6 +47,10 @@ ENTITY_KEYS = {
     # NASS bills -> policy_documents (document_type="bill").
     "budget_line": "budgets",
     "bill_document": "policy_documents",
+    # feat-conn-subnat-firms: CAC registrations -> business_registrations;
+    # AfDB/IATI evidence artifacts -> evidence_sources.
+    "business_registration": "business_registrations",
+    "evidence_source": "evidence_sources",
 }
 
 # Entity batch key -> tRPC loader procedure.

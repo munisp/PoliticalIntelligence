@@ -204,6 +204,6 @@ def test_registry_complete():
                              "budget_office", "nass_bills",
                              "state_budgets",
                              "state_procurement",
-                             "state_assembly_bills", "state_irs"}
+                             "state_assembly_bills", "state_irs", "cac"}
     for name in REGISTRY:
         assert get_connector(name).name == name
