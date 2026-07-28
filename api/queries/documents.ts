@@ -240,6 +240,47 @@ export async function fetchClausesArtifact(
   }
 }
 
+/**
+ * G4: render Akoma Ntoso 3.0 XML for a drafted bill via the documents
+ * service (/v1/akn/draft), including the RIA annex. Throws
+ * DocumentsServiceUnreachable when the service is down — callers fall back
+ * to the local deterministic AKN builder.
+ */
+export async function renderDraftAkn(payload: {
+  title: string;
+  clauses: {
+    section_path: string;
+    heading?: string | null;
+    text: string;
+    kind?: string;
+  }[];
+  ria?: unknown | null;
+  country?: string;
+  doc_type?: string;
+  year?: number | null;
+  language?: string;
+}): Promise<{ akn_xml: string; problems: string[] }> {
+  return fetchJson(
+    "/v1/akn/draft",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    {
+      parse: (v) => {
+        const o = v as { akn_xml?: unknown; problems?: unknown };
+        if (typeof o?.akn_xml !== "string")
+          throw new Error("malformed akn response");
+        return {
+          akn_xml: o.akn_xml,
+          problems: Array.isArray(o.problems) ? (o.problems as string[]) : [],
+        };
+      },
+    },
+  );
+}
+
 export async function reprocessDocument(
   documentId: string,
 ): Promise<ServiceJob> {
