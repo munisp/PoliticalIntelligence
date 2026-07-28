@@ -25,6 +25,7 @@ import {
   Download,
   MoreHorizontal,
   Sparkles,
+  Globe2,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -266,6 +267,8 @@ const PRIMARY_NAV: NavItem[] = [
 const SECONDARY_NAV: NavItem[] = [
   /* INNOVATIONS-NAV */
   { label: "Innovations", tKey: "innovations", href: "/innovations", Icon: Sparkles },
+  /* GEO3D-NAV */
+  { label: "3D Geospatial", tKey: "geo3d", href: "/geo3d", Icon: Globe2 },
   { label: "Documents library", tKey: "documents", href: "/documents", Icon: FolderOpen },
   { label: "Audit log", tKey: "auditLog", href: "/audit-log", Icon: ScrollText },
   { label: "Settings", tKey: "settings", href: "/settings", Icon: Settings },
@@ -280,6 +283,7 @@ const PAGE_TITLES: Record<string, { title: string; crumb: string }> = {
   "/briefs": { title: "Executive Briefs", crumb: "Kaduna State / Documents" },
   "/data-health": { title: "Data Source Health", crumb: "Platform / Pipelines" },
   "/copilot": { title: "Copilot", crumb: "Kaduna State / Assistant" },
+  "/geo3d": { title: "3D Geospatial", crumb: "Kaduna State / LGA extrusion" },
 };
 
 const DEMO_ROLES = [

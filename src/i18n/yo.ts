@@ -20,6 +20,7 @@ const yo: Dict = {
     auditLog: "Ìwé ìṣàkóso ìsàyẹ̀wò",
     settings: "Àwọn ètò",
     help: "Ìrànlọ́wọ́ & àwọn ọ̀nà ẹ̀kẹ́",
+    geo3d: "Ìwòye 3D Ilẹ̀",
     explorer: "Ìwádìí",
     workbench: "Tábìlì iṣẹ́",
     studio: "Studio",
@@ -444,6 +445,27 @@ const yo: Dict = {
     bannerBody:
       "Ọ̀pọ̀ jùlọ dátà agbègbè yìí jẹ́ dátà ẹ̀yànrùn-ìfihàn. Sopọ̀ àwọn orísun laàyè nínú Ìlera Orísun Dátà láti rọ́pọ̀ wọn pẹ̀lú dátà tí a wọ́n.",
     bannerCta: "Ṣí Ìlera Orísun Dátà",
+  },
+  geo3d: {
+    caption: "Ìpínlẹ̀ Kaduna · Ògbón ilẹ̀-àyíká",
+    title: "Ìwòye 3D Ilẹ̀",
+    subtitle:
+      "A gbé àwọn ààlà LGA sókè gẹ́gẹ́ bí iye àwọn ilé-iṣẹ́ lórí àwòrán OpenStreetMap — kò sí tóókìn máàpù tí a nílò.",
+    view2d: "Máàpù 2D",
+    view3d: "Ìwòye 3D",
+    loading3d: "Ń gbe ẹ̀rọ 3D wọlé…",
+    load3dTitle: "Ìwòye 3D wà",
+    load3dBody:
+      "Ìsopọ̀ rẹ̀ jẹ́ èyí tó ní òpin tàbí tó lọ́ra, nítorí náà ni a fi máàpù 2D tó rọrùn hàn. Ìwòye 3D máa ṣe ìgbàsílẹ̀ ẹ̀rọ tó tóbi àti àwòrán máàpù.",
+    load3dCta: "Gbe 3D wọlé síbẹ̀",
+    terrainNote: "Ilẹ̀: ellipsoid WGS84 (kò sí tóókìn). Àwòrán: OpenStreetMap.",
+    boundariesFallback: "Ààlà tí a kọ́ sínú rẹ ni a ń fi hàn (iṣẹ́ kò sí).",
+    selectLga: "Yan oníhò LGA kan láti ṣàyẹ̀wò rẹ̀.",
+    infoboxFacilities: "Àwọn ilé-iṣẹ́",
+    infoboxOpportunities: "Àwọn àǹfààní tí a ṣe lẹ́sẹ̀sẹ̀ (tó gbogbo ìpínlẹ̀)",
+    infoboxByType: "Gẹ́gẹ́ bí irú",
+    infoboxNoData: "Kò sí dátà ilé-iṣẹ́ fún LGA yìí síbẹ̀.",
+    close: "Pa",
   },
   onboarding: {
     title: "Ìgbéwọlé Agbègbè",
