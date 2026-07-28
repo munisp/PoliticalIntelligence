@@ -85,3 +85,48 @@ v7 certification-round closures (❌→✅, evidence verified in master aa468c3)
 - **Auditor:** multi-agent certification swarm
 - **Method:** direct code inspection + execution of every runnable test suite; prior verdicts not trusted; all 90 requirements re-verified.
 - **Next review:** after go-live prerequisites 1–6 complete (target: production cutover review).
+
+---
+
+## Addendum 2026-07-29 — Gap closure G1–G5
+
+Post-certification, five capability gaps identified after the 2026-07-28 audit
+were closed on feature branches and merged (`d79c572`). These items **exceed
+the original spec's 90 requirements** — they close capability gaps identified
+post-certification, so the **weighted requirement completion is unchanged at
+88.3%** (no spec row re-scored).
+
+- **G1 — GPU go-live code-complete.** vLLM/Ray Serve model-serving manifests
+  (`infra/k8s/model-serving/`, wired into staging/prod overlays), an
+  eval-gated switch (`services/ai/app/evals/`, 17-case pack) and an operator
+  runbook (`docs/GPU-GOLIVE.md`). Code and manifests only — **no infra apply
+  performed; no live GPU model is serving.**
+- **G2 — Realized-outcomes store.** Realized outcomes persisted and queryable
+  (`api/queries/outcomes.ts`, `services/simulation/app/outcomes.py`); causal
+  engine gains a `data_mode: realized` path
+  (`services/simulation/app/engines/causal.py`) and backtests consume actuals
+  (`services/simulation/app/backtest.py`,
+  `services/simulation/tests/test_outcomes_realized.py`).
+- **G3 — Legal→parameter mapper.** Maps legal instruments to simulation
+  parameters (`services/documents/app/param_mapper.py`, `docs/PARAM-MAPPER.md`).
+- **G4 — Bill drafting.** Drafted bills with evidence base, Regulatory Impact
+  Assessment annex, and Akoma Ntoso XML export (`api/tests/drafting.test.ts`,
+  `api/lib/akn.ts`, `services/documents/app/akn.py`, `docs/DRAFTING.md`;
+  schema: `laws.evidence_base`, `laws.ria_annex`, `clauses.heading/grounding`).
+- **G5 — Rendered brief exports.** HTML/document rendering of briefs with
+  export audit events (`api/utils/render.ts`, `api/tests/render.test.ts`).
+
+### Production-readiness scorecard updates (honest)
+
+- **AI/LLM maturity: 6.0 (unchanged).** The GPU tier is now code-complete
+  (manifests + eval gate + runbook) but is still **not serving a live model**;
+  the offline template synthesizer remains the default. No score change is
+  justified until the go-live switch is flipped and evals run against a live
+  model.
+- **Functionality notes:** realized outcomes (G2) now feed backtests with
+  actuals; legal→param mapping (G3), bill drafting with RIA/AKN (G4), and
+  rendered brief exports (G5) remove four post-certification capability gaps.
+
+**Composite remains 7.5 / 10.** Go-live prerequisites 1–6 above are unchanged
+and still blocking; prerequisite 1 (GPU model tier) now has complete code,
+manifests, eval gate, and runbook behind it.
