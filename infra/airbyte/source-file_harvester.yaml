@@ -1,0 +1,42 @@
+# Airbyte CDK low-code declarative source: local file drop zone (ING-8).
+version: "3.0.0"
+description: "File harvester — CSV/JSON files dropped in INGESTION_SOURCES_DIR"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "file:///"
+    http_method: GET
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: []
+  streams:
+    files:
+      type: DeclarativeStream
+      name: files
+      primary_key: ["path"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: "{{ config['sources_dir'] }}"
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "file_harvester"
+streams:
+  - $ref: "#/definitions/streams/files"
+check:
+  type: CheckStream
+  stream_names: ["files"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    required: ["sources_dir"]
+    properties:
+      sources_dir: {type: string, examples: ["/srv/artifacts/ingestion/sources"]}
