@@ -1,0 +1,13 @@
+{
+  "note": "State approved-budget lines (2025 appropriations) captured from state budget portal publication shapes; used as the deterministic offline fallback for the state_budgets connector.",
+  "lines": [
+    {"state": "lagos", "mda": "Lagos State Ministry of Health", "program_code": "LAG-HLT-2025-004", "description": "Upgrade of general hospitals and PHCs statewide", "sector": "health", "amount_ngn": 61200000000, "released_ngn": 38400000000, "fiscal_year": 2025, "appropriation_type": "capital"},
+    {"state": "lagos", "mda": "Lagos State Ministry of Transportation", "program_code": "LAG-TRN-2025-011", "description": "Blue Line rail Phase 2 and junction improvements", "sector": "transport", "amount_ngn": 148500000000, "fiscal_year": 2025, "appropriation_type": "capital"},
+    {"state": "lagos", "mda": "Lagos State Ministry of Education", "program_code": "LAG-EDU-2025-002", "description": "Recurrent: teachers' salaries and school operations", "sector": "education", "amount_ngn": 95400000000, "released_ngn": 71200000000, "fiscal_year": 2025, "appropriation_type": "recurrent"},
+    {"state": "kaduna", "mda": "Kaduna State Ministry of Public Works and Infrastructure", "program_code": "KAD-PWI-2025-007", "description": "Rural roads construction and rehabilitation (RAAMP corridors)", "sector": "infrastructure", "amount_ngn": 42300000000, "released_ngn": 18900000000, "fiscal_year": 2025, "appropriation_type": "capital"},
+    {"state": "kaduna", "mda": "Kaduna State Ministry of Health", "program_code": "KAD-HLT-2025-003", "description": "Primary healthcare revitalisation — 255 ward PHCs", "sector": "health", "amount_ngn": 21400000000, "fiscal_year": 2025, "appropriation_type": "capital"},
+    {"state": "kaduna", "mda": "Kaduna State Universal Basic Education Board", "program_code": "KAD-SUB-2025-001", "description": "Recurrent: SUBEB counterpart funding and school feeding", "sector": "education", "amount_ngn": 18700000000, "released_ngn": 12400000000, "fiscal_year": 2025, "appropriation_type": "recurrent"},
+    {"state": "kano", "mda": "Kano State Ministry of Agriculture", "program_code": "KAN-AGR-2025-005", "description": "Irrigation schemes and dry-season farming inputs", "sector": "agriculture", "amount_ngn": 27600000000, "fiscal_year": 2025, "appropriation_type": "capital"},
+    {"state": "kano", "mda": "Kano State Ministry of Water Resources", "program_code": "KAN-WAT-2025-002", "description": "Greater Kano water supply expansion (Challawa)", "sector": "water", "amount_ngn": 33200000000, "released_ngn": 14100000000, "fiscal_year": 2025, "appropriation_type": "capital"}
+  ]
+}
