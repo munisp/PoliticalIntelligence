@@ -3,7 +3,8 @@ import { nanoid } from "nanoid";
 import { confidenceTier } from "@contracts/entities";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { envelope, apiError, audit, requestMeta } from "./utils/envelope";
-import { requireRole, assertJurisdictionAccess } from "./utils/rbac";
+import { requireRole, assertJurisdictionAccess, assertJurisdictionRead, resolveReadScope } from "./utils/rbac";
+import { assertDatasetRead } from "./utils/datasets";
 import {
   evidenceByIds,
   findOpportunitiesByIds,
@@ -15,6 +16,8 @@ import { findJob, findJobByIdempotencyKey, insertJob } from "./queries/admin";
 import { enqueuePersistedJob } from "./runner";
 
 export const opportunitiesRouter = createRouter({
+  // ABAC-scoped read (SR-10/SEC-3): requires sign-in; non-global actors
+  // are restricted to their assigned jurisdictions.
   rankings: publicQuery
     .input(
       z.object({
@@ -28,13 +31,10 @@ export const opportunitiesRouter = createRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const jur = input.jurisdiction_id ?? input.geography;
-      // ABAC: authenticated actors are restricted to assigned jurisdictions.
-      if (ctx.user && jur) {
-        await assertJurisdictionAccess(ctx as never, jur, "read");
-      }
+      const scope = await resolveReadScope(ctx, input.jurisdiction_id ?? input.geography);
       const page = await opportunityRankings({
-        jurisdictionId: input.jurisdiction_id ?? input.geography,
+        jurisdictionId: scope.jurisdictionId,
+        jurisdictionIds: scope.jurisdictionIds,
         sectorCode: input.sector_code,
         horizonMaxMonths: input.horizon_max_months,
         confidenceFloor: input.confidence_floor,
@@ -69,6 +69,13 @@ export const opportunitiesRouter = createRouter({
           code: "OPPORTUNITY_NOT_FOUND",
           message: `Opportunity ${input.opportunity_id} not found`,
         });
+      await assertJurisdictionRead(ctx, opp.jurisdictionId);
+      // SEC-3: dataset-level ABAC — restricted opportunity datasets 403.
+      await assertDatasetRead(ctx, {
+        entityType: "opportunity",
+        datasetId: opp.opportunityId,
+        jurisdictionId: opp.jurisdictionId,
+      });
       const evidenceIds = Array.isArray(opp.evidenceRefs)
         ? (opp.evidenceRefs as string[])
         : [];
@@ -95,6 +102,9 @@ export const opportunitiesRouter = createRouter({
     )
     .query(async ({ ctx, input }) => {
       const rows = await findOpportunitiesByIds(input.opportunity_ids);
+      for (const row of rows) {
+        await assertJurisdictionRead(ctx, row.jurisdictionId);
+      }
       if (rows.length !== input.opportunity_ids.length)
         throw apiError(ctx, {
           http: "NOT_FOUND",

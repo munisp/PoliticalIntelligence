@@ -1,10 +1,12 @@
-import { and, desc, eq, asc } from "drizzle-orm";
+import { and, desc, eq, asc, inArray } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { ReviewState } from "@contracts/entities";
 import { getDb } from "./connection";
 
 export async function listBriefs(filters: {
   jurisdictionId?: string;
+  /** ABAC read scope: restrict to these jurisdiction ids. */
+  jurisdictionIds?: string[];
   reviewState?: ReviewState;
   cursor?: string;
   limit: number;
@@ -12,6 +14,12 @@ export async function listBriefs(filters: {
   const conds = [];
   if (filters.jurisdictionId)
     conds.push(eq(schema.briefs.jurisdictionId, filters.jurisdictionId));
+  if (filters.jurisdictionIds)
+    conds.push(
+      filters.jurisdictionIds.length > 0
+        ? inArray(schema.briefs.jurisdictionId, filters.jurisdictionIds)
+        : eq(schema.briefs.jurisdictionId, "__none__"),
+    );
   if (filters.reviewState)
     conds.push(eq(schema.briefs.reviewState, filters.reviewState));
   const offset = filters.cursor ? Math.max(0, Number(filters.cursor) || 0) : 0;
