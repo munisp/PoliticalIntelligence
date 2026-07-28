@@ -16,6 +16,7 @@ from app.connectors.nass_bills import NassBillsConnector
 from app.connectors.state_budgets import StateBudgetsConnector
 from app.connectors.state_procurement import StateProcurementConnector
 from app.connectors.state_assembly_bills import StateAssemblyBillsConnector
+from app.connectors.state_irs import StateIrsConnector
 
 REGISTRY: dict[str, type[BaseConnector]] = {
     c.name: c
@@ -34,6 +35,7 @@ REGISTRY: dict[str, type[BaseConnector]] = {
         StateBudgetsConnector,
         StateProcurementConnector,
         StateAssemblyBillsConnector,
+        StateIrsConnector,
     )
 }
 

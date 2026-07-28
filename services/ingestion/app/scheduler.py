@@ -50,6 +50,7 @@ DEFAULT_CADENCE_S: dict[str, int] = {
     "state_budgets": 30 * 24 * 3600,   # monthly state budget publications
     "state_procurement": 30 * 24 * 3600,  # monthly state procurement awards
     "state_assembly_bills": 7 * 24 * 3600,  # weekly state assembly bills
+    "state_irs": 30 * 24 * 3600,        # monthly SIRS revenue publications
 }
 DEFAULT_JITTER_PCT = 0.10
 DEFAULT_JURISDICTION = "jur:ng-kd"

@@ -1,0 +1,15 @@
+{
+  "note": "State IRS published revenue performance and tax guides used as the deterministic offline fallback for the state_irs connector.",
+  "revenue": [
+    {"state": "lagos", "period": "2024", "igr_total_ngn": 940610000000, "paye_ngn": 501200000000, "road_levies_ngn": 24600000000, "direct_assessment_ngn": 48900000000, "mda_revenue_ngn": 215400000000},
+    {"state": "lagos", "period": "2023", "igr_total_ngn": 814920000000, "paye_ngn": 432100000000, "direct_assessment_ngn": 41300000000, "mda_revenue_ngn": 189700000000},
+    {"state": "kaduna", "period": "2024", "igr_total_ngn": 62300000000, "paye_ngn": 31800000000, "direct_assessment_ngn": 4900000000, "mda_revenue_ngn": 17200000000},
+    {"state": "kaduna", "period": "2023", "igr_total_ngn": 58100000000, "paye_ngn": 29400000000, "mda_revenue_ngn": 15100000000},
+    {"state": "kano", "period": "2024", "igr_total_ngn": 74500000000, "paye_ngn": 36200000000, "direct_assessment_ngn": 8100000000, "mda_revenue_ngn": 20400000000}
+  ],
+  "guides": [
+    {"state": "lagos", "title": "Lagos State Revenue Code (Consolidated) 2024", "instrument_type": "revenue_code", "issued_by": "Lagos Internal Revenue Service", "date": "2024-01-15", "source_url": "https://lirs.gov.ng/publications/revenue-code-2024"},
+    {"state": "kaduna", "title": "KADIRS Presumptive Tax Guide for Informal Sector Operators", "instrument_type": "tax_guide", "issued_by": "Kaduna State Internal Revenue Service", "date": "2024-03-01", "source_url": "https://kadirs.kdsg.gov.ng/publications/presumptive-tax-guide"},
+    {"state": "kano", "title": "Kano State Land Use Charge Rates and Assessment Guide 2024", "instrument_type": "tax_guide", "issued_by": "Kano State Internal Revenue Service", "date": "2024-02-10", "source_url": "https://kirs.gov.ng/publications/land-use-charge-2024"}
+  ]
+}

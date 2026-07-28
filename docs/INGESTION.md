@@ -41,6 +41,7 @@ including failures.
 | `state_budgets` | State budget portals — Lagos/Kaduna/Kano first-class, generic `https://<state>state.gov.ng/budget` fallback | **HYBRID** — attempts each state's approved-budget listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `budget_line` (`tier="state"`, state→jurisdiction FK) → `budgets` |
 | `state_procurement` | State procurement portals — Lagos PPA / Kaduna KDPPA / Kano PPB, generic state fallback | **HYBRID** — attempts each state's awards listing (OCDS-shaped); falls back to bundled fixture stamped `origin=derived` when unreachable | `procurement_record` (buyer/supplier/value/ocid, state in payload) → `procurement_records` |
 | `state_assembly_bills` | State Houses of Assembly bills — Lagos/Kaduna/Kano first-class, generic state fallback | **HYBRID** — attempts each assembly's bills listing; falls back to bundled fixture stamped `origin=derived` when unreachable (weekly cadence) | `bill_document` → `policy_documents` (`doc_type="bill"`; state/chamber/stage in `metadata`) |
+| `state_irs` | State Internal Revenue Services — LIRS/KADIRS/KIRS first-class, generic fallback | **HYBRID** — attempts each SIRS publications listing; falls back to bundled fixture stamped `origin=derived` when unreachable | `sector_metric` (`SIRS_*` revenue series) → `sector_metrics`; tax guides/revenue codes as `bill_document` (`doc_type="legal_instrument"`) → `policy_documents` |
 
 Live-captured payloads are committed under
 `onboarding/packs/kaduna-ng/live_samples/` and
