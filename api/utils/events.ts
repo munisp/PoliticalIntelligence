@@ -498,7 +498,12 @@ export async function replayEvents(opts: ReplayOptions): Promise<ReplayResult> {
   let replayedOutbox = 0;
 
   if (source === "dlq" || source === "both") {
-    const conds = [eq(schema.eventDlq.topic, topic)];
+    // Only unreplayed rows: re-replaying an already-replayed dead letter is
+    // a no-op (its outbox row was already reset) and expensive on large DLQs.
+    const conds = [
+      eq(schema.eventDlq.topic, topic),
+      isNull(schema.eventDlq.replayedAt),
+    ];
     if (sinceDate) conds.push(gte(schema.eventDlq.createdAt, sinceDate));
     const rows = await getDb()
       .select()
