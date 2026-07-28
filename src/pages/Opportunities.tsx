@@ -19,6 +19,7 @@ import MapPanel, {
 } from "@/components/shared/MapPanel";
 import { isProcedureMissing } from "@/lib/innovations-client";
 import { useT } from "@/lib/LocaleContext";
+import OfflineBoundary from "@/lib/OfflineBoundary";
 import EvidenceDrawer, {
   type EvidenceSource,
 } from "@/components/shared/EvidenceDrawer";
@@ -762,7 +763,14 @@ export default function Opportunities() {
               aria-label={t.opportunities.rankedListAria}
               className={cn("lg:col-span-7", mobileTab === "map" && "hidden lg:block")}
             >
-              {rankingList}
+              <OfflineBoundary
+                isLoading={rankingsQuery.isLoading}
+                hasData={allItems.length > 0}
+                onRetry={() => void rankingsQuery.refetch()}
+                label={t.opportunities.rankedOpportunities}
+              >
+                {rankingList}
+              </OfflineBoundary>
             </section>
             <section
               aria-label={t.opportunities.mapAria}

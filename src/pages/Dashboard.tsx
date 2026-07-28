@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { useT } from "@/lib/LocaleContext";
+import OfflineBoundary from "@/lib/OfflineBoundary";
 import { approvalStateLabel } from "@/lib/trpc-data";
 import { ProvenanceChipFromInfo } from "@/components/provenance";
 import { useAuth } from "@/hooks/useAuth";
@@ -490,6 +491,12 @@ export default function Dashboard() {
           />
         </div>
       )}
+      <OfflineBoundary
+        isLoading={profileQ.isLoading || runsLoading}
+        hasData={profile != null}
+        onRetry={() => profileQ.refetch()}
+        label={t.dashboard.errorKpis}
+      >
       {profileQ.isLoading || runsLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -555,6 +562,7 @@ export default function Dashboard() {
           </motion.div>
         </div>
       )}
+      </OfflineBoundary>
       {stale && (
         <p className="-mt-3 flex items-center gap-1.5 text-[11px] text-status-warning">
           <AlertTriangle aria-hidden className="h-3 w-3" />
