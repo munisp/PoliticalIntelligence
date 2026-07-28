@@ -30,7 +30,8 @@ The event backbone is Redpanda (Kafka-compatible). Schemas live in `contracts/` 
 
 | Component | Status | Where |
 | --- | --- | --- |
-| Topic catalog (contracts constant) | Shipped — `EventTopics` in `contracts/entities.ts` | Producers reference the constant, not string literals |
+| Topic catalog (contracts constant) | Shipped — `EventTopics` in `contracts/entities.ts`; codified provisioning manifest `infra/events/topics.json` (partitions, partition keys, DLQ policy) consumed by `scripts/kafka-topics.sh` | Parity manifest↔contracts↔provisioner enforced by `api/tests/topic-catalog.test.ts` |
+| Per-topic payload schemas (API-8) | Shipped — `EventPayloadSchemas` in `contracts/events.ts` (zod, loose/additive), enforced in `emitEvent`: invalid payloads and unregistered topics are dropped + logged before Kafka/outbox/webhooks; `registerEventSchema` extends the registry for extension topics | `api/tests/event-schemas.test.ts` (catalog completeness, producer fixtures, malformed-payload rejection, outbox drop proof) |
 | Kafka/Redpanda producer | Shipped, env-gated — active when `KAFKA_BROKERS` is set; `kafkajs` is an `optionalDependency` (guarded dynamic import, API boots without it) | `api/utils/events.ts` (`getProducer`) |
 | Durable outbox fallback | Shipped — `event_outbox` table (event_id, topic, partition_key, payload, attempts, delivered_at); relay loop retries undelivered rows and stamps `delivered_at` | `api/utils/events.ts` (`persistOutbox`, `relayOutboxOnce`, `startOutboxRelay`) |
 | Emitters | Shipped — job lifecycle (queued/running/succeeded/failed), simulation runs, recommendations, approvals, backtests, recalibrations | `api/runner.ts`, `api/utils/events.ts` (`emitJobLifecycle`) |

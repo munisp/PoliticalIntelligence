@@ -52,3 +52,24 @@ docker compose -f infra/docker/docker-compose.yml up --build
 4. Simulation calibration report attached; reproducibility suite green.
 5. Performance run meets NFR table; security scans clean or triaged.
 6. Staging canary healthy for the bake window before prod promotion.
+
+## Implementation status (added with the NFR evidence pack)
+
+As of the `feat-nfr-ci` branch the following layers now have runnable
+artifacts; see `docs/NFR-EVIDENCE.md` for the per-NFR mapping and commands:
+
+- **Performance**: k6 profiles in `tests/k6/` (api-reads 100 VU p95<5s,
+  advisory 20 VU p95<20s, 30s CI smoke) plus the zero-dependency
+  `tests/perf/local-bench.mjs` that enforces the same NFR thresholds and runs
+  in the CI `e2e` job.
+- **E2E API**: zero-dependency runner `tests/e2e/e2e.mjs` covering health,
+  envelope shape, idempotency, scenario lifecycle with uncertainty bands,
+  brief RBAC matrix, audit-chain verify, and required `/metrics` series.
+- **DR**: `scripts/backup.sh` / `scripts/restore.sh` + `docs/DR.md` runbook;
+  the RPO/RTO claims become *verified* after the first timed quarterly drill.
+- **CI**: `node-tests`, `python-tests` (simulation/ai/ingestion), `e2e`,
+  `security`, and a main-branch `release-gate` job in `.github/workflows/ci.yml`.
+
+Still pending (honest gaps): full 5-minute k6 runs against staging, the first
+timed DR drill, object-lock enforcement on the backup bucket, and a production
+uptime window for the availability SLI.
