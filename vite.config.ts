@@ -4,6 +4,7 @@ const __dirname = import.meta.dirname
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import { VitePWA } from "vite-plugin-pwa"
+import { viteStaticCopy } from "vite-plugin-static-copy"
 import { inspectAttr } from 'plugin-inspect-react-code'
 
 // https://vite.dev/config/
@@ -13,6 +14,15 @@ export default defineConfig({
     devServer({ entry: "api/boot.ts", exclude: [/^\/(?!api\/).*$/] }),
     inspectAttr(),
     react(),
+    // GEO-2: copy the Cesium runtime assets (Workers/Widgets/Assets/ThirdParty)
+    // into public/cesium/ so the viewer runs token-free off our own origin.
+    // CESIUM_BASE_URL is set to "/cesium/" in src/lib/cesium-base.ts.
+    viteStaticCopy({
+      targets: ["Workers", "Widgets", "Assets", "ThirdParty"].map((dir) => ({
+        src: `node_modules/cesium/Build/Cesium/${dir}`,
+        dest: "cesium",
+      })),
+    }),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: [
@@ -28,6 +38,8 @@ export default defineConfig({
         navigateFallback: "index.html",
         navigateFallbackDenylist: [/^\/api\//],
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // Cesium runtime assets are served on demand — never precache them.
+        globIgnores: ["cesium/**"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
           {
