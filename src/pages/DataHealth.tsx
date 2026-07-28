@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useNavigate } from "react-router";
 import {
   AlertTriangle,
   Copy,
@@ -8,15 +9,14 @@ import {
   ScrollText,
   X,
 } from "lucide-react";
-import { nanoid } from "nanoid";
-import { useNavigate } from "react-router";
 import { toast, Toaster } from "sonner";
+import { nanoid } from "nanoid";
 
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { envelopeMeta, unwrap } from "@/lib/trpc-data";
-import { cn } from "@/lib/utils";
 import { useT } from "@/lib/LocaleContext";
+import { cn } from "@/lib/utils";
 import EmptyState from "@/components/shared/EmptyState";
 import { SkeletonCard, SkeletonTable } from "@/components/shared/Skeleton";
 import {
@@ -30,214 +30,155 @@ import {
 
 import OverviewStrip from "@/components/data-health/OverviewStrip";
 import PipelineBoard, {
-  type BoardRow,
+  buildPipelineRows,
+  type PipelineRow,
 } from "@/components/data-health/PipelineBoard";
-import ReviewQueue, {
-  type ReviewTaskRow,
-} from "@/components/data-health/ReviewQueue";
-import SourceRegistry, {
-  type DataSourceRow,
-} from "@/components/data-health/SourceRegistry";
+import ReviewQueue from "@/components/data-health/ReviewQueue";
+import SourceRegistry from "@/components/data-health/SourceRegistry";
 import FreshnessHeatmap from "@/components/data-health/FreshnessHeatmap";
 import {
   ageDays,
-  formatDateTime,
+  parseCompliance,
   relativeTime,
-  stewardRoles,
-  type FreshnessSummary,
+  slaStatus,
+  type DataSourceRow,
   type PipelineRunRow,
-} from "@/components/data-health/utils";
+  type ReviewTaskRow,
+} from "@/components/data-health/health-utils";
+import { formatDateTime } from "@/components/briefs/brief-utils";
 
 type Range = "24h" | "7d" | "30d";
+const RANGE_DAYS: Record<Range, number> = { "24h": 1, "7d": 7, "30d": 30 };
 
 export default function DataHealth() {
-  const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
   const t = useT();
-
-  /* ------------------------------ state -------------------------------- */
-  const [range, setRange] = useState<Range>("7d");
-  const [runsFor, setRunsFor] = useState<string | null>(null);
-  const [reRunRow, setReRunRow] = useState<BoardRow | null>(null);
-  const [triageRow, setTriageRow] = useState<BoardRow | null>(null);
-  const [registerOpen, setRegisterOpen] = useState(false);
-  const [auditOpen, setAuditOpen] = useState(false);
-  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
-  const [triagingId, setTriagingId] = useState<string | null>(null);
-  const [signingOffId, setSigningOffId] = useState<string | null>(null);
-  const idempotencyKey = useRef(`rerun-${nanoid(16)}`);
-
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const role = user
     ? user.role === "admin"
-      ? "admin"
+      ? "executive"
       : ((user as { platformRole?: string }).platformRole ?? "policy_analyst")
-    : "guest";
-  const canSteward = stewardRoles.includes(role);
-  const stewardEnabled = isAuthenticated && canSteward;
+    : "policy_analyst";
+  const canSteward = isAuthenticated && ["data_steward", "platform_admin"].includes(role);
+
+  const utils = trpc.useUtils();
+  const [range, setRange] = useState<Range>("30d");
+  const [runsFor, setRunsFor] = useState<string | null>(null);
+  const [reRunRow, setReRunRow] = useState<PipelineRow | null>(null);
+  const [triageRow, setTriageRow] = useState<PipelineRow | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [triagingId, setTriagingId] = useState<string | null>(null);
+  const [signingOffId, setSigningOffId] = useState<string | null>(null);
+  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
+  const [auditOpen, setAuditOpen] = useState(false);
+  const idempotencyKey = useRef(`rerun-${nanoid(16)}`);
 
   /* ------------------------------ queries ------------------------------ */
-  const sourcesQ = trpc.ops.dataSourcesList.useQuery(undefined, {
-    enabled: isAuthenticated,
-    retry: false,
-  });
-  const freshnessQ = trpc.ops.freshnessSummary.useQuery();
-  const runsQ = trpc.ops.pipelineRuns.useQuery(
-    { limit: 100 },
-    { enabled: isAuthenticated, retry: false },
-  );
-  const tasksQ = trpc.ops.reviewTasksList.useQuery(
-    { limit: 100 },
-    { enabled: stewardEnabled, retry: false },
-  );
-  const complianceQ = trpc.ops.contractCompliance.useQuery(undefined, {
+  const stewardEnabled = isAuthenticated;
+  const sourcesQ = trpc.admin.dataSources.useQuery({}, { enabled: stewardEnabled, retry: false });
+  const runsQ = trpc.admin.pipelineRuns.useQuery({ limit: 100 }, { enabled: stewardEnabled, retry: false });
+  const tasksQ = trpc.admin.reviewTasks.useQuery({ limit: 100 }, { enabled: stewardEnabled, retry: false });
+  const complianceQ = trpc.admin.contractsCompliance.useQuery(undefined, {
     enabled: stewardEnabled,
     retry: false,
   });
+  const freshnessQ = trpc.ops.freshnessSummary.useQuery();
   const auditQ = trpc.ops.auditLog.useQuery(
-    { entity_type: "data_source", limit: 20 },
-    { enabled: stewardEnabled && auditOpen, retry: false },
+    { entity_type: "data_source", limit: 8 },
+    { enabled: stewardEnabled && auditOpen && canSteward, retry: false },
+  );
+  const sourceRunsQ = trpc.admin.pipelineRuns.useQuery(
+    { source_id: runsFor ?? "", limit: 20 },
+    { enabled: stewardEnabled && runsFor !== null, retry: false },
   );
 
+  const sources = useMemo(
+    () => (unwrap(sourcesQ.data) as DataSourceRow[] | undefined) ?? [],
+    [sourcesQ.data],
+  );
+  const runs = useMemo(
+    () => (unwrap(runsQ.data) as PipelineRunRow[] | undefined) ?? [],
+    [runsQ.data],
+  );
+  const tasks = useMemo(
+    () => (unwrap(tasksQ.data) as ReviewTaskRow[] | undefined) ?? [],
+    [tasksQ.data],
+  );
+  const freshness = unwrap(freshnessQ.data) as
+    | { asOf: Date | null; status: string; sources: number; label: string }
+    | undefined;
   const complianceMeta = envelopeMeta(complianceQ.data);
 
-  /* --------------------------- derived data ---------------------------- */
-  const sources: DataSourceRow[] = useMemo(() => {
-    const rows = (unwrap(sourcesQ.data) as DataSourceRow[] | undefined) ?? [];
-    const compliance =
-      (unwrap(complianceQ.data) as
-        | { items?: { source_id: string; contract_compliance?: DataSourceRow["contractCompliance"] }[] }
-        | undefined)?.items ?? [];
-    const byId = new Map(compliance.map((c) => [c.source_id, c.contract_compliance]));
-    return rows.map((s) => ({ ...s, contractCompliance: byId.get(s.sourceId) ?? s.contractCompliance }));
-  }, [sourcesQ.data, complianceQ.data]);
-
-  const runsBySource = useMemo(() => {
-    const runs = (unwrap(runsQ.data) as PipelineRunRow[] | undefined) ?? [];
-    const map = new Map<string, PipelineRunRow[]>();
-    for (const r of runs) {
-      const list = map.get(r.sourceId) ?? [];
-      list.push(r);
-      map.set(r.sourceId, list);
-    }
-    for (const list of map.values()) {
-      list.sort(
-        (a, b) =>
-          new Date(b.startedAt ?? b.createdAt).getTime() -
-          new Date(a.startedAt ?? a.createdAt).getTime(),
-      );
-    }
-    return map;
-  }, [runsQ.data]);
-
-  const tasks: ReviewTaskRow[] = useMemo(() => {
-    const rows = (unwrap(tasksQ.data) as ReviewTaskRow[] | undefined) ?? [];
-    return [...rows].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  const forbidden =
+    !isAuthenticated ||
+    [sourcesQ, runsQ, tasksQ].some((q) =>
+      q.error?.data?.code === "FORBIDDEN" || q.error?.data?.code === "UNAUTHORIZED",
     );
-  }, [tasksQ.data]);
 
-  const boardRows: BoardRow[] = useMemo(
-    () =>
-      sources.map((source) => {
-        const runs = runsBySource.get(source.sourceId) ?? [];
-        const latestRun = runs[0] ?? null;
-        const task = tasks.find(
-          (t) =>
-            t.entityRef === source.sourceId &&
-            (t.status === "open" || t.status === "in_progress"),
-        );
-        return {
-          source,
-          latestRun,
-          runs: runs.slice(0, 6),
-          task: task
-            ? {
-                taskId: task.taskId,
-                status: task.status,
-                assigneeRole: task.assigneeRole,
-              }
-            : null,
-        };
-      }),
-    [sources, runsBySource, tasks],
-  );
+  /* ----------------------------- mutations ------------------------------ */
+  const triageM = trpc.admin.triageReviewTask.useMutation({
+    onSuccess: async (_p, vars) => {
+      toast.success(`Review task ${vars.status.replace(/_/g, " ")}`, {
+        description: "Triage recorded with actor id — audit event written.",
+      });
+      setTriagingId(null);
+      await utils.admin.reviewTasks.invalidate();
+    },
+    onError: (err) => {
+      toast.error(t.common.errorGeneric, { description: err.message });
+      setTriagingId(null);
+    },
+  });
 
-  const { healthy, stale, failing } = useMemo(() => {
-    let h = 0,
-      s = 0,
-      f = 0;
-    for (const src of sources) {
-      if (src.status === "healthy") h++;
-      else if (src.status === "failing") f++;
-      else s++;
-    }
-    return { healthy: h, stale: s, failing: f };
-  }, [sources]);
+  const updateSourceM = trpc.admin.updateDataSource.useMutation({
+    onSuccess: async (_p, vars) => {
+      if (vars.contract_compliance) {
+        toast.success("Contract change approved", {
+          description: "Drift sign-off recorded with actor + timestamp (audit).",
+        });
+      } else {
+        toast.success("Source updated", { description: "Audit event recorded." });
+      }
+      setSigningOffId(null);
+      await Promise.all([
+        utils.admin.dataSources.invalidate(),
+        utils.admin.contractsCompliance.invalidate(),
+      ]);
+    },
+    onError: (err) => {
+      toast.error(t.common.errorGeneric, { description: err.message });
+      setSigningOffId(null);
+    },
+  });
 
-  const freshness = unwrap(freshnessQ.data) as FreshnessSummary | undefined;
+  /* ------------------------------ derived ------------------------------- */
+  const healthy = sources.filter((s) => s.health === "healthy").length;
+  const stale = sources.filter((s) => s.health === "stale").length;
+  const failing = sources.filter((s) => s.health === "failing").length;
 
   const breaches = useMemo(
     () =>
       sources.filter(
         (s) =>
-          !acknowledged.has(s.sourceId) &&
-          (s.status === "failing" || ageDays(s.lastRefresh) > s.slaDays),
+          slaStatus(s.freshnessDays, s.refreshCadence) === "breached" &&
+          !acknowledged.has(s.sourceId),
       ),
     [sources, acknowledged],
   );
 
-  const forbidden =
-    isAuthenticated &&
-    !canSteward &&
-    (sourcesQ.isError || tasksQ.isError) &&
-    /forbidden|unauthor/i.test(
-      `${sourcesQ.error?.message ?? ""} ${tasksQ.error?.message ?? ""}`,
-    );
+  const rangeRuns = useMemo(() => {
+    const cutoff = Date.now() - RANGE_DAYS[range] * 86400000;
+    return runs.filter((r) => {
+      const t = r.startedAt ? new Date(r.startedAt).getTime() : new Date(r.createdAt).getTime();
+      return Number.isNaN(t) ? true : t >= cutoff;
+    });
+  }, [runs, range]);
 
-  /* ----------------------------- mutations ------------------------------ */
-  const updateSourceM = trpc.ops.updateDataSource.useMutation({
-    onSuccess: () => {
-      toast.success(t.dataHealth.toastSourceUpdated);
-      setSigningOffId(null);
-      void sourcesQ.refetch();
-      void complianceQ.refetch();
-    },
-    onError: (err) => {
-      toast.error(t.dataHealth.toastUpdateFailed, { description: err.message });
-      setSigningOffId(null);
-    },
-  });
-
-  const triageM = trpc.ops.triageTask.useMutation({
-    onSuccess: (_d, vars) => {
-      toast.success(
-        vars.status === "resolved"
-          ? t.dataHealth.toastResolved
-          : vars.status === "dismissed"
-            ? t.dataHealth.toastDismissed
-            : t.dataHealth.toastInProgress,
-      );
-      setTriagingId(null);
-      void tasksQ.refetch();
-    },
-    onError: (err) => {
-      toast.error(t.dataHealth.toastTriageFailed, { description: err.message });
-      setTriagingId(null);
-    },
-  });
-
-  /* ------------------------------ actions ------------------------------- */
-  const sourceRunsQ = trpc.ops.pipelineRuns.useQuery(
-    { source_id: runsFor ?? "", limit: 25 },
-    { enabled: runsFor !== null },
-  );
+  const boardRows = useMemo(() => buildPipelineRows(sources, rangeRuns), [sources, rangeRuns]);
 
   const acknowledgeBreach = (s: DataSourceRow) => {
-    const compliance = s.contractCompliance ?? {
-      schema_ok: true,
-      sla_ok: false,
-      license_ok: true,
-    };
+    if (!canSteward) return;
+    const compliance = parseCompliance(s.contractCompliance) ?? {};
     updateSourceM.mutate({
       source_id: s.sourceId,
       contract_compliance: {
