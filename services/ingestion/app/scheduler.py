@@ -54,6 +54,7 @@ DEFAULT_CADENCE_S: dict[str, int] = {
     "cac": 30 * 24 * 3600,              # monthly CAC registrations
     "bpp": 30 * 24 * 3600,              # monthly BPP/NOCOPO awards
     "smedan": 30 * 24 * 3600,           # monthly SMEDAN survey highlights
+    "npopc": 30 * 24 * 3600,            # monthly NPopC projections
 }
 DEFAULT_JITTER_PCT = 0.10
 DEFAULT_JURISDICTION = "jur:ng-kd"

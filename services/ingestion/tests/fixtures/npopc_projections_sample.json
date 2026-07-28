@@ -1,0 +1,11 @@
+{
+  "note": "NPopC state/LGA demographic projections used as the deterministic offline fallback for the npopc connector (projection vintage 2022, based on 2006 census projections).",
+  "rows": [
+    {"state": "Lagos", "jurisdiction_id": "ng-la", "period": "2022", "population": 20401000, "growth_rate_pct": 3.2, "under15_pct": 31.4, "working_age_pct": 63.9, "density_per_km2": 5720},
+    {"state": "Kaduna", "jurisdiction_id": "ng-kd", "period": "2022", "population": 9252000, "growth_rate_pct": 3.1, "under15_pct": 44.8, "working_age_pct": 51.6, "density_per_km2": 201},
+    {"state": "Kaduna", "jurisdiction_id": "ng-kd", "lga": "Kaduna North", "period": "2022", "population": 452000, "growth_rate_pct": 2.9, "under15_pct": 43.5},
+    {"state": "Kano", "jurisdiction_id": "ng-kn", "period": "2022", "population": 15853000, "growth_rate_pct": 2.7, "under15_pct": 46.2, "working_age_pct": 50.4, "density_per_km2": 787},
+    {"state": "Rivers", "jurisdiction_id": "ng-ri", "period": "2022", "population": 7867000, "growth_rate_pct": 2.4, "under15_pct": 38.1, "working_age_pct": 57.2, "density_per_km2": 711},
+    {"state": "Kaduna", "jurisdiction_id": "ng-kd", "lga": "Zaria", "period": "2022", "population": 512000, "growth_rate_pct": 3.0, "under15_pct": 44.1}
+  ]
+}

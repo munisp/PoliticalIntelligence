@@ -20,6 +20,7 @@ from app.connectors.state_irs import StateIrsConnector
 from app.connectors.cac import CacConnector
 from app.connectors.bpp import BppConnector
 from app.connectors.smedan import SmedanConnector
+from app.connectors.npopc import NpopcConnector
 
 REGISTRY: dict[str, type[BaseConnector]] = {
     c.name: c
@@ -42,6 +43,7 @@ REGISTRY: dict[str, type[BaseConnector]] = {
         CacConnector,
         BppConnector,
         SmedanConnector,
+        NpopcConnector,
     )
 }
 
