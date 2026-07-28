@@ -386,6 +386,12 @@ export const simulationRuns = mysqlTable(
     resultSummary: json("result_summary"),
     artifactUri: varchar("artifact_uri", { length: 512 }),
     seed: int("seed").default(42).notNull(),
+    /** DM-3: persisted run manifest (everything needed to re-run). */
+    manifest: json("manifest"),
+    /** Content-addressed snapshot of run inputs: snap:<sha256-16>. */
+    datasetSnapshotId: varchar("dataset_snapshot_id", { length: 96 }),
+    /** sha256(manifest + result_summary) — recomputed to verify reproducibility. */
+    reproducibilityHash: varchar("reproducibility_hash", { length: 64 }),
     startedAt: timestamp("started_at"),
     finishedAt: timestamp("finished_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -442,6 +448,7 @@ export const facilities = mysqlTable(
   (t) => ({
     jurIdx: index("facilities_jur_idx").on(t.jurisdictionId),
     typeIdx: index("facilities_type_idx").on(t.type),
+    latLonIdx: index("facilities_lat_lon_idx").on(t.lat, t.lon),
   }),
 );
 
@@ -495,6 +502,130 @@ export const ingestionRuns = mysqlTable(
 export type IngestionRun = typeof ingestionRuns.$inferSelect;
 
 /* ------------------------------------------------------------------ */
+/* Canonical model completion (additive — feat-data-loader)            */
+/* ------------------------------------------------------------------ */
+
+/** State budget lines: appropriation vs release per MDA/sector/year. */
+export const budgets = mysqlTable(
+  "budgets",
+  {
+    budgetId: varchar("budget_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    fiscalYear: int("fiscal_year").notNull(),
+    /** Ministry/Department/Agency. */
+    mda: varchar("mda", { length: 255 }).notNull(),
+    sectorCode: varchar("sector_code", { length: 32 }),
+    /** Figures in ₦ (naira), not millions. */
+    appropriatedNgn: double("appropriated_ngn"),
+    releasedNgn: double("released_ngn"),
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurYearIdx: index("budgets_jur_year_idx").on(t.jurisdictionId, t.fiscalYear),
+  }),
+);
+
+export type Budget = typeof budgets.$inferSelect;
+
+/** Public officials relevant to policy twin (tenure-windowed). */
+export const officials = mysqlTable(
+  "officials",
+  {
+    officialId: varchar("official_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    role: varchar("role", { length: 255 }).notNull(),
+    level: adminLevelEnum("level"),
+    party: varchar("party", { length: 64 }),
+    /** Tenure window as ISO date labels (e.g. "2023-05-29"). */
+    validFrom: varchar("valid_from", { length: 32 }),
+    validTo: varchar("valid_to", { length: 32 }),
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("officials_jur_idx").on(t.jurisdictionId),
+  }),
+);
+
+export type Official = typeof officials.$inferSelect;
+
+/** Flagship government programs (status + headline targets). */
+export const programs = mysqlTable(
+  "programs",
+  {
+    programId: varchar("program_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    sectorCode: varchar("sector_code", { length: 32 }),
+    status: varchar("status", { length: 32 }).default("active").notNull(),
+    targetJobs: int("target_jobs"),
+    budgetId: varchar("budget_id", { length: 96 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("programs_jur_idx").on(t.jurisdictionId),
+  }),
+);
+
+export type Program = typeof programs.$inferSelect;
+
+/** Business registrations (CAC-style) — SME formalization proxy. */
+export const businessRegistrations = mysqlTable(
+  "business_registrations",
+  {
+    registrationId: varchar("registration_id", { length: 96 }).primaryKey(),
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    rcNumber: varchar("rc_number", { length: 32 }),
+    entityType: varchar("entity_type", { length: 64 }),
+    /** Registration date as ISO date label. */
+    registeredAt: varchar("registered_at", { length: 32 }),
+    status: varchar("status", { length: 32 }).default("active").notNull(),
+    lga: varchar("lga", { length: 128 }),
+    source: varchar("source", { length: 255 }),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => ({
+    jurIdx: index("business_registrations_jur_idx").on(t.jurisdictionId),
+    rcIdx: index("business_registrations_rc_idx").on(t.rcNumber),
+  }),
+);
+
+export type BusinessRegistration = typeof businessRegistrations.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* Geospatial (additive — feat-data-loader)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Administrative boundary polygons (GeoJSON Feature per unit) with real
+ * centroids. Mirrors public/geo/*.geojson; powers choropleths and the
+ * point-in-polygon fallback when POSTGIS_URL is not configured.
+ */
+export const geoBoundaries = mysqlTable(
+  "geo_boundaries",
+  {
+    /** e.g. "adm:ng-kd-zaria" — mirrors admin_units ids. */
+    unitId: varchar("unit_id", { length: 96 }).primaryKey(),
+    level: adminLevelEnum("level"),
+    /** GeoJSON Feature (Polygon/MultiPolygon) with name/osm props. */
+    geojson: json("geojson").notNull(),
+    centroidLat: double("centroid_lat"),
+    centroidLon: double("centroid_lon"),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+);
+
+export type GeoBoundary = typeof geoBoundaries.$inferSelect;
+
+/* ------------------------------------------------------------------ */
 /* Briefs                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -546,6 +677,14 @@ export const dataSources = mysqlTable("data_sources", {
   /** Source contract compliance: {schema_ok, sla_ok, license_ok, notes}. */
   contractCompliance: json("contract_compliance"),
   geographyScope: varchar("geography_scope", { length: 128 }),
+  /** §16 EvidenceSource registry metadata. */
+  license: varchar("license", { length: 255 }),
+  /** Data-quality score 0–100 (freshness/schema/SLA composite). */
+  qualityScore: int("quality_score"),
+  /** Privacy classification: public | internal | restricted. */
+  privacyClassification: varchar("privacy_classification", { length: 32 })
+    .default("internal")
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -815,3 +954,105 @@ export const webhookSubscriptions = mysqlTable("webhook_subscriptions", {
 });
 
 export type WebhookSubscription = typeof webhookSubscriptions.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+// === feat-llm-events tables ===
+/* ------------------------------------------------------------------ */
+
+/**
+ * Dead-letter queue for the event backbone (docs/EVENTS.md). Rows land here
+ * after the consumer retry budget (3x backoff) is exhausted — either from a
+ * Kafka consumer group or from the outbox-mode polled consumer. The original
+ * event_outbox row keeps its attempts/last_error; this table is the durable
+ * DLQ record (`<topic>.dlq` equivalent when Kafka is not deployed).
+ */
+export const eventDlq = mysqlTable("event_dlq", {
+  eventId: varchar("event_id", { length: 64 }).primaryKey(),
+  /** Source topic (the DLQ topic is derived as `${topic}.dlq`). */
+  topic: varchar("topic", { length: 128 }).notNull(),
+  dlqTopic: varchar("dlq_topic", { length: 160 }).notNull(),
+  partitionKey: varchar("partition_key", { length: 128 }),
+  payload: json("payload").notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  /** Consumer group / handler that exhausted retries. */
+  consumerGroup: varchar("consumer_group", { length: 128 }),
+  deadAt: timestamp("dead_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  /** Set when an operator replays the message back onto the bus. */
+  replayedAt: timestamp("replayed_at"),
+});
+
+export type EventDlqRow = typeof eventDlq.$inferSelect;
+
+/**
+ * Job heartbeats (SR-9 jobs hardening). The in-process runner stamps a row
+ * on every lifecycle transition; a sweeper interval auto-fails jobs whose
+ * heartbeat is stale (>10 min) while the jobs row still says running.
+ */
+export const jobHeartbeats = mysqlTable("job_heartbeats", {
+  jobId: varchar("job_id", { length: 64 }).primaryKey(),
+  /** Last lifecycle status observed by the runner. */
+  status: varchar("status", { length: 32 }).notNull(),
+  ts: timestamp("ts").defaultNow().notNull(),
+});
+
+export type JobHeartbeat = typeof jobHeartbeats.$inferSelect;
+
+/**
+ * WORM audit export checkpoints (SEC-4). One row per export file: anchors
+ * the running hash-chain head + sha256 manifest so continuity across
+ * hourly exports is verifiable even if the artifact dir is remounted.
+ */
+export const auditWormExports = mysqlTable("audit_worm_exports", {
+  exportId: varchar("export_id", { length: 64 }).primaryKey(),
+  fileName: varchar("file_name", { length: 255 }).notNull(),
+  /** First/last audit event ids included (inclusive). */
+  fromEventId: bigint("from_event_id", { mode: "number" }),
+  toEventId: bigint("to_event_id", { mode: "number" }),
+  eventCount: int("event_count").default(0).notNull(),
+  /** Chain head (entry_hash of the last exported event) and manifest sha. */
+  chainHead: varchar("chain_head", { length: 64 }).notNull(),
+  manifestSha256: varchar("manifest_sha256", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AuditWormExport = typeof auditWormExports.$inferSelect;
+
+/* ------------------------------------------------------------------ */
+/* ADDITIVE (SEC-3): dataset-level ABAC policies.                      */
+/* One row per protected dataset: a concrete dataset key (document id, */
+/* law id, opportunity id, source id) or the entity-type wildcard "*". */
+/* Resolution at read time: exact dataset_id match wins over "*".      */
+/* ------------------------------------------------------------------ */
+export const datasetPolicies = mysqlTable(
+  "dataset_policies",
+  {
+    policyId: varchar("policy_id", { length: 64 }).primaryKey(),
+    /** Concrete dataset key or "*" (entity-type default). */
+    datasetId: varchar("dataset_id", { length: 128 }).notNull(),
+    /** document | clause | opportunity | data_source | ... */
+    entityType: varchar("entity_type", { length: 64 }).notNull(),
+    classification: mysqlEnum("classification", [
+      "public",
+      "internal",
+      "restricted",
+    ])
+      .notNull()
+      .default("internal"),
+    /** Platform roles allowed when classification = restricted (json array). */
+    allowedRoles: json("allowed_roles"),
+    /** Optional: policy only applies within this jurisdiction. */
+    jurisdictionId: varchar("jurisdiction_id", { length: 64 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    datasetEntity: uniqueIndex("dataset_policies_dataset_entity").on(
+      t.datasetId,
+      t.entityType,
+    ),
+  }),
+);
+
+export type DatasetPolicy = typeof datasetPolicies.$inferSelect;
