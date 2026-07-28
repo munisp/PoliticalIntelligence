@@ -1,0 +1,40 @@
+# Airbyte CDK low-code declarative source: UBEC fact sheets (ING-8).
+version: "3.0.0"
+description: "Universal Basic Education Commission — publication index"
+definitions:
+  requester:
+    type: HttpRequester
+    url_base: "https://ubec.gov.ng/"
+    http_method: GET
+  retriever:
+    type: SimpleRetriever
+    requester:
+      $ref: "#/definitions/requester"
+    record_selector:
+      type: RecordSelector
+      extractor:
+        type: DpathExtractor
+        field_path: []
+  streams:
+    fact_sheets:
+      type: DeclarativeStream
+      name: fact_sheets
+      primary_key: ["url"]
+      retriever:
+        $ref: "#/definitions/retriever"
+      path: publications/
+      transformations:
+        - type: AddFields
+          fields:
+            - path: ["_source"]
+              value: "ubec_factsheet"
+streams:
+  - $ref: "#/definitions/streams/fact_sheets"
+check:
+  type: CheckStream
+  stream_names: ["fact_sheets"]
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    properties: {}
