@@ -27,6 +27,8 @@ import {
   Sparkles,
   Globe2,
   Megaphone,
+  Radar as RadarNavIcon,
+  Map,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -263,6 +265,10 @@ const PRIMARY_NAV: NavItem[] = [
   { label: "Executive Briefs", tKey: "executiveBriefs", href: "/briefs", Icon: FileText },
   /* ADVOCACY-NAV */
   { label: "Advocacy Pathway", tKey: "advocacy", href: "/advocacy", Icon: Megaphone },
+  /* I1 — Policy Radar */
+  { label: "Policy Radar", tKey: "radar", href: "/radar", Icon: RadarNavIcon },
+  /* DOMESTICATION-NAV */
+  { label: "Domestication Tracker", tKey: "tracker", href: "/tracker", Icon: Map },
   { label: "Data Source Health", tKey: "dataHealth", href: "/data-health", Icon: HeartPulse },
   { label: "Copilot", tKey: "copilot", href: "/copilot", Icon: MessageSquareText, dot: true },
 ];
@@ -288,6 +294,9 @@ const PAGE_TITLES: Record<string, { title: string; crumb: string }> = {
   "/copilot": { title: "Copilot", crumb: "Kaduna State / Assistant" },
   "/geo3d": { title: "3D Geospatial", crumb: "Kaduna State / LGA extrusion" },
   "/advocacy": { title: "Advocacy Pathway", crumb: "Kaduna State / Engagement" },
+  "/radar": { title: "Policy Radar", crumb: "Platform / Weekly digest" },
+  "/corridors": { title: "Corridor Twin", crumb: "Lagos–Calabar / Delivery" },
+  "/tracker": { title: "State Domestication Tracker", crumb: "Federation / 37 cells" },
 };
 
 const DEMO_ROLES = [
