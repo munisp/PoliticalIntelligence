@@ -327,15 +327,14 @@ export async function upsertBudgets(
           sectorCode: (data.sector_code as string) ?? null,
           appropriatedNgn:
             data.amount_ngn !== undefined ? Number(data.amount_ngn) : null,
-          source: [
-            // Optional budget tier (state / development_partner) from
-            // feat-conn-subnat-firms connectors; absent for federal lines.
-            data.tier ?? "",
-            data.appropriation_type ?? "capital",
-            data.program_code ?? "",
-          ]
-            .join(" ")
-            .trim() || null,
+          // Budget tier (federal / state / faac_allocation /
+          // budget_execution / development_partner) lives in its own
+          // column; `source` stays a clean source descriptor.
+          tier: (data.tier as string) ?? null,
+          source:
+            [data.appropriation_type ?? "capital", data.program_code ?? ""]
+              .join(" ")
+              .trim() || null,
           origin: provenance.origin,
           sourceUrl: provenance.url ?? null,
           fetchedAt: toDate(provenance.fetched_at),
