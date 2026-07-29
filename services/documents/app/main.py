@@ -229,6 +229,26 @@ async def param_map(request: Request, body: ParamMapRequest):
     return _envelope(request, result.model_dump(mode="json"))
 
 
+class DiffImpactRequest(BaseModel):
+    clauses_a: list[Clause]
+    clauses_b: list[Clause]
+
+
+@app.post("/v1/diff-impact")
+async def diff_impact(request: Request, body: DiffImpactRequest):
+    """I4: diff two bill versions (clauses A vs B) — added/removed/changed
+    obligations, parameter deltas (instrument/scale) and per-change impact
+    notes. Deterministic rules; analyst review required."""
+    from app.diff_impact import compute_diff_impact
+
+    if not body.clauses_a and not body.clauses_b:
+        raise ServiceError(code="DIFF_IMPACT_INPUT_REQUIRED",
+                           message="Provide clauses_a and/or clauses_b",
+                           http_status=422)
+    result = compute_diff_impact(body.clauses_a, body.clauses_b)
+    return _envelope(request, result.model_dump(mode="json"))
+
+
 @app.post("/v1/documents/{document_id}/reprocess", status_code=202)
 async def reprocess(document_id: str, request: Request):
     manager: JobManager = request.app.state.jobs
