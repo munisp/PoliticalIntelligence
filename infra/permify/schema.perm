@@ -1,0 +1,63 @@
+// Permify ReBAC model for the Policy Twin platform (feat-mw-edge-authz).
+//
+// Entities mirror the ABAC tiers in api/utils/datasets.ts:
+//   jurisdiction — hierarchical (admin_units.parent_id); `view` inherits up
+//                  the parent chain so a grant on a state implies its LGAs.
+//   dataset      — owner relation + jurisdiction link; `read` respects the
+//                  classification attribute (public ⇒ everyone, otherwise
+//                  owner or anyone who can view the jurisdiction).
+//   law / opportunity — jurisdiction-scoped reference data, same shape.
+//
+// Relationships are written by scripts/permify-sync.ts (jurisdiction
+// hierarchy from admin_units) and by dataset classification writes.
+
+entity user {}
+
+entity jurisdiction {
+    relation parent @jurisdiction
+    relation admin @user
+
+    permission view = admin or parent.view
+    permission manage = admin
+}
+
+entity dataset {
+    relation owner @user
+    relation jur @jurisdiction
+
+    attribute classification string
+
+    rule is_public(classification string) {
+        classification == "public"
+    }
+
+    // public ⇒ anyone; internal/restricted ⇒ owner or jurisdiction viewers.
+    permission read = is_public(classification) or owner or jur.view
+    permission write = owner or jur.manage
+}
+
+entity law {
+    relation jur @jurisdiction
+
+    attribute classification string
+
+    rule is_public(classification string) {
+        classification == "public"
+    }
+
+    permission read = is_public(classification) or jur.view
+    permission write = jur.manage
+}
+
+entity opportunity {
+    relation jur @jurisdiction
+
+    attribute classification string
+
+    rule is_public(classification string) {
+        classification == "public"
+    }
+
+    permission read = is_public(classification) or jur.view
+    permission write = jur.manage
+}
