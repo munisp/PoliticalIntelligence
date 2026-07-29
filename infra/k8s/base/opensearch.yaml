@@ -1,0 +1,78 @@
+# OpenSearch — full-text search plane (docs/OPENSEARCH.md).
+# Dev topology: single-node, security plugin DISABLED (dev only), emptyDir.
+# Production should use a managed domain or the multi-node overlay with the
+# security plugin enabled and TLS everywhere.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opensearch
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opensearch
+        app.kubernetes.io/part-of: policy-twin
+    spec:
+      containers:
+        - name: opensearch
+          image: opensearchproject/opensearch:2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: plugins.security.disabled
+              value: "true"
+            - name: DISABLE_SECURITY_PLUGIN
+              value: "true"
+            - name: OPENSEARCH_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          ports:
+            - name: http
+              containerPort: 9200
+            - name: transport
+              containerPort: 9600
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/opensearch/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  selector:
+    app.kubernetes.io/name: opensearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: http
