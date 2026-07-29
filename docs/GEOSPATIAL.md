@@ -42,6 +42,10 @@ Otherwise the **MySQL fallback** runs the same shapes:
 Every response carries `engine: "postgis" | "mysql"` so the execution
 path is visible.
 
+Integration coverage: `api/tests/geo-postgis.test.ts` exercises the PostGIS
+adapter end-to-end when `POSTGIS_URL` is reachable and skips cleanly
+otherwise (vitest conditional pattern — no hard PostGIS dependency in CI).
+
 ## 3. API (`api/geo.ts`, default export)
 
 | Procedure | Input | Output |

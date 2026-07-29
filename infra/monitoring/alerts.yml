@@ -46,10 +46,13 @@ groups:
           summary: "Data source {{ $labels.source }} is stale"
           description: "No successful ingestion from {{ $labels.source }} within its expected cadence."
 
-      # Event backlog: consumer lag growing on any topic.
+      # Event backlog: consumer lag growing on any topic. Fires on the
+      # API-emitted event_consumer_lag gauge (outbox backlog, gap #28) or
+      # the Redpanda group-lag metric when Kafka mode is live.
       - alert: EventBacklogGrowing
         expr: |
-          sum by (group, topic) (redpanda_kafka_consumer_group_lag) > 10000
+          max by (group, topic) (event_consumer_lag) > 10000
+          or sum by (group, topic) (redpanda_kafka_consumer_group_lag) > 10000
         for: 20m
         labels:
           severity: warning

@@ -10,6 +10,27 @@
 
 Promotion: merge → dev auto-deploys; release-candidate tags → staging + canary; release tags → prod after manual approval (GitOps flow in `infra/k8s/README.md`).
 
+## Database setup & seeding
+
+Provision schema with `npm run db:migrate` (or `npm run db:push` in dev), then seed all demo/pilot corpora idempotently with `npm run db:seed:all` (essentials + advocacy KB + Lagos–Calabar corridor; re-runnable).
+
+## Container image extras (audit gaps #25/#26)
+
+- **Documents service** (`services/documents/Dockerfile`): heavy OCR extras
+  (PaddleOCR, Docling, boto3 — see `requirements-extras.txt`) are behind
+  build-arg `WITH_OCR_EXTRAS=true` (**default false**, keeps the image slim;
+  paddlepaddle alone is ~200MB, Docling pulls torch + ~1.5GB models). Install
+  is best-effort — a failed extras install does not fail the build, and the
+  service falls back to deterministic stdlib extractors. Enable per-build:
+  `docker build --build-arg WITH_OCR_EXTRAS=true services/documents` or
+  `build.args.WITH_OCR_EXTRAS: "true"` on the compose `documents` service.
+- **Ingestion service** (`services/ingestion/Dockerfile`):
+  `requirements-extras.txt` (pyiceberg for the DM-4 lakehouse export,
+  kafka-python, PyMySQL, optional Dagster) is installed by default via
+  `WITH_INGESTION_EXTRAS=true` — pyiceberg is small and the lakehouse path is
+  a first-class feature. Build slim with
+  `docker build --build-arg WITH_INGESTION_EXTRAS=false services/ingestion`.
+
 ## Secrets management
 
 - All secrets live in **Vault**; Kubernetes consumes them via the External Secrets Operator (or sealed-secrets). `infra/k8s/base/secrets-template.yaml` documents required keys — real values are never committed.

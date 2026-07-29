@@ -80,6 +80,33 @@ cd mobile && npm run sync     # rebuild ../dist + copy into both native shells
    the bundled `webDir` assets. (The `cleartext: true` flag there is for the
    local dev server only.)
 
+## Web ↔ native bridge (audit gap #9)
+
+`src/main.tsx` (root app) wires `initNative` via a **guarded dynamic
+import**: the bridge module is only imported when `window.Capacitor
+?.isNativePlatform?.()` is true (native shell injects the Capacitor runtime
+before web code runs). In a plain browser/PWA it is a strict no-op — the web
+bundle never resolves `@capacitor/*` and no network fetch is attempted.
+
+> **Native builds:** for the bridge code to actually bundle into the native
+> app's WebView assets, add the `@capacitor/*` packages as root dev
+> dependencies and change the non-literal import in `src/main.tsx` to the
+> literal path `../../mobile/src/native` (Vite will then code-split it).
+> Until then the dynamic import fails soft in the shell (warn-only) and all
+> helpers in `src/native.ts` remain importable directly by native-targeted
+> entry points.
+
+## Quick sync + debug build
+
+```bash
+bash scripts/mobile-sync.sh            # web build + cap sync (both platforms)
+bash scripts/mobile-sync.sh android    # android only
+cd mobile/android && ./gradlew assembleDebug   # debug APK (needs Android SDK/JDK 17)
+```
+
+The sandbox/CI without an Android SDK cannot run `cap add`/`gradlew` — see
+the commented `mobile-android` job sketch in `.github/workflows/ci.yml`.
+
 ## PWA ↔ native relationship
 
 - The root app remains a fully functional PWA. Capacitor loads the **same**

@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nightly live-connector probe (gap #5): catches upstream API
+    # regressions (worldbank/hdx/nada/overpass/iati) independent of pushes.
+    - cron: "17 3 * * *"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -49,6 +53,32 @@ jobs:
 
       - name: Unit tests (vitest)
         run: npm run test
+
+  # ── Mobile native build (audit gap #9) ────────────────────────────────────
+  # Android builds need the Android SDK + JDK 17, which the current CI image
+  # does not provision; the job is documented here for when a self-hosted or
+  # larger runner is available. The web↔native bridge is a guarded dynamic
+  # import (src/main.tsx), so the web jobs above fully cover the PWA path.
+  #
+  # mobile-android:
+  #   name: Mobile (Android debug APK)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 20, cache: npm }
+  #     - uses: actions/setup-java@v4
+  #       with: { distribution: temurin, java-version: 17 }
+  #     - uses: android-actions/setup-android@v3
+  #     - run: npm ci && npm --prefix mobile ci
+  #     - run: npm run build                      # web app → dist/
+  #     - run: npm --prefix mobile run add:android  # generates android/ (not committed)
+  #     - run: npx --prefix mobile cap sync android
+  #     - run: cd mobile/android && ./gradlew assembleDebug
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: app-debug-apk
+  #         path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
 
   python:
     name: Python (${{ matrix.service }})
@@ -140,8 +170,8 @@ jobs:
       - name: Push schema
         run: npm run db:push
 
-      - name: Seed pilot data
-        run: npx tsx db/seed.ts
+      - name: Seed pilot data (unified: essentials + advocacy + lagos-calabar)
+        run: npm run db:seed:all
 
       - name: Seed e2e identities
         run: npx tsx tests/e2e/seed-users.ts
@@ -199,10 +229,63 @@ jobs:
       - name: Dependency audit (high severity threshold)
         run: npm audit --omit=dev --audit-level=high
 
+      # Gap #18: allowlisted gate — same check but with a documented,
+      # time-boxed exception mechanism (scripts/security-scan.mjs).
+      - name: Security gate (allowlisted npm audit)
+        run: node scripts/security-scan.mjs
+
+      # Gap #18: container/filesystem scan. Scans the repo (config,
+      # Dockerfiles, lockfiles) for high/critical vulns; non-zero on
+      # findings so the job goes red. SBOM/image scans slot in here later.
+      - name: Trivy filesystem scan (high/critical)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
       - name: Secret scan (gitleaks)
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Nightly live-probe of the genuinely-live ingestion endpoints
+  # (scripts/probe-connectors.mjs). Non-zero exit on regression, so a
+  # broken upstream fails the scheduled run and shows up in Actions.
+  # Gap #21: terraform fmt/validate hygiene. The script self-skips when
+  # terraform is absent, but here we install it so the gate is real.
+  terraform:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: fmt -check + validate (root + modules)
+        run: bash scripts/tf-validate.sh
+
+  connector-probe:
+    name: Live connector probe (nightly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Probe live connectors
+        env:
+          # Optional: free IATI Datastore subscription key; without it the
+          # probe treats the documented 401 as WARN (not a regression).
+          IATI_API_KEY: ${{ secrets.IATI_API_KEY }}
+        run: node scripts/probe-connectors.mjs
 
   docker:
     name: Docker images

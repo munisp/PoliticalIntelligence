@@ -127,10 +127,19 @@ export async function emitEvent(
     console.error(`[events] kafka send failed for ${topic}, falling back to outbox:`, err);
   }
   await persistOutbox(event);
-  // Webhook fan-out is best-effort and asynchronous.
-  void deliverWebhooks(event).catch((err) =>
-    console.error("[events] webhook delivery error:", err),
-  );
+  // Webhook fan-out is best-effort and asynchronous. Gated by
+  // WEBHOOKS_ENABLED (default on) so test runs don't fire HTTP fan-out
+  // noise at subscriber URLs (vitest sets WEBHOOKS_ENABLED=false).
+  if (webhooksEnabled()) {
+    void deliverWebhooks(event).catch((err) =>
+      console.error("[events] webhook delivery error:", err),
+    );
+  }
+}
+
+/** WEBHOOKS_ENABLED gate (default true; "0/false/no" disables). */
+export function webhooksEnabled(): boolean {
+  return !/^(0|false|no)$/i.test(process.env.WEBHOOKS_ENABLED ?? "");
 }
 
 /**

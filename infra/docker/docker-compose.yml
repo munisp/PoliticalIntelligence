@@ -630,7 +630,10 @@ services:
       VLLM_BASE_URL: ${VLLM_BASE_URL:-http://localhost:8000/v1}
       # AI-7: set LLM_TRANSPORT=ray to route via Ray Serve (RAY_SERVE_URL)
       LLM_TRANSPORT: ${LLM_TRANSPORT:-vllm}
-      RAY_SERVE_URL: ${RAY_SERVE_URL:-http://localhost:8001}
+      # NOTE (gap #7): no default RAY_SERVE_URL — there is no Ray service in
+      # this compose stack, and a dangling default points the breaker at a
+      # dead localhost endpoint. Uncomment only with a real Ray Serve URL:
+      # RAY_SERVE_URL: ${RAY_SERVE_URL}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
@@ -976,8 +979,14 @@ services:
     networks: [platform]
     restart: unless-stopped
 
+  # Trino is an opt-in analyst tool (nothing in the app/ingestion runtime
+  # depends on it — there is no TRINO_URL consumer in the codebase), so it is
+  # profile-gated to keep the default stack slim. Enable with:
+  #   docker compose -f infra/docker/docker-compose.yml --profile lakehouse up trino
+  # Smoke check: TRINO_URL=http://localhost:8080 node scripts/trino-smoke.mjs
   trino:
     image: trinodb/trino:latest
+    profiles: ["lakehouse"]
     ports:
       - "${TRINO_PORT:-8080}:8080"
     environment:

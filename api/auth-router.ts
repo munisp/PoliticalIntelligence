@@ -17,6 +17,7 @@ export const ROLE_SCOPES: Record<PlatformRole, string[]> = {
   legal_analyst: ["legislation:review"],
   simulation_specialist: ["scenarios:write"],
   data_steward: ["admin:sources"],
+  field_officer: ["field:verify"],
   platform_admin: ["admin:all"],
 };
 

@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/LocaleContext";
 import { useFocusReturn } from "@/hooks/use-focus-return";
+import EngagementsSection from "./EngagementsSection";
 import type { StakeholderEdge, StakeholderKind, StakeholderNode } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -698,6 +699,9 @@ function StakeholderDrawer({
                 </h3>
                 <p className="mt-1 text-[13px] text-ink-secondary">{node.contactNote}</p>
               </section>
+
+              {/* I5 — Advocacy CRM engagements */}
+              <EngagementsSection stakeholderId={node.stakeholderId} />
 
               <section>
                 <h3 className="caption-label text-ink-muted">

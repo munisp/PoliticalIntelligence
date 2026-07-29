@@ -43,6 +43,15 @@ import { renderDraftAkn } from "./queries/documents";
 import { buildDraftAkn } from "./lib/akn";
 import { computePolicyDiff } from "./lib/policy-diff";
 import {
+  diffImpactInput,
+  diffImpactOutput,
+  diffImpactResultSchema,
+  type DiffClause,
+  type DiffImpactResult,
+} from "@contracts/diff-impact";
+import { computeDiffImpactFallback } from "./lib/diff-impact";
+import { DOCUMENTS_BASE_URL } from "./queries/documents";
+import {
   CLAUSE_REVIEW_CONFIDENCE,
   type ClauseArtifact,
 } from "@contracts/documents";
@@ -62,6 +71,82 @@ const TRANSITIONS: Record<ReviewState, ReviewState[]> = {
   signed_off: [],
   returned: ["draft", "in_review"],
 };
+
+/* ------------------------------------------------------------------ */
+/* I4 — diff-impact helpers                                            */
+/* ------------------------------------------------------------------ */
+
+/** Resolve one side of the diff: law id → KB clauses, or inline document. */
+async function resolveDiffClauses(
+  lawId: string | undefined,
+  doc: { clauses: DiffClause[] } | undefined,
+  ctx: Parameters<typeof apiError>[0],
+): Promise<DiffClause[]> {
+  if (doc) return doc.clauses;
+  if (!lawId) throw apiError(ctx, {
+    http: "BAD_REQUEST",
+    code: "DIFF_INPUT_REQUIRED",
+    message: "Provide fromLawId+toLawId or docA+docB",
+    retryable: false,
+  });
+  const law = await findLaw(lawId);
+  if (!law)
+    throw apiError(ctx, {
+      http: "NOT_FOUND",
+      code: "LAW_NOT_FOUND",
+      message: `Law ${lawId} not found`,
+    });
+  await assertJurisdictionRead(ctx, law.jurisdictionId);
+  const rows = await clausesForLaw(lawId);
+  return rows.map((c) => ({
+    clause_id: c.clauseId,
+    section_path: c.sectionPath,
+    text: c.text,
+    obligations: (
+      (c.obligations as
+        | { kind?: string; actor?: string | null; action: string; modal?: string }[]
+        | null) ?? []
+    ).map((o) => ({
+      kind: o.kind ?? "obligation",
+      actor: o.actor ?? null,
+      action: o.action,
+      modal: o.modal ?? "shall",
+    })),
+  }));
+}
+
+/**
+ * Bridge: POST /v1/diff-impact on the documents service; deterministic
+ * in-process fallback on any failure (same output contract).
+ */
+export async function diffImpactViaServiceOrFallback(
+  clausesA: DiffClause[],
+  clausesB: DiffClause[],
+): Promise<{ result: DiffImpactResult; engine: "documents-service" | "fallback" }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const resp = await fetch(`${DOCUMENTS_BASE_URL}/v1/diff-impact`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clauses_a: clausesA, clauses_b: clausesB }),
+      signal: ctrl.signal,
+    });
+    if (!resp.ok) throw new Error(`documents service ${resp.status}`);
+    const body = (await resp.json()) as { data?: unknown };
+    return {
+      result: diffImpactResultSchema.parse(body.data ?? body),
+      engine: "documents-service",
+    };
+  } catch {
+    return {
+      result: computeDiffImpactFallback(clausesA, clausesB),
+      engine: "fallback",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export const legislationRouter = createRouter({
   // ABAC-scoped read (SR-10/SEC-3): actors see laws in their assigned
@@ -198,6 +283,35 @@ export const legislationRouter = createRouter({
           message: `Law ${missingLawId} not found`,
         });
       return envelope(result, ctx);
+    }),
+
+  /**
+   * I4 — legislative diff-impact (docs/INNOVATIONS.md §I4). Bridges the
+   * documents service POST /v1/diff-impact; on any service failure falls
+   * back to the in-process deterministic engine (api/lib/diff-impact.ts)
+   * with the same contract. Accepts two law ids (clauses from the KB) or
+   * two inline clause documents.
+   */
+  diffImpact: publicQuery
+    .input(diffImpactInput)
+    .query(async ({ ctx, input }) => {
+      const clausesA = await resolveDiffClauses(input.fromLawId, input.docA, ctx);
+      const clausesB = await resolveDiffClauses(input.toLawId, input.docB, ctx);
+      const { result, engine } = await diffImpactViaServiceOrFallback(
+        clausesA,
+        clausesB,
+      );
+      audit(ctx, "legislation.diff_impact", {
+        type: "law",
+        id: `${input.fromLawId ?? "docA"}→${input.toLawId ?? "docB"}`,
+        scopes: ["legislation:read"],
+        payload: {
+          engine,
+          deltas: result.parameter_deltas.length,
+          obligation_changes: result.obligation_changes.length,
+        },
+      });
+      return envelope(diffImpactOutput.parse({ ...result, engine }), ctx);
     }),
 
   reviewQueue: authedQuery

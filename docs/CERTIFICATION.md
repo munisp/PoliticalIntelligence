@@ -130,3 +130,15 @@ post-certification, so the **weighted requirement completion is unchanged at
 **Composite remains 7.5 / 10.** Go-live prerequisites 1–6 above are unchanged
 and still blocking; prerequisite 1 (GPU model tier) now has complete code,
 manifests, eval gate, and runbook behind it.
+
+## Addendum 2026-07-29 — v8: Gap closure wave + innovations I1–I10
+
+Master: 4a701d72. Independent audit (40 findings) actioned:
+
+**Closed in code (this wave):** migration drift (BLOCKER — 53 tables fully covered, CI parity gate), budgets.tier column (BLOCKER), e2e coverage for all post-cert features, nightly connector live-probe (5/5 healthy), IATI key support, Ray dead-default removed, auditchain race fix (serial forks), webhook test gating, notifications via webhook fan-out, npm-audit + trivy + terraform-validate CI gates, OTel staging flag, consumer-lag metric, PostGIS exercised, OCR/Iceberg extras in images, Airbyte coverage annotation, SEC-5 row corrected, deploy checklist (all placeholders enumerated), mobile shell wiring, unified seeding.
+
+**Ops track (environment-side, documented in docs/DEPLOY-CHECKLIST.md + GPU-GOLIVE.md):** GPU model tier apply, Keycloak IdP switch, 7-day uptime observation, k6 staging run, canary drill, cert-manager/ESO install + hostname substitution.
+
+**Innovations I1–I10 (all shipped, tested, documented in docs/INNOVATIONS.md):** Policy Radar, opportunity embed widgets, Corridor Twin (Lagos–Calabar milestones + variance), legislative diff-impact analyzer, Advocacy CRM, public participation, state domestication tracker (3 laws × 37), procurement supplier matching, scenario marketplace (publish/fork/verify), field verification loop.
+
+Gates: 353 vitest passed (53 files), 496 pytest across 4 services, tsc clean, build green, migration parity asserted.

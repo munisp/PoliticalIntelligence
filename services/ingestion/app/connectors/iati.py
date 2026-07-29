@@ -7,8 +7,12 @@ records with `tier="development_partner"` -> `budgets` table.
 
 Live path: GET the IATI Datastore activity query
 (`https://api.iatistandard.org/datastore/activity/select`,
-IATI_BASE_URL override). Offline fallback: when the source is
-unreachable, the connector loads the bundled fixture
+IATI_BASE_URL override). The datastore sits behind Azure API Management
+and requires a (free) subscription key from the IATI developer portal;
+supply it via the IATI_API_KEY env var or `params["api_key"]` — it is
+sent as the `Ocp-Apim-Subscription-Key` header. Without a key the API
+answers HTTP 401, which is treated as a fetch failure and falls through
+to the offline fallback: the connector loads the bundled fixture
 `tests/fixtures/iati_activities_sample.json` and stamps every record
 `origin="derived"` — the fallback is never presented as live data.
 """
@@ -24,6 +28,9 @@ from app.connectors.base import BaseConnector
 
 DEFAULT_BASE = os.getenv(
     "IATI_BASE_URL", "https://api.iatistandard.org/datastore")
+# Azure APIM subscription key for the IATI Datastore (free from the IATI
+# developer portal). Optional: absent → 401 → fixture fallback (derived).
+API_KEY = os.getenv("IATI_API_KEY")
 DEFAULT_FIXTURE = (
     Path(__file__).resolve().parents[2]
     / "tests"
@@ -62,8 +69,11 @@ class IatiConnector(BaseConnector):
         url = params.get("activities_url") or (
             f"{base}/activity/select?q=recipient_country_code:NG"
             f"&rows={limit}")
+        api_key = params.get("api_key") or API_KEY
+        headers = (
+            {"Ocp-Apim-Subscription-Key": api_key} if api_key else {})
         try:
-            body = self.get_json(url)
+            body = self.get_json(url, headers=headers)
             if isinstance(body, dict):
                 docs = (
                     (body.get("response") or {}).get("docs")

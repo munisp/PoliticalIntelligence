@@ -2,9 +2,14 @@ import { z } from "zod";
 import {
   analyzeIdeaInput,
   analyzeIdeaOutput,
+  engagementSchema,
+  engagementsInput,
+  engagementsOutput,
   getPathwayInput,
+  logEngagementInput,
   pathwayChecklistInput,
   stakeholderMapInput,
+  upcomingActionsOutput,
   type PathwayConstraint,
   type PathwayLicense,
   type PathwayStep,
@@ -18,8 +23,12 @@ import {
   allEdges,
   allLawsLite,
   allStakeholders,
+  engagementsFor,
   findPathway,
+  insertEngagement,
   listPathways,
+  stakeholdersByIds,
+  upcomingEngagementsFor,
 } from "./queries/advocacy";
 import type { RegulatoryPathway, Stakeholder } from "@db/schema";
 
@@ -407,4 +416,120 @@ export const advocacyRouter = createRouter({
         ctx,
       );
     }),
+
+  /* ------------------------------------------------------------------ */
+  /* I5 — Advocacy CRM (own-user scoped engagement log)                 */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Log a stakeholder engagement. Any authenticated platform role may log;
+   * rows are own-user scoped (users see only their own log).
+   */
+  logEngagement: authedQuery
+    .input(logEngagementInput)
+    .mutation(async ({ ctx, input }) => {
+      const stk = (await stakeholdersByIds([input.stakeholderId]))[0];
+      if (!stk) {
+        throw apiError(ctx, {
+          http: "NOT_FOUND",
+          code: "STAKEHOLDER_NOT_FOUND",
+          message: `Stakeholder ${input.stakeholderId} not found`,
+          retryable: false,
+        });
+      }
+      const created = await insertEngagement({
+        stakeholderId: input.stakeholderId,
+        userId: ctx.user.id,
+        engagedAt: input.engagedAt ? new Date(input.engagedAt) : new Date(),
+        channel: input.channel,
+        outcome: input.outcome ?? null,
+        commitments: input.commitments ?? null,
+        nextAction: input.nextAction ?? null,
+        nextActionDate: input.nextActionDate ?? null,
+      });
+      audit(ctx, "advocacy.engagement.logged", {
+        type: "stakeholder",
+        id: input.stakeholderId,
+        scopes: ["advocacy:engage"],
+        payload: { channel: input.channel, has_next_action: !!input.nextAction },
+      });
+      return envelope(
+        { engagement: engagementSchema.parse(toEngagementView(created)) },
+        ctx,
+      );
+    }),
+
+  /** Engagement history for one stakeholder (own-user scoped). */
+  engagements: authedQuery
+    .input(engagementsInput)
+    .query(async ({ ctx, input }) => {
+      const rows = await engagementsFor(
+        input.stakeholderId,
+        ctx.user.id,
+        input.limit,
+      );
+      return envelope(
+        engagementsOutput.parse({
+          engagements: rows.map(toEngagementView),
+        }),
+        ctx,
+      );
+    }),
+
+  /**
+   * Upcoming next actions across all of the actor's engagements, joined
+   * with stakeholder names, soonest first (overdue items first).
+   */
+  upcomingActions: authedQuery.query(async ({ ctx }) => {
+    const rows = (await upcomingEngagementsFor(ctx.user.id, 100)).filter(
+      (r) => r.nextAction && r.nextActionDate,
+    );
+    const stks = await stakeholdersByIds([
+      ...new Set(rows.map((r) => r.stakeholderId)),
+    ]);
+    const nameById = new Map(stks.map((s) => [s.stakeholderId, s.name]));
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const actions = rows
+      .map((r) => {
+        const d = r.nextActionDate ? new Date(`${r.nextActionDate}T00:00:00Z`) : null;
+        const daysUntil = d
+          ? Math.round((d.getTime() - today.getTime()) / (24 * 3600 * 1000))
+          : null;
+        return {
+          ...toEngagementView(r),
+          stakeholderName: nameById.get(r.stakeholderId) ?? null,
+          daysUntil,
+        };
+      })
+      .sort((a, b) => (a.daysUntil ?? 0) - (b.daysUntil ?? 0));
+    return envelope(upcomingActionsOutput.parse({ actions }), ctx);
+  }),
 });
+
+/** DB row → contract view (I5). */
+function toEngagementView(r: {
+  id: number;
+  stakeholderId: string;
+  userId: number;
+  engagedAt: Date;
+  channel: string;
+  outcome: string | null;
+  commitments: string | null;
+  nextAction: string | null;
+  nextActionDate: string | null;
+  createdAt: Date;
+}) {
+  return {
+    id: r.id,
+    stakeholderId: r.stakeholderId,
+    userId: r.userId,
+    engagedAt: r.engagedAt,
+    channel: r.channel,
+    outcome: r.outcome ?? null,
+    commitments: r.commitments ?? null,
+    nextAction: r.nextAction ?? null,
+    nextActionDate: r.nextActionDate ?? null,
+    createdAt: r.createdAt,
+  };
+}

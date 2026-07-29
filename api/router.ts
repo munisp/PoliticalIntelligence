@@ -16,6 +16,14 @@ import { onboardingRouter } from "./onboarding";
 import { geoRouter } from "./geo";
 import { outcomesRouter } from "./outcomes";
 import { advocacyRouter } from "./advocacy";
+import { radarRouter } from "./radar";
+import { embedRouter } from "./embed";
+import { corridorsRouter } from "./corridors";
+import { participationRouter } from "./participation";
+import { domesticationRouter } from "./domestication";
+import { matchmakingRouter } from "./matchmaking";
+import { marketplaceRouter } from "./marketplace";
+import { fieldRouter } from "./field";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -36,6 +44,14 @@ export const appRouter = createRouter({
   geo: geoRouter,
   outcomes: outcomesRouter,
   advocacy: advocacyRouter,
+  radar: radarRouter,
+  embed: embedRouter,
+  corridors: corridorsRouter,
+  participation: participationRouter,
+  domestication: domesticationRouter,
+  matchmaking: matchmakingRouter,
+  marketplace: marketplaceRouter,
+  field: fieldRouter,
 });
 
 export type AppRouter = typeof appRouter;

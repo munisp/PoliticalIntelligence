@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/providers/trpc";
+import MatchedSuppliers from "./MatchedSuppliers";
 import ConfidenceChip from "@/components/shared/ConfidenceChip";
 import ApprovalBadge, { type ApprovalState } from "@/components/shared/ApprovalBadge";
 import { approvalStateLabel } from "@/lib/trpc-data";
@@ -337,14 +338,18 @@ const RankingRow = forwardRef<HTMLDivElement, RankingRowProps>(
 
         <AnimatePresence initial={false}>
           {expanded && (
-            <ExpandedDetail
-              item={item}
-              onOpenEvidence={onOpenEvidence}
-              onSimulate={onSimulate}
-              onToggleCompare={onToggleCompare}
-              inCompare={inCompare}
-              compareFull={compareFull}
-            />
+            <>
+              <ExpandedDetail
+                item={item}
+                onOpenEvidence={onOpenEvidence}
+                onSimulate={onSimulate}
+                onToggleCompare={onToggleCompare}
+                inCompare={inCompare}
+                compareFull={compareFull}
+              />
+              {/* I8 — Procurement match: matched suppliers with readiness bars */}
+              <MatchedSuppliers opportunityId={item.opportunityId} />
+            </>
           )}
         </AnimatePresence>
       </motion.div>

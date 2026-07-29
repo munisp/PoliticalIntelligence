@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   History,
@@ -151,6 +151,13 @@ export default function Simulation() {
           <p className="mt-1 text-[13px] text-ink-secondary">
             {t.simulation.subtitle}
           </p>
+          {/* I3 — Corridor Twin lives under Simulation (no nav addition) */}
+          <Link
+            to="/corridors"
+            className="mt-2 inline-flex items-center gap-1 text-[12px] text-civic hover:underline"
+          >
+            {t.corridors.linkFromSimulation}
+          </Link>
         </div>
         <motion.div
           className="flex items-center gap-2"

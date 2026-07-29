@@ -975,7 +975,7 @@ const GEO_BOUNDARIES_SEED: (typeof schema.geoBoundaries.$inferInsert)[] = [
   { unitId: "adm:ng-kd-zaria", level: "lga", geojson: {"coordinates": [[[7.7496, 11.1211], [7.7443, 11.0864], [7.6688, 11.1312], [7.6457, 11.1308], [7.6401, 11.077], [7.6006, 11.0844], [7.5983, 11.0731], [7.578, 11.0764], [7.5648, 11.0619], [7.517, 11.0628], [7.4878, 11.0341], [7.5056, 11.0196], [7.5231, 10.9706], [7.5685, 10.9955], [7.5879, 11.0216], [7.6255, 10.9966], [7.6423, 10.9687], [7.6684, 10.9999], [7.7031, 10.9929], [7.7177, 10.9654], [7.7475, 10.9691], [7.7863, 10.9201], [7.8039, 10.9273], [7.8175, 10.9607], [7.8145, 10.9991], [7.7995, 11.0107], [7.8202, 11.0353], [7.8162, 11.0659], [7.7746, 11.133], [7.7496, 11.1211]]], "type": "Polygon"} as object, centroidLat: 11.0337, centroidLon: 7.6756, origin: "derived", sourceUrl: "https://www.openstreetmap.org/relation/3709376", fetchedAt: new Date("2024-12-31T16:00:00.000Z") },
 ];
 
-async function seed() {
+export async function seed() {
   console.log("Seeding Nigeria pilot data (idempotent)...");
 
   await ensureStringPk("jurisdictions", schema.jurisdictions as never, schema.jurisdictions.jurisdictionId as never, JURISDICTIONS as never, "jurisdictionId");
@@ -1106,10 +1106,18 @@ async function seed() {
   // === end feat-dataset-abac seed ===
 
   console.log("Done.");
-  process.exit(0);
 }
 
-seed().catch((err) => {
-  console.error("Seed failed:", err);
-  process.exit(1);
-});
+const invokedDirectly =
+  typeof process !== "undefined" &&
+  process.argv[1] &&
+  /seed\.(ts|js)$/.test(process.argv[1]);
+
+if (invokedDirectly) {
+  seed()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("Seed failed:", err);
+      process.exit(1);
+    });
+}

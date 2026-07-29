@@ -40,6 +40,8 @@ import ContextPanel, {
 } from "@/components/legislation/ContextPanel";
 import CitationTraceModal from "@/components/legislation/CitationTraceModal";
 import DraftingPanel from "@/components/legislation/DraftingPanel";
+import DiffImpactPanel from "@/components/legislation/DiffImpactPanel";
+import BillComments from "@/components/legislation/BillComments";
 import { indexHealth, toApprovalState, type GraphData } from "@/components/legislation/types";
 
 const DRAFT_TYPE_IDS = ["amendment", "regulation", "model"] as const;
@@ -697,6 +699,11 @@ ${body}
           />
         </div>
       </div>
+
+      {/* I4 — diff-impact compare ("Parameter impact" section) */}
+      <DiffImpactPanel laws={laws.map((l) => ({ lawId: l.lawId, title: l.title }))} />
+      {/* I6 — Public participation: comments on the selected law */}
+      {selectedLawId && <BillComments lawId={selectedLawId} />}
 
       {/* Keyboard hint */}
       <p className="mt-3 hidden items-center gap-2 text-[11px] text-ink-muted lg:flex">

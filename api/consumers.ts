@@ -1,16 +1,20 @@
-import { eq, lt } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { eq, lt, isNull, sql } from "drizzle-orm";
 import * as schema from "@db/schema";
 import { getDb } from "./queries/connection";
 import { dbJobStore, updateJob } from "./queries/admin";
 import {
   createConsumer,
+  deliverWebhooks,
   emitEvent,
   Topics,
+  webhooksEnabled,
   type ConsumerHandle,
   type DomainEvent,
 } from "./utils/events";
 import { redactPayload, logRedactionEvent, type RedactionCounts } from "./utils/pii";
 import { exportWormNow, startWormExporter } from "./utils/worm";
+import { eventConsumerLag } from "./utils/metrics";
 
 /**
  * Real event consumers (closes EVT-1/EVT-2 "eventing is one-way") plus job
@@ -26,6 +30,31 @@ import { exportWormNow, startWormExporter } from "./utils/worm";
 
 const handles: ConsumerHandle[] = [];
 let sweeperTimer: ReturnType<typeof setInterval> | null = null;
+let lagTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Gap #28: sample the event_consumer_lag gauge. In outbox mode (no Kafka)
+ * lag = undelivered event_outbox rows per topic; the same count is the
+ * honest backlog signal when Kafka is down, because undelivered rows pile
+ * up for the relay. Exported for tests.
+ */
+export async function sampleConsumerLag(): Promise<void> {
+  const rows = await getDb()
+    .select({
+      topic: schema.eventOutbox.topic,
+      n: sql<number>`count(*)`,
+    })
+    .from(schema.eventOutbox)
+    .where(isNull(schema.eventOutbox.deliveredAt))
+    .groupBy(schema.eventOutbox.topic);
+  const byTopic = new Map(rows.map((r) => [r.topic, Number(r.n)]));
+  for (const h of handles) {
+    eventConsumerLag.set(
+      { topic: h.topic, group: h.group },
+      byTopic.get(h.topic) ?? 0,
+    );
+  }
+}
 
 /**
  * Observability/test hook: the currently registered consumer handles
@@ -122,16 +151,55 @@ export async function sweepStaleJobs(
 async function onSimulationCompleted(event: DomainEvent): Promise<void> {
   const payload = (event.payload ?? {}) as Record<string, unknown>;
   // Recalibration trigger hook: the adaptive twin loop (api/runner.ts twin
-  // helpers) consumes live metric deltas; here we emit the trigger signal
-  // and stub the operator notification.
+  // helpers) consumes live metric deltas; here we emit the trigger signal.
   console.info(
     `[consumers] simulations.run.completed job=${payload.job_id ?? "-"} ` +
       `-> recalibration trigger queued`,
   );
-  console.info(
-    `[consumers] notification stub: simulation result ready for jurisdiction ${
-      (payload as { jurisdiction_id?: string }).jurisdiction_id ?? "unknown"}`,
+  // Gap #17: operator notification goes through the real webhook fan-out
+  // (subscriptions on ops.alerts / "*"); console remains the fallback when
+  // nobody subscribes.
+  await notifyOps(
+    "simulation.result_ready",
+    {
+      job_id: payload.job_id ?? null,
+      jurisdiction_id:
+        (payload as { jurisdiction_id?: string }).jurisdiction_id ?? "unknown",
+      simulation_run_id: payload.simulation_run_id ?? null,
+    },
+    String(payload.job_id ?? event.event_id),
   );
+}
+
+/**
+ * Route an operator notification through the existing webhook fan-out
+ * (api/utils/events.ts). Falls back to console when there are no active
+ * subscribers (or delivery is disabled in tests).
+ */
+export async function notifyOps(
+  type: string,
+  details: Record<string, unknown>,
+  partitionKey?: string,
+): Promise<void> {
+  const event: DomainEvent = {
+    event_id: `evt_${randomUUID()}`,
+    topic: Topics.opsAlerts,
+    partition_key: partitionKey ?? null,
+    payload: { type, ...details, ts: new Date().toISOString() },
+    occurred_at: new Date().toISOString(),
+  };
+  let delivered = 0;
+  if (webhooksEnabled()) {
+    delivered = await deliverWebhooks(event).catch((err) => {
+      console.error("[consumers] notification webhook delivery error:", err);
+      return 0;
+    });
+  }
+  if (delivered === 0) {
+    console.info(
+      `[consumers] notification (no webhook subscribers): ${type} ${JSON.stringify(details)}`,
+    );
+  }
 }
 
 async function onIngestRawReceived(event: DomainEvent): Promise<void> {
@@ -192,6 +260,13 @@ export async function startConsumers(): Promise<void> {
   }, 60_000);
   sweeperTimer.unref?.();
 
+  lagTimer = setInterval(() => {
+    sampleConsumerLag().catch((err) =>
+      console.error("[consumers] lag sampler error:", err));
+  }, 15_000);
+  lagTimer.unref?.();
+  void sampleConsumerLag().catch(() => undefined);
+
   startWormExporter();
 }
 
@@ -200,4 +275,6 @@ export async function stopConsumers(): Promise<void> {
   handles.length = 0;
   if (sweeperTimer) clearInterval(sweeperTimer);
   sweeperTimer = null;
+  if (lagTimer) clearInterval(lagTimer);
+  lagTimer = null;
 }

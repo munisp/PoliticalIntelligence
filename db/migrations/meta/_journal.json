@@ -15,6 +15,69 @@
       "when": 1785273434931,
       "tag": "0001_exotic_turbo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1785286563207,
+      "tag": "0002_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1785287052353,
+      "tag": "0003_budgets_tier",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1785287310584,
+      "tag": "0004_policy_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1785287846673,
+      "tag": "0005_corridor_milestones",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1785289100356,
+      "tag": "0006_stakeholder_engagements",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1785286940307,
+      "tag": "0007_bill_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1785287586811,
+      "tag": "0008_domestication_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1785288367519,
+      "tag": "0009_published_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1785288760287,
+      "tag": "0010_field_verifications",
+      "breakpoints": true
     }
   ]
 }

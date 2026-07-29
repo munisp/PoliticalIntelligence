@@ -167,3 +167,62 @@ export const analyzeIdeaOutput = z.object({
   }),
 });
 export type AnalyzeIdeaOutput = z.infer<typeof analyzeIdeaOutput>;
+
+/* ------------------------------------------------------------------ */
+/* I5 — Advocacy CRM (stakeholder engagements)                         */
+/* ------------------------------------------------------------------ */
+
+export const ENGAGEMENT_CHANNELS = [
+  "meeting",
+  "call",
+  "email",
+  "roundtable",
+  "site_visit",
+  "other",
+] as const;
+
+export const logEngagementInput = z.object({
+  stakeholderId: z.string().min(1).max(96),
+  /** ISO datetime; defaults to now server-side. */
+  engagedAt: z.string().optional(),
+  channel: z.enum(ENGAGEMENT_CHANNELS),
+  outcome: z.string().max(4000).optional(),
+  commitments: z.string().max(4000).optional(),
+  nextAction: z.string().max(1000).optional(),
+  /** ISO date label (YYYY-MM-DD). */
+  nextActionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+export type LogEngagementInput = z.infer<typeof logEngagementInput>;
+
+export const engagementSchema = z.object({
+  id: z.number().int().positive(),
+  stakeholderId: z.string(),
+  userId: z.number(),
+  engagedAt: z.union([z.string(), z.date()]),
+  channel: z.string(),
+  outcome: z.string().nullable(),
+  commitments: z.string().nullable(),
+  nextAction: z.string().nullable(),
+  nextActionDate: z.string().nullable(),
+  createdAt: z.union([z.string(), z.date()]),
+});
+export type EngagementView = z.infer<typeof engagementSchema>;
+
+export const engagementsInput = z.object({
+  stakeholderId: z.string().min(1).max(96),
+  limit: z.number().int().min(1).max(100).default(50),
+});
+
+export const engagementsOutput = z.object({
+  engagements: z.array(engagementSchema),
+});
+
+export const upcomingActionsOutput = z.object({
+  actions: z.array(
+    engagementSchema.extend({
+      stakeholderName: z.string().nullable(),
+      /** Days until nextActionDate (negative = overdue). */
+      daysUntil: z.number().nullable(),
+    }),
+  ),
+});
