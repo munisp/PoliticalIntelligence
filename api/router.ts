@@ -24,6 +24,7 @@ import { domesticationRouter } from "./domestication";
 import { matchmakingRouter } from "./matchmaking";
 import { marketplaceRouter } from "./marketplace";
 import { fieldRouter } from "./field";
+import { workflowsRouter } from "./workflows";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -52,6 +53,7 @@ export const appRouter = createRouter({
   matchmaking: matchmakingRouter,
   marketplace: marketplaceRouter,
   field: fieldRouter,
+  workflows: workflowsRouter,
 });
 
 export type AppRouter = typeof appRouter;
