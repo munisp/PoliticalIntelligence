@@ -1,0 +1,28 @@
+# Dapr pub/sub component over the Redpanda (Kafka API) event backbone
+# (ADR-010, docs/DAPR.md). Topics stay governed by infra/events/topics.json;
+# this component is the transport binding, not a new topic catalog.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: policy-twin-pubsub
+  namespace: policy-twin
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    - name: brokers
+      value: redpanda:9092 # dev compose; staging/prod override via env
+    - name: authType
+      value: none
+    - name: consumerGroup
+      value: policy-twin-dapr
+    - name: disableTls
+      value: "true"
+    # Match the topic catalog defaults (6 partitions, delete policy).
+    - name: maxMessageBytes
+      value: "1048576"
+scopes:
+  # Scoped adoption: only the Python services opt in initially.
+  - ingestion
+  - simulation
+  - documents
