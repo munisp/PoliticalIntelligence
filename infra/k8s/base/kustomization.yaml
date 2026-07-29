@@ -4,7 +4,12 @@ resources:
   - namespace.yaml
   - app.yaml
   - simulation.yaml
+  - geo-rs.yaml
   - ai.yaml
+  - redis.yaml
+  - opensearch.yaml
+  - temporal.yaml
+  - permify.yaml
   - configmap.yaml
   - secrets-template.yaml
   - ingress.yaml
