@@ -25,6 +25,12 @@ patches:
         LOG_LEVEL: "info"
         DATA_MODE: "production"
         MODEL_DEFAULT_TIER: "qwen3-32b"
+        # Gap #27: enable OTel tracing on staging. The collector endpoint
+        # comes from the base platform-config
+        # (otel-collector.observability.svc.cluster.local:4317); the SDK
+        # noops gracefully if the collector or optional OTel packages are
+        # unavailable (api/utils/otel.ts, services/_shared/metrics.py).
+        OTEL_SDK_ENABLED: "true"
     target:
       kind: ConfigMap
       name: platform-config

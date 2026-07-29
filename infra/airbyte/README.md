@@ -16,6 +16,18 @@ team wants UI-managed syncs; the built-in connectors + Dagster schedules
 | `source-ubec.yaml` | UBEC fact-sheet index | weekly |
 | `source-file_harvester.yaml` | Local file drop zone | hourly |
 
+> **Coverage note (audit gap #24):** these manifests cover **8 of the 36**
+> ingestion connectors — `worldbank`, `hdx`, `overpass`, `budeshi`, `nada`,
+> `nbs_bulletin`, `ubec_factsheet`, `file_harvester`. The remaining 28
+> (afdb, afreximbank, bpp, budget_office, cac, cbn, cbn_fintech, dmo, faac,
+> gazettes, iati, judgments, nafdac, nass_bills, nbs_outcomes, nbs_series,
+> ncaa, ncc, nerc, nitda, npopc, oagf, portal, smedan, son,
+> state_assembly_bills, state_budgets, state_irs, state_procurement …) are
+> **code-managed only** in `services/ingestion/app/connectors/` (Python
+> connectors + Dagster schedules in `app/orchestration/dagster_defs.py`) and
+> have no Airbyte manifest — extend this directory if a source moves to
+> UI-managed syncs.
+
 ## Run Airbyte locally
 
 Use the official compose stack (not duplicated in the platform compose —
