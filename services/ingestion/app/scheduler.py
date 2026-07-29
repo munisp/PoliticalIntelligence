@@ -47,6 +47,32 @@ DEFAULT_CADENCE_S: dict[str, int] = {
     "nbs_outcomes": 90 * 24 * 3600,
     "budget_office": 90 * 24 * 3600,   # quarterly budget publications
     "nass_bills": 7 * 24 * 3600,       # weekly bills tracker
+    "cbn": 30 * 24 * 3600,             # monthly monetary statistics
+    "dmo": 30 * 24 * 3600,             # monthly debt statistics
+    "nbs_series": 30 * 24 * 3600,      # monthly headline indicator series
+    "faac": 30 * 24 * 3600,            # monthly FAAC disbursements
+    "oagf": 30 * 24 * 3600,            # monthly budget execution releases
+    "gazettes": 7 * 24 * 3600,         # weekly gazette watch
+    "judgments": 7 * 24 * 3600,        # weekly case-law watch
+    # feat-conn-regulators: sector regulators refresh monthly (30d)
+    "nitda": 30 * 24 * 3600,
+    "cbn_fintech": 30 * 24 * 3600,
+    "ncc": 30 * 24 * 3600,
+    "nerc": 30 * 24 * 3600,
+    "nafdac": 30 * 24 * 3600,
+    "son": 30 * 24 * 3600,
+    "ncaa": 30 * 24 * 3600,
+    "state_budgets": 30 * 24 * 3600,   # monthly state budget publications
+    "state_procurement": 30 * 24 * 3600,  # monthly state procurement awards
+    "state_assembly_bills": 7 * 24 * 3600,  # weekly state assembly bills
+    "state_irs": 30 * 24 * 3600,        # monthly SIRS revenue publications
+    "cac": 30 * 24 * 3600,              # monthly CAC registrations
+    "bpp": 30 * 24 * 3600,              # monthly BPP/NOCOPO awards
+    "smedan": 30 * 24 * 3600,           # monthly SMEDAN survey highlights
+    "npopc": 30 * 24 * 3600,            # monthly NPopC projections
+    "afdb": 30 * 24 * 3600,             # monthly AfDB Nigeria portfolio
+    "afreximbank": 30 * 24 * 3600,      # monthly Afreximbank announcements
+    "iati": 30 * 24 * 3600,             # monthly IATI aid-flow activities
 }
 DEFAULT_JITTER_PCT = 0.10
 DEFAULT_JURISDICTION = "jur:ng-kd"
