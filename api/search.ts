@@ -5,6 +5,7 @@ import { searchLike } from "./queries/admin";
 import { findEvidence } from "./queries/opportunities";
 import { copilotQuery, retrieveBundle } from "./bridges/ai";
 import { evidenceByIds } from "./queries/opportunities";
+import { getClient, SEARCH_INDICES } from "./search/opensearch";
 
 export const searchRouter = createRouter({
   /**
@@ -24,6 +25,73 @@ export const searchRouter = createRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      // --- OpenSearch path (docs/OPENSEARCH.md) --------------------------
+      // When a cluster is configured, try the multi-index bool query first.
+      // Fall through to hybrid retrieval / SQL LIKE when OpenSearch is
+      // unavailable, errors, or returns zero hits. meta.search_engine is
+      // the honesty marker: "opensearch" | "hybrid" | "sql".
+      const os = getClient();
+      if (os) {
+        try {
+          const hits = await os.search({
+            indices: SEARCH_INDICES,
+            query: input.q,
+            filters: input.jurisdiction_id
+              ? { jurisdiction_id: input.jurisdiction_id }
+              : {},
+            limit: input.limit,
+          });
+          if (hits.length > 0) {
+            const KIND_BY_INDEX = {
+              "pt-documents": "brief",
+              "pt-laws": "law",
+              "pt-opportunities": "opportunity",
+              "pt-stakeholders": "brief",
+            } as const;
+            const results = hits.map((h) => ({
+              kind: KIND_BY_INDEX[h.index as keyof typeof KIND_BY_INDEX] ?? ("brief" as const),
+              id: h.id,
+              title:
+                (h.source.title as string | undefined) ??
+                (h.source.name as string | undefined) ??
+                h.id,
+              snippet:
+                ((h.source.summary as string | undefined) ??
+                  (h.source.bio as string | undefined) ??
+                  ""
+                ).slice(0, 200) || null,
+              score: h.score,
+              provenance: {
+                index: h.index,
+                jurisdiction_id:
+                  (h.source.jurisdiction_id as string | undefined) ??
+                  input.jurisdiction_id ??
+                  null,
+              },
+            }));
+            const env = envelope(
+              {
+                q: input.q,
+                results,
+                adapter: "opensearch",
+                retrieval_mode: "hybrid" as const,
+              },
+              ctx,
+            );
+            return {
+              ...env,
+              meta: {
+                ...env.meta,
+                retrieval_mode: "hybrid" as const,
+                search_engine: "opensearch" as const,
+              },
+            };
+          }
+        } catch {
+          // OpenSearch down/erroring → hybrid retrieval / SQL below.
+        }
+      }
+
       // --- hybrid retrieval path (AI service) ---------------------------
       try {
         const bundle = await retrieveBundle({
@@ -71,7 +139,11 @@ export const searchRouter = createRouter({
         );
         return {
           ...env,
-          meta: { ...env.meta, retrieval_mode: "hybrid" as const },
+          meta: {
+            ...env.meta,
+            retrieval_mode: "hybrid" as const,
+            search_engine: "hybrid" as const,
+          },
         };
       } catch {
         // AI service unreachable/misconfigured → SQL LIKE fallback below.
@@ -130,7 +202,11 @@ export const searchRouter = createRouter({
       );
       return {
         ...env,
-        meta: { ...env.meta, retrieval_mode: "fallback" as const },
+        meta: {
+          ...env.meta,
+          retrieval_mode: "fallback" as const,
+          search_engine: "sql" as const,
+        },
       };
     }),
 
