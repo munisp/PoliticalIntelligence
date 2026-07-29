@@ -1,0 +1,49 @@
+{
+  "source": "Debt Management Office — public debt statistics (fixture)",
+  "series": [
+    {
+      "indicator": "DMO_TOTAL_PUBLIC_DEBT",
+      "points": [
+        {"period": "2023-Q1", "value": 49380.0},
+        {"period": "2023-Q2", "value": 87380.0},
+        {"period": "2023-Q3", "value": 87910.0},
+        {"period": "2023-Q4", "value": 97340.0},
+        {"period": "2024-Q1", "value": 121670.0},
+        {"period": "2024-Q2", "value": 134300.0}
+      ]
+    },
+    {
+      "indicator": "DMO_DOMESTIC_DEBT",
+      "points": [
+        {"period": "2023-Q1", "value": 30140.0},
+        {"period": "2023-Q2", "value": 54250.0},
+        {"period": "2023-Q3", "value": 53960.0},
+        {"period": "2023-Q4", "value": 59230.0},
+        {"period": "2024-Q1", "value": 65960.0},
+        {"period": "2024-Q2", "value": 71300.0}
+      ]
+    },
+    {
+      "indicator": "DMO_EXTERNAL_DEBT",
+      "points": [
+        {"period": "2023-Q1", "value": 42690.0},
+        {"period": "2023-Q2", "value": 43230.0},
+        {"period": "2023-Q3", "value": 41960.0},
+        {"period": "2023-Q4", "value": 42500.0},
+        {"period": "2024-Q1", "value": 56350.0},
+        {"period": "2024-Q2", "value": 63070.0}
+      ]
+    },
+    {
+      "indicator": "DMO_DEBT_SERVICE",
+      "points": [
+        {"period": "2023-Q1", "value": 1345.2},
+        {"period": "2023-Q2", "value": 1562.8},
+        {"period": "2023-Q3", "value": 1710.4},
+        {"period": "2023-Q4", "value": 1890.1},
+        {"period": "2024-Q1", "value": 2235.6},
+        {"period": "2024-Q2", "value": 2460.3}
+      ]
+    }
+  ]
+}
