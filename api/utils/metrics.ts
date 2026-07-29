@@ -40,6 +40,27 @@ class Counter {
   }
 }
 
+class Gauge {
+  public name: string;
+  public help: string;
+  private values = new Map<string, number>();
+  constructor(name: string, help: string) {
+    this.name = name;
+    this.help = help;
+  }
+  set(labels: Labels | undefined, value: number) {
+    this.values.set(labelKey(labels), value);
+  }
+  render(): string {
+    const lines = [`# HELP ${this.name} ${this.help}`, `# TYPE ${this.name} gauge`];
+    if (this.values.size === 0) lines.push(`${this.name} 0`);
+    for (const [key, v] of this.values) {
+      lines.push(key ? `${this.name}{${key}} ${v}` : `${this.name} ${v}`);
+    }
+    return lines.join("\n");
+  }
+}
+
 const DEFAULT_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
 class Histogram {
@@ -101,6 +122,11 @@ export const eventsEmittedTotal = new Counter(
   "events_emitted_total",
   "Domain events emitted by topic",
 );
+/** Gap #28: consumer backlog per topic/group (drives EventBacklogGrowing). */
+export const eventConsumerLag = new Gauge(
+  "event_consumer_lag",
+  "Undelivered events awaiting consumer processing, by topic and group",
+);
 
 const ALL = [
   httpRequestDuration,
@@ -110,6 +136,7 @@ const ALL = [
   llmRoutingDecisions,
   ingestionRecordsTotal,
   eventsEmittedTotal,
+  eventConsumerLag,
 ];
 
 /** Prometheus text exposition format. */
