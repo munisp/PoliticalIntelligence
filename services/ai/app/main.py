@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app import CODE_VERSION
 from app.config import settings
-from app.errors import ServiceError, ValidationError
+from app.errors import NotFoundError, ServiceError, ValidationError
 from app.llm.offline import synthesize_copilot_answer, synthesize_recommendation
 from app.llm.router import ModelRouter, audit_log
 from app.llm.serving import ServingClient
@@ -181,6 +181,31 @@ async def copilot_query(req: CopilotQuery, request: Request):
     else:
         answer = synthesize_copilot_answer(bundle, routing_meta)
     return _envelope(request, answer)
+
+
+# ---------------------------------------------------------------------------
+# Copilot tool registry (app/tools) — deterministic data-plane tools.
+# ---------------------------------------------------------------------------
+from app.tools import get_tool, list_tools  # noqa: E402
+
+
+@app.get("/v1/tools")
+async def tools_list(request: Request):
+    return _envelope(request, {
+        "tools": [{"name": t.name, "description": t.description,
+                   "tags": list(t.tags)} for t in list_tools()],
+        "count": len(list_tools()),
+    })
+
+
+@app.post("/v1/tools/{name}/invoke")
+async def tools_invoke(name: str, request: Request):
+    spec = get_tool(name)
+    if spec is None:
+        raise NotFoundError(f"unknown tool '{name}'",
+                            details={"known": [t.name for t in list_tools()]})
+    body = await request.json()
+    return _envelope(request, spec.handler(**body))
 
 
 @app.get("/v1/routing/audit")
