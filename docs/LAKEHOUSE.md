@@ -83,3 +83,98 @@ GROUP BY 1, 2 ORDER BY 3 DESC;
 
 (A `SHOW TABLES` after the first export proves the end-to-end path:
 MySQL → export → Iceberg/MinIO → Trino.)
+
+## Apache Sedona — lakehouse-scale geo compute
+
+`services/ingestion/app/geo_analytics/sedona_jobs.py` runs the geo batch
+analytics over the lakehouse. Two engines, one set of spatial semantics:
+
+- **Sedona / PySpark** (production): reads boundary GeoJSON +
+  the canonical `facilities` Iceberg export from the MinIO warehouse,
+  runs distributed spatial joins (`ST_Contains` — facilities per LGA) and
+  corridor-proximity aggregates (`ST_DWithin` against the seeded
+  Lagos–Calabar corridor line), writes `policy_twin.geo_analytics`
+  (Iceberg) via the Spark `lakehouse` hadoop catalog; parquet fallback when
+  the catalog is unreachable.
+- **Pure-Python** (offline/CI default): identical predicates
+  (`point_in_feature`, `distance_to_line_km`, … — mirroring
+  `api/queries/geo.ts`) executed without a JVM; parquet output when pyarrow
+  is installed, else JSONL. Deterministic and seeded
+  (`GEO_ANALYTICS_SEED`, default `20240801`; outputs sorted by natural keys
+  so identical inputs give byte-identical files).
+
+Run locally (no Spark needed):
+
+```bash
+cd services/ingestion
+python -m app.geo_analytics.sedona_jobs \
+  --boundaries ../public/geo/kaduna-lgas.geojson \
+  --facilities /tmp/lakehouse/jsonl-preview/policy_twin/facilities \
+  --corridor-km 50 --out /tmp/geo-analytics --engine python
+```
+
+Compose (opt-in `lakehouse` profile, notebook UI OFF — batch driver):
+
+```bash
+docker compose -f infra/docker/docker-compose.yml --profile lakehouse up spark-sedona
+```
+
+Kubernetes (documented, NOT part of the default kustomization):
+`kubectl apply -f infra/k8s/base/sedona-job.yaml`.
+
+### Trino: query the result
+
+After a Sedona run lands `geo_analytics` in the warehouse:
+
+```sql
+SHOW TABLES FROM iceberg.policy_twin;   -- now includes geo_analytics
+SELECT unit_id, name, facility_count
+FROM iceberg.policy_twin.geo_analytics
+ORDER BY facility_count DESC LIMIT 10;
+SELECT name, centroid_distance_km, facility_count
+FROM iceberg.policy_twin.geo_analytics
+WHERE centroid_distance_km <= 50
+ORDER BY centroid_distance_km;
+```
+
+## The full lakehouse picture
+
+| Layer | Tech | Role |
+|-------|------|------|
+| Canonical snapshots | **Iceberg + MinIO** | versioned, partition-pruned exports of operational MySQL entities (`policy_twin.*`) |
+| SQL fabric | **Trino** (profile `lakehouse`) | ad-hoc analytical SQL across Iceberg catalogs — no app runtime dependency |
+| Geo compute | **Apache Sedona** (profile `lakehouse`, k8s job optional) | distributed spatial joins/proximity over the warehouse → `geo_analytics` |
+| Serving index | **OpenSearch** | full-text/vector serving for the app + ai retrieval (`OPENSEARCH_URL` in `services/ai`); indexes are *derived* from canonical exports — see `services/ai/app/retrieval/vector_adapter.py` and docs/ARCHITECTURE.md. Cross-ref: OpenSearch is the read-optimized serving plane, never the system of record. |
+
+```mermaid
+flowchart LR
+    subgraph operational["Operational plane"]
+        MYSQL[(MySQL / TiDB)]
+        PG[(PostGIS)]
+    end
+    subgraph lakehouse["Lakehouse (MinIO warehouse)"]
+        ICE[(Iceberg tables<br/>policy_twin.*)]
+        GEO[(Iceberg<br/>geo_analytics)]
+    end
+    MYSQL -->|incremental export<br/>app.lakehouse| ICE
+    PG -->|boundary mirror| SEDONA
+    ICE --> SEDONA[Apache Sedona<br/>spark-sedona]
+    SEDONA --> GEO
+    ICE --> TRINO[Trino SQL fabric]
+    GEO --> TRINO
+    ICE --> OS[OpenSearch<br/>serving index]
+    TRINO --> ANALYSTS[Analysts / BI]
+    OS --> APP[App + AI copilot<br/>retrieval]
+    GEOTOOL[GeoLibre copilot tool<br/>template engine] --> PG
+    GEOTOOL -.->|fallback| GEOJSON[public/geo geojson]
+```
+
+## GeoLibre evaluation note
+
+[GeoLibre](https://github.com/opengeos/GeoLibre) is evaluated as the future
+AI-geo backend for the copilot. The integration is a **seam, not a
+vendoring**: `services/ai/app/tools/geolibre_tool.py` POSTs the natural-
+language question to `GEOLIBRE_URL/query` when configured and falls back to
+a deterministic in-process template engine otherwise (every answer carries
+an honest `geo_engine: "geolibre" | "template"` marker). See
+docs/GEOSPATIAL.md §6.
