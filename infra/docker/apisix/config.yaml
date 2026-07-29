@@ -1,0 +1,31 @@
+# APISIX dev config for the compose `edge` profile (mirrors
+# infra/k8s/edge/apisix.yaml ConfigMap). Dev-only inline admin key — the k8s
+# deployment injects it from Vault via ESO instead.
+apisix:
+  node_listen: 9080
+  enable_admin: true
+  allow_admin:
+    - 0.0.0.0/0
+  admin_key:
+    - name: admin
+      key: $(APISIX_ADMIN_KEY)
+      role: admin
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  etcd:
+    host:
+      - "http://apisix-etcd:2379"
+    prefix: /apisix
+nginx_config:
+  error_log_level: warn
+plugins:
+  - openid-connect
+  - limit-req
+  - cors
+  - prometheus
+  - proxy-rewrite
+plugin_attrs:
+  prometheus:
+    export_uri: /apisix/prometheus/metrics

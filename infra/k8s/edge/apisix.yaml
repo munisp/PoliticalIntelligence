@@ -1,0 +1,277 @@
+# APISIX edge gateway (feat-mw-edge-authz). APISIX is the perimeter: TLS,
+# OIDC, rate limiting, CORS, metrics and WAF hand-off (open-appsec) live
+# here; the Hono app stays the application. The existing nginx Ingress
+# (infra/k8s/base/ingress.yaml) is kept as the fallback path.
+#
+# Dev-grade single-etcd deployment. For HA, run 3-node etcd and 2+ APISIX
+# replicas behind a cloud LB. The Admin API key is materialized by ESO from
+# Vault (apisix-admin-apikey ExternalSecret below) — never hardcode it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edge
+  labels:
+    app.kubernetes.io/part-of: policy-twin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etcd
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: etcd
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: etcd
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: etcd
+        app.kubernetes.io/part-of: policy-twin
+    spec:
+      containers:
+        - name: etcd
+          image: bitnami/etcd:3.5
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ALLOW_NONE_AUTHENTICATION
+              value: "yes"
+            - name: ETCD_ADVERTISE_CLIENT_URLS
+              value: "http://etcd.edge.svc.cluster.local:2379"
+          ports:
+            - name: client
+              containerPort: 2379
+          readinessProbe:
+            tcpSocket:
+              port: client
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: etcd
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  selector:
+    app.kubernetes.io/name: etcd
+  ports:
+    - name: client
+      port: 2379
+      targetPort: client
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apisix-config
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: apisix
+    app.kubernetes.io/part-of: policy-twin
+data:
+  config.yaml: |
+    apisix:
+      node_listen: 9080
+      enable_admin: true
+      allow_admin:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+      # Admin API key injected from the apisix-admin-apikey Secret (ESO);
+      # $(APISIX_ADMIN_KEY) is expanded from the container env by APISIX.
+      admin_key:
+        - name: admin
+          key: $(APISIX_ADMIN_KEY)
+          role: admin
+    deployment:
+      role: traditional
+      role_traditional:
+        config_provider: etcd
+      etcd:
+        host:
+          - "http://etcd.edge.svc.cluster.local:2379"
+        prefix: /apisix
+    nginx_config:
+      error_log_level: warn
+    plugins:
+      - openid-connect
+      - limit-req
+      - cors
+      - prometheus
+      - proxy-rewrite
+      - response-rewrite
+      # open-appsec attachment (docs/EDGE.md): the WAF agent attaches as an
+      # APISIX plugin once the agent deployment (openappsec.yaml) is live.
+      # - open-appsec
+    plugin_attrs:
+      prometheus:
+        export_uri: /apisix/prometheus/metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apisix
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: apisix
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apisix
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apisix
+        app.kubernetes.io/part-of: policy-twin
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9080"
+        prometheus.io/path: /apisix/prometheus/metrics
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: apisix
+          image: apache/apisix:3.9.1-debian
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9080
+            - name: admin
+              containerPort: 9180
+          env:
+            - name: APISIX_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: apisix-admin-apikey
+                  key: admin-key
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/apisix/conf/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /apisix/prometheus/metrics
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: config
+          configMap:
+            name: apisix-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apisix-gateway
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: apisix
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: apisix
+  ports:
+    - name: http
+      port: 9080
+      targetPort: http
+---
+# Admin API (in-cluster only): used by route bootstrap jobs. Never exposed
+# outside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: apisix-admin
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: apisix
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  selector:
+    app.kubernetes.io/name: apisix
+  ports:
+    - name: admin
+      port: 9180
+      targetPort: admin
+---
+# SEC-5: Admin API key from Vault via ESO (placeholder property — add
+# APISIX_ADMIN_KEY to the Vault policy-twin/platform document).
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: apisix-admin-apikey
+  namespace: edge
+  labels:
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: vault
+    kind: ClusterSecretStore
+  target:
+    name: apisix-admin-apikey
+    creationPolicy: Owner
+  data:
+    - secretKey: admin-key
+      remoteRef: {key: policy-twin/platform, property: APISIX_ADMIN_KEY}
+---
+# Ingress exposing the gateway. Same ingress-class + ClusterIssuer as the
+# base app ingress, so the edge can be switched by DNS, not manifests.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: apisix-gateway
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: apisix
+    app.kubernetes.io/part-of: policy-twin
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: edge.policy-twin.example.gov.ng
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: apisix-gateway
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - edge.policy-twin.example.gov.ng
+      secretName: apisix-gateway-tls

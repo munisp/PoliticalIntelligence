@@ -1,0 +1,17 @@
+# open-appsec local policy for the compose `edge` profile — detect/learn
+# only, mirroring the staging k8s policy (infra/k8s/edge/openappsec.yaml).
+policies:
+  - name: policy-twin-local
+    practices:
+      - name: web-attacks
+        mode: detect
+      - name: api-threats
+        mode: detect
+    triggers:
+      - name: log-all
+        mode: detect
+assets:
+  - name: policy-twin-app
+    urls:
+      - "http://localhost:9080"
+    policy: policy-twin-local

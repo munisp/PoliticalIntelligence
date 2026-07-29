@@ -829,6 +829,61 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # ------------------------------------------------------------------
+  # Edge perimeter (feat-mw-edge-authz, profile `edge`): APISIX gateway +
+  # open-appsec WAF in front of the app, mirroring infra/k8s/edge. The
+  # default stack (app directly on :3000) is unchanged; enable with:
+  #   docker compose --profile edge up apisix openappsec
+  # then browse via http://localhost:9080 (detect-mode WAF, local policy).
+  # ------------------------------------------------------------------
+  apisix-etcd:
+    image: bitnami/etcd:3.5
+    profiles: ["edge"]
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "etcdctl endpoint health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  apisix:
+    image: apache/apisix:3.9.1-debian
+    profiles: ["edge"]
+    ports:
+      - "${APISIX_PORT:-9080}:9080"
+      - "${APISIX_ADMIN_PORT:-9180}:9180"
+    environment:
+      # Dev-only inline key (compose has no ESO; k8s pulls it from Vault).
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:-edd1c9f034335f136f87ad84b625c8f1}
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
+      api-gateway:
+        condition: service_started
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9080/apisix/prometheus/metrics || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  openappsec:
+    image: openappsec/agent:latest
+    profiles: ["edge"]
+    environment:
+      managed_mode: local
+    volumes:
+      - ./openappsec/local_policy.yaml:/etc/cp/conf/local_policy.yaml:ro
+    networks: [platform]
+    restart: unless-stopped
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0
     ports:
