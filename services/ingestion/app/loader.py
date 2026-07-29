@@ -45,8 +45,17 @@ ENTITY_KEYS = {
     "outcome_observation": "observations",
     # feat-ng-connectors: Budget Office appropriation lines -> budgets;
     # NASS bills -> policy_documents (document_type="bill").
+    # feat-conn-regulators: regulator instruments reuse bill_document with
+    # document_type="regulation" -> policy_documents (no new literal needed).
     "budget_line": "budgets",
     "bill_document": "policy_documents",
+    # feat-conn-macro-legal: gazettes/judgments -> policy_documents
+    # (document_type="gazette" | "judgment").
+    "policy_document": "policy_documents",
+    # feat-conn-subnat-firms: CAC registrations -> business_registrations;
+    # AfDB/IATI evidence artifacts -> evidence_sources.
+    "business_registration": "business_registrations",
+    "evidence_source": "evidence_sources",
 }
 
 # Entity batch key -> tRPC loader procedure.
