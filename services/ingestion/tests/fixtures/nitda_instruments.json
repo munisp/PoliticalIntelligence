@@ -1,0 +1,58 @@
+{
+  "publication": "NITDA regulatory instruments (sample)",
+  "source_portal": "https://nitda.gov.ng",
+  "note": "Offline fixture mirroring NITDA's regulations/guidelines listing; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "instruments": [
+    {
+      "title": "Nigeria Data Protection Regulation (NDPR) Implementation Framework",
+      "instrument_type": "implementation_framework",
+      "subject_sectors": ["digital_economy", "data_protection"],
+      "reference": "NITDA/NDPR/2020/001",
+      "issued_date": "2020-11-04",
+      "source_url": "https://nitda.gov.ng/wp-content/uploads/2020/11/NDPR-Implementation-Framework.pdf"
+    },
+    {
+      "title": "Guidance Notice on the Nigeria Data Protection Act (NDPA) 2023 Compliance Obligations",
+      "instrument_type": "guidance_notice",
+      "subject_sectors": ["digital_economy", "data_protection"],
+      "reference": "NDPC/GN/2024/02",
+      "issued_date": "2024-02-15",
+      "source_url": "https://ndpc.gov.ng/guidance-notice-ndpa-compliance-2024"
+    },
+    {
+      "title": "Nigeria Startup Act 2022 — Startup Labelling Guidelines",
+      "instrument_type": "guidelines",
+      "subject_sectors": ["digital_economy", "innovation", "smes"],
+      "reference": "NSA/SLG/2023/01",
+      "issued_date": "2023-05-22",
+      "source_url": "https://startup.gov.ng/startup-labelling-guidelines"
+    },
+    {
+      "title": "National Digital Economy Policy and Strategy (NDEPS) 2020-2030 Implementation Roadmap",
+      "instrument_type": "framework",
+      "subject_sectors": ["digital_economy", "broadband", "egovernment"],
+      "reference": "FMCDE/NDEPS/2020",
+      "issued_date": "2020-06-10",
+      "source_url": "https://nitda.gov.ng/ndeps-implementation-roadmap"
+    },
+    {
+      "title": "Guidelines for Nigerian Content Development in Information and Communications Technology",
+      "instrument_type": "guidelines",
+      "subject_sectors": ["digital_economy", "ict_local_content"],
+      "reference": "NITDA/NCD/2019/01",
+      "issued_date": "2019-12-02",
+      "source_url": "https://nitda.gov.ng/nigerian-content-development-ict-guidelines"
+    },
+    {
+      "title": "National Artificial Intelligence Policy — Draft Framework for Responsible AI Adoption",
+      "instrument_type": "framework",
+      "subject_sectors": ["digital_economy", "artificial_intelligence"],
+      "reference": "NITDA/NAIP/2024/DRAFT",
+      "issued_date": "2024-08-01",
+      "source_url": "https://nitda.gov.ng/national-ai-policy-draft-2024",
+      "metrics": [
+        {"metric_key": "ict_sector_gdp_share_pct", "sector_code": "digital_economy", "value": 16.4, "period": "2024", "unit": "percent"}
+      ]
+    }
+  ]
+}
