@@ -1,0 +1,72 @@
+# Redis — cache + sliding-window rate limiting (docs/REDIS.md).
+# Dev topology: single replica, emptyDir (ephemeral; cache-only, AOF off).
+# Production should use a managed Redis or the HA overlay (sentinel).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 1
+  strategy:
+    # Single-writer stateful service: never run two pods during rollouts.
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/part-of: policy-twin
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          args: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 320Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
