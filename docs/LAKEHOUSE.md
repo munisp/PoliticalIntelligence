@@ -56,9 +56,19 @@ MinIO warehouse — no Hive metastore needed for dev; switch to
 
 ### Smoke query
 
+Trino is profile-gated in compose (`profiles: ["lakehouse"]`) because nothing
+in the app/ingestion runtime consumes it by default (no `TRINO_URL` consumer
+in the codebase) — it is an opt-in analyst fabric:
+
 ```bash
-docker compose -f infra/docker/docker-compose.yml up trino
+docker compose -f infra/docker/docker-compose.yml --profile lakehouse up trino
 docker exec -it $(docker ps -qf name=trino) trino
+```
+
+Scripted smoke check (skips cleanly when `TRINO_URL` is unset):
+
+```bash
+TRINO_URL=http://localhost:8080 node scripts/trino-smoke.mjs   # runs SHOW CATALOGS
 ```
 
 ```sql
