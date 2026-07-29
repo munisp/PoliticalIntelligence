@@ -23,14 +23,29 @@ export function authProvider(): AuthProvider {
   return process.env.AUTH_PROVIDER === "keycloak" ? "keycloak" : "kimi";
 }
 
-/** Keycloak realm role -> platform role (spec §7, six roles). */
+/**
+ * Keycloak realm role -> platform role (spec §7, seven roles).
+ * The realm ships both legacy hyphenated names and canonical names that
+ * match the `platformRole` enum 1:1 (executive, policy_analyst,
+ * legal_analyst, data_steward, simulation_specialist, field_officer,
+ * platform_admin) — the canonical names are pass-through identity maps.
+ */
 export const KEYCLOAK_ROLE_MAP: Record<string, string> = {
+  // Legacy hyphenated realm roles.
   "executive-consumer": "executive",
   "policy-analyst": "policy_analyst",
   "legal-analyst": "legal_analyst",
   "data-steward": "data_steward",
   "simulation-specialist": "simulation_specialist",
   "platform-administrator": "platform_admin",
+  // Canonical roles matching the platformRole enum 1:1.
+  executive: "executive",
+  policy_analyst: "policy_analyst",
+  legal_analyst: "legal_analyst",
+  data_steward: "data_steward",
+  simulation_specialist: "simulation_specialist",
+  field_officer: "field_officer",
+  platform_admin: "platform_admin",
 };
 
 interface OidcDiscovery {
