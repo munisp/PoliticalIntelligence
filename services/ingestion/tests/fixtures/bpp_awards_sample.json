@@ -1,0 +1,11 @@
+{
+  "note": "BPP/NOCOPO federal contract award notices used as the deterministic offline fallback for the bpp connector.",
+  "records": [
+    {"ocid": "ocds-bpp-fgn-2024-0001", "nocopo_no": "NOCOPO/2024/FMH/0112", "title": "Dualisation of Kaduna Eastern Bypass (Section II)", "buyer": {"name": "Federal Ministry of Works"}, "awards": [{"suppliers": [{"name": "Julius Berger Nigeria Plc"}], "value": {"amount": 38500000000, "currency": "NGN"}, "date": "2024-03-11"}], "status": "active"},
+    {"ocid": "ocds-bpp-fgn-2024-0002", "nocopo_no": "NOCOPO/2024/FMOH/0087", "title": "Supply of antimalarial commodities under the National Malaria Elimination Programme", "buyer": {"name": "Federal Ministry of Health"}, "awards": [{"suppliers": [{"name": "Fidson Healthcare Plc"}], "value": {"amount": 6420000000, "currency": "NGN"}, "date": "2024-04-02"}], "status": "complete"},
+    {"ocid": "ocds-bpp-fgn-2024-0003", "nocopo_no": "NOCOPO/2024/FME/0154", "title": "Construction of 45 model science and technical colleges", "buyer": {"name": "Federal Ministry of Education"}, "awards": [{"suppliers": [{"name": "CCECC Nigeria Limited"}], "value": {"amount": 27300000000, "currency": "NGN"}, "date": "2024-05-20"}], "status": "active"},
+    {"ocid": "ocds-bpp-fgn-2024-0004", "nocopo_no": "NOCOPO/2024/FMWA/0063", "title": "Sokoto-Rima river basin irrigation rehabilitation", "buyer": {"name": "Federal Ministry of Water Resources"}, "awards": [{"suppliers": [{"name": "SCC Nigeria Limited"}], "value": {"amount": 12800000000, "currency": "NGN"}, "date": "2024-06-17"}], "status": "active"},
+    {"ocid": "ocds-bpp-fgn-2024-0005", "nocopo_no": "NOCOPO/2024/FMOT/0191", "title": "Lekki Deep Sea Port access road (eleventh-mile section)", "buyer": {"name": "Federal Ministry of Transportation"}, "awards": [{"suppliers": [{"name": "Dangote Construction Ltd"}], "value": {"amount": 15400000000, "currency": "NGN"}, "date": "2024-07-29"}], "status": "complete"},
+    {"ocid": "ocds-bpp-fgn-2024-0006", "nocopo_no": "NOCOPO/2024/FMAFS/0042", "title": "National strategic grain reserve restocking (sorghum and maize)", "buyer": {"name": "Federal Ministry of Agriculture and Food Security"}, "awards": [{"suppliers": [{"name": "AFEX Commodities Exchange Ltd"}], "value": {"amount": 8100000000, "currency": "NGN"}, "date": "2024-09-09"}], "status": "complete"}
+  ]
+}
