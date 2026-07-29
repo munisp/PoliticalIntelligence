@@ -3,6 +3,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { assertJurisdictionRead } from "./utils/rbac";
 import { envelope } from "./utils/envelope";
 import { listSectors, sectorMetricsRange } from "./queries/opportunities";
+import { cached } from "./utils/cache";
 
 export const sectorsRouter = createRouter({
   list: publicQuery.query(async ({ ctx }) => {
@@ -21,12 +22,19 @@ export const sectorsRouter = createRouter({
     )
     .query(async ({ ctx, input }) => {
       await assertJurisdictionRead(ctx, input.jurisdiction_id);
-      const rows = await sectorMetricsRange({
-        jurisdictionId: input.jurisdiction_id,
-        sectorCode: input.sector_code,
-        periodFrom: input.period_from,
-        periodTo: input.period_to,
-      });
+      // Hot read path (docs/REDIS.md): sector-metric series change on data
+      // loads, not request-to-request — 5-minute read-through cache.
+      const rows = await cached(
+        `sectors:metrics:${input.jurisdiction_id}:${input.sector_code ?? "*"}:${input.period_from ?? ""}:${input.period_to ?? ""}`,
+        300,
+        () =>
+          sectorMetricsRange({
+            jurisdictionId: input.jurisdiction_id,
+            sectorCode: input.sector_code,
+            periodFrom: input.period_from,
+            periodTo: input.period_to,
+          }),
+      );
       return envelope(rows, ctx);
     }),
 });
