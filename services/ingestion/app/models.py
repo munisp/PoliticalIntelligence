@@ -85,6 +85,9 @@ class CanonicalRecord(BaseModel):
         "outcome_observation",
         "budget_line",
         "bill_document",
+        "policy_document",
+        "business_registration",
+        "evidence_source",
     ]
     data: dict
     provenance: Provenance
