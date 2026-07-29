@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geo-rs
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: geo-rs
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: geo-rs
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: geo-rs
+        app.kubernetes.io/part-of: policy-twin
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: geo-rs
+          image: ghcr.io/munisp/politicalintelligence/geo-rs:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8500
+          env:
+            - name: PORT
+              value: "8500"
+            - name: RUST_LOG
+              value: geo_rs=info,tower_http=info
+          envFrom:
+            - configMapRef:
+                name: platform-config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: geo-rs
+  namespace: policy-twin
+  labels:
+    app.kubernetes.io/name: geo-rs
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: geo-rs
+  ports:
+    - name: http
+      port: 8500
+      targetPort: http
