@@ -1,0 +1,56 @@
+# OPTIONAL batch job — Apache Sedona geo analytics (docs/LAKEHOUSE.md).
+# NOT part of the default kustomization apply: run on demand after the
+# canonical facilities export has landed in the Iceberg warehouse on MinIO:
+#   kubectl apply -f infra/k8s/base/sedona-job.yaml
+#   kubectl logs -n policy-twin job/geo-analytics-sedona -f
+# Notebook UI is intentionally OFF — this is a batch driver that reads
+# boundary GeoJSON + the canonical facilities export, runs the distributed
+# spatial join / corridor-proximity aggregates, writes
+# policy_twin.geo_analytics (Iceberg on MinIO), and completes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: geo-analytics-sedona
+  namespace: policy-twin
+  labels:
+    app: geo-analytics
+    engine: sedona
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: geo-analytics
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: sedona
+          image: apache/sedona:1.6.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LAKEHOUSE_WAREHOUSE
+              value: s3://policy-twin/lakehouse
+            - name: S3_ENDPOINT
+              value: http://minio:9000
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: access-key
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: secret-key
+            - name: GEO_ENGINE
+              value: sedona
+            - name: GEO_ANALYTICS_SEED
+              value: "20240801" # deterministic; keep in sync with compose
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
