@@ -65,6 +65,7 @@ describe("auth.permissions", () => {
         "legal_analyst",
         "simulation_specialist",
         "data_steward",
+        "field_officer",
         "platform_admin",
       ].sort(),
     );
