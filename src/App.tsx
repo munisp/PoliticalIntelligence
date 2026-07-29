@@ -13,6 +13,9 @@ import NotFound from "./pages/NotFound";
 import InnovationsRouter from "./pages/innovations";
 import Geo3D from "./pages/Geo3D";
 import Advocacy from "./pages/Advocacy";
+import Radar from "./pages/Radar";
+import Corridors from "./pages/Corridors";
+import Domestication from "./pages/Domestication";
 
 export default function App() {
   return (
@@ -30,6 +33,9 @@ export default function App() {
         <Route path="/data-health" element={<DataHealth />} />
         <Route path="/copilot" element={<Copilot />} />
         <Route path="/advocacy" element={<Advocacy />} />
+        <Route path="/radar" element={<Radar />} />
+        <Route path="/corridors" element={<Corridors />} />
+        <Route path="/tracker" element={<Domestication />} />
         {/* GEO3D-ROUTE */}
         <Route path="/geo3d" element={<Geo3D />} />
         {/* INNOVATIONS-ROUTE */}
