@@ -87,6 +87,9 @@ services:
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      # Permify ReBAC (optional): set PERMIFY_URL=http://permify:3476 with
+      # the `authz` profile; empty/unset ⇒ ABAC only, unchanged behavior.
+      PERMIFY_URL: ${PERMIFY_URL:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
     depends_on:
       mysql:
@@ -103,8 +106,7 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_started
-    
-        simulation:
+      simulation:
         condition: service_started
       ai:
         condition: service_started
@@ -776,6 +778,52 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # Permify ReBAC authorization service (feat-mw-edge-authz, profile
+  # `authz`). Reuses the postgis Postgres as its backend (separate `permify`
+  # database, created by permify-db-init). The app checks dataset reads
+  # against Permify first when PERMIFY_URL is set, with circuit-breaker
+  # fallback to ABAC (api/utils/permify.ts). Enable with:
+  #   docker compose --profile authz up permify
+  # then load the model + relationships:
+  #   PERMIFY_URL=http://localhost:3476 npx tsx scripts/permify-sync.ts
+  permify-db-init:
+    image: postgres:16-alpine
+    profiles: ["authz"]
+    depends_on:
+      postgis:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "psql postgres://$${POSTGIS_USER}:$${POSTGIS_PASSWORD}@postgis:5432/postgres -tc
+      \"SELECT 1 FROM pg_database WHERE datname='permify'\" | grep -q 1
+      || psql postgres://$${POSTGIS_USER}:$${POSTGIS_PASSWORD}@postgis:5432/postgres -c 'CREATE DATABASE permify'"
+    environment:
+      POSTGIS_USER: ${POSTGIS_USER:-policytwin}
+      POSTGIS_PASSWORD: ${POSTGIS_PASSWORD:-policytwin}
+    networks: [platform]
+    restart: "no"
+
+  permify:
+    image: permify/permify:latest
+    profiles: ["authz"]
+    ports:
+      - "${PERMIFY_PORT:-3476}:3476"
+    command:
+      - serve
+      - --database-engine=postgres
+      - --database-uri=postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/permify?sslmode=disable
+      - --database-max-open-connections=20
+    depends_on:
+      permify-db-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3476/healthz || exit 1"]
+      interval: 15s
       timeout: 5s
       retries: 12
       start_period: 20s

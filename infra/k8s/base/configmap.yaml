@@ -22,4 +22,10 @@ data:
   KEYCLOAK_URL: "https://idp.example.gov.ng"
   KEYCLOAK_REALM: "policy-twin"
   KEYCLOAK_CLIENT_ID: "policy-twin-app"
+  # Permify ReBAC (feat-mw-edge-authz). Set PERMIFY_URL to enable Permify-
+  # primary dataset read checks with ABAC circuit-breaker fallback; leave
+  # empty to run ABAC-only (default, unchanged behavior).
+  PERMIFY_URL: ""
+  PERMIFY_TENANT_ID: "t1"
+  # PERMIFY_URL: "http://permify.policy-twin.svc.cluster.local:3476"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"

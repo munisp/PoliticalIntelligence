@@ -5,6 +5,7 @@ resources:
   - app.yaml
   - simulation.yaml
   - ai.yaml
+  - permify.yaml
   - configmap.yaml
   - secrets-template.yaml
   - ingress.yaml
