@@ -1,0 +1,12 @@
+{
+  "note": "CAC new-registration records used as the deterministic offline fallback for the cac connector (public search shape; CAC portal is captcha-gated — see docs/INGESTION.md).",
+  "records": [
+    {"name": "Zaria Agro-Processors Limited", "rc_number": "RC1849203", "entity_type": "limited_liability", "registered_at": "2025-01-14", "status": "active", "state": "Kaduna", "lga": "Zaria", "sector": "agriculture"},
+    {"name": "Kawo Textile Traders", "rc_number": "BN3920184", "entity_type": "business_name", "registered_at": "2025-01-22", "status": "active", "state": "Kaduna", "lga": "Kaduna North", "sector": "trade"},
+    {"name": "Lekki Fintech Solutions Limited", "rc_number": "RC1851077", "entity_type": "limited_liability", "registered_at": "2025-02-03", "status": "active", "state": "Lagos", "lga": "Eti-Osa", "sector": "financial_services"},
+    {"name": "Surulere Creative Hub Foundation", "rc_number": "IT2409912", "entity_type": "incorporated_trustees", "registered_at": "2025-02-11", "status": "active", "state": "Lagos", "lga": "Surulere", "sector": "creative"},
+    {"name": "Kano Leather Export Company Limited", "rc_number": "RC1856630", "entity_type": "limited_liability", "registered_at": "2025-02-27", "status": "active", "state": "Kano", "lga": "Fagge", "sector": "manufacturing"},
+    {"name": "Sabon Gari Logistics Partners", "rc_number": "LP3310065", "entity_type": "limited_partnership", "registered_at": "2025-03-05", "status": "active", "state": "Kano", "lga": "Sabon Gari", "sector": "logistics"},
+    {"name": "Gwarinpa Solar Installers Limited", "rc_number": "RC1862841", "entity_type": "limited_liability", "registered_at": "2025-03-19", "status": "active", "state": "FCT", "lga": "AMAC", "sector": "energy"}
+  ]
+}
