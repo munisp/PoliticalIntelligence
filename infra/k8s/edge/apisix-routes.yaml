@@ -1,0 +1,98 @@
+# APISIX routes for the Policy Twin app (feat-mw-edge-authz).
+# Declarative ApisixRoute CRDs (apisix.apache.org/v2) consumed by the APISIX
+# ingress controller; equivalent Admin-API payloads are derivable 1:1.
+#
+# Plugin chain on the app route:
+#   openid-connect  — Keycloak realm SSO at the edge (COMMENTED TEMPLATE:
+#                     enable when AUTH_PROVIDER=keycloak staging validation
+#                     graduates; the app still validates tokens itself, so
+#                     this is defense-in-depth, not a replacement)
+#   limit-req       — per-IP request shaping at the perimeter
+#   cors            — PWA origins
+#   prometheus      — /apisix/prometheus/metrics (gateway-level, in apisix.yaml)
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: app
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: app
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  http:
+    - name: app-all
+      match:
+        hosts:
+          - policy-twin.example.gov.ng
+          - policy-twin.stg.example.gov.ng
+        paths:
+          - "/*"
+      backends:
+        - serviceName: app
+          serviceNamespace: policy-twin
+          servicePort: 3000
+      plugins:
+        # ── WAF hand-off (open-appsec, docs/EDGE.md) ──
+        # The open-appsec APISIX plugin forwards request metadata to the
+        # agent service (openappsec.yaml). Staging runs the policy in
+        # detect-learn; promote to prevent only after FP review.
+        - name: open-appsec
+          enable: true
+          config:
+            host: openappsec-agent.edge.svc.cluster.local
+        # ── OIDC at the edge (COMMENTED TEMPLATE — Keycloak realm) ──
+        # - name: openid-connect
+        #   enable: true
+        #   config:
+        #     client_id: policy-twin-web
+        #     client_secret: ${OIDC_CLIENT_SECRET}   # via apisix secret ref
+        #     discovery: https://keycloak.stg.example.gov.ng/realms/policy-twin/.well-known/openid-configuration
+        #     scope: openid profile email
+        #     bearer_only: false
+        #     realm: policy-twin
+        - name: limit-req
+          enable: true
+          config:
+            rate: 50
+            burst: 20
+            rejected_code: 429
+            key: remote_addr
+        - name: cors
+          enable: true
+          config:
+            allow_origins: "https://policy-twin.example.gov.ng,https://policy-twin.stg.example.gov.ng"
+            allow_methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            allow_headers: "authorization,content-type,x-request-id,x-correlation-id"
+            allow_credential: true
+            max_age: 3600
+---
+# Health + metrics route: no auth plugins; the app's /healthz stays cheap.
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: app-health
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: app
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  http:
+    - name: app-healthz
+      match:
+        hosts:
+          - policy-twin.example.gov.ng
+          - policy-twin.stg.example.gov.ng
+        paths:
+          - /healthz
+      backends:
+        - serviceName: app
+          serviceNamespace: policy-twin
+          servicePort: 3000
+      plugins:
+        - name: limit-req
+          enable: true
+          config:
+            rate: 10
+            burst: 5
+            rejected_code: 429
+            key: remote_addr
