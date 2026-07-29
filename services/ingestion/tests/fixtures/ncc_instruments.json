@@ -1,0 +1,58 @@
+{
+  "publication": "NCC regulatory instruments (sample)",
+  "source_portal": "https://ncc.gov.ng",
+  "note": "Offline fixture mirroring the NCC regulations/licensing listing; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "instruments": [
+    {
+      "title": "Licensing Framework for Unified Access Service in Nigeria",
+      "instrument_type": "licensing_framework",
+      "subject_sectors": ["telecoms", "broadband"],
+      "reference": "NCC/LIC/UAS/2019",
+      "issued_date": "2019-07-01",
+      "source_url": "https://ncc.gov.ng/licensing/unified-access-service-framework"
+    },
+    {
+      "title": "Guidelines on Spectrum Trading in Nigeria",
+      "instrument_type": "guidelines",
+      "subject_sectors": ["telecoms", "spectrum"],
+      "reference": "NCC/SPEC/2022/01",
+      "issued_date": "2022-06-20",
+      "source_url": "https://ncc.gov.ng/spectrum/spectrum-trading-guidelines"
+    },
+    {
+      "title": "Quality of Service Regulations 2024",
+      "instrument_type": "regulations",
+      "subject_sectors": ["telecoms", "consumer_protection"],
+      "reference": "NCC/QOS/2024",
+      "issued_date": "2024-03-12",
+      "source_url": "https://ncc.gov.ng/regulations/qos-regulations-2024",
+      "metrics": [
+        {"metric_key": "broadband_penetration_pct", "sector_code": "telecoms", "value": 43.7, "period": "2024", "unit": "percent"}
+      ]
+    },
+    {
+      "title": "Registration of Telephone Subscribers Regulations (Revised) 2024",
+      "instrument_type": "regulations",
+      "subject_sectors": ["telecoms", "identity", "security"],
+      "reference": "NCC/SIM/2024",
+      "issued_date": "2024-01-30",
+      "source_url": "https://ncc.gov.ng/regulations/sim-registration-regulations-2024"
+    },
+    {
+      "title": "Type Approval Regulations for Communications Equipment",
+      "instrument_type": "regulations",
+      "subject_sectors": ["telecoms", "equipment_standards"],
+      "reference": "NCC/TA/2021",
+      "issued_date": "2021-09-15",
+      "source_url": "https://ncc.gov.ng/regulations/type-approval-regulations"
+    },
+    {
+      "title": "National Roaming and Infrastructure Sharing Guidelines",
+      "instrument_type": "guidelines",
+      "subject_sectors": ["telecoms", "infrastructure_sharing"],
+      "reference": "NCC/INF/2023/02",
+      "issued_date": "2023-10-05",
+      "source_url": "https://ncc.gov.ng/guidelines/national-roaming-infrastructure-sharing"
+    }
+  ]
+}
