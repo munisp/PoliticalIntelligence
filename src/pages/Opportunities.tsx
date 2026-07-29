@@ -17,6 +17,7 @@ import MapPanel, {
   type LgaDatum,
   type MapMarker,
 } from "@/components/shared/MapPanel";
+import EmbedButton from "@/components/opportunities/EmbedButton";
 import { isProcedureMissing } from "@/lib/innovations-client";
 import { useT } from "@/lib/LocaleContext";
 import OfflineBoundary from "@/lib/OfflineBoundary";
@@ -528,6 +529,10 @@ export default function Opportunities() {
         /* INNOVATIONS-PROVENANCE: additive wrapper — chip overlays the row's
            chip area without touching the shared RankingRow component. */
         <div key={o.opportunityId} className="relative">
+        {/* I2 — per-opportunity embed widget (docs/EMBED.md) */}
+        <div className="absolute bottom-2 right-12 z-10">
+          <EmbedButton opportunityId={o.opportunityId} />
+        </div>
         {(o as { provenance?: import("@/lib/innovations-client").ProvenanceInfo }).provenance && (
           <div className="pointer-events-none absolute right-12 top-2 z-10">
             <div className="pointer-events-auto">
