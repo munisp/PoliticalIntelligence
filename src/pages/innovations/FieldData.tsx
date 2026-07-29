@@ -5,6 +5,7 @@ import { useOnlineStatus } from "@/hooks/use-pwa";
 import { EmptyState, SkeletonTable, StatusDot } from "@/components/shared";
 import { ProvenanceChip } from "@/components/provenance";
 import InnovationPage, { InnovationError } from "@/components/innovations/InnovationPage";
+import FieldVerification from "@/components/innovations/FieldVerification";
 import {
   useFieldDataList,
   useFieldDataSubmit,
@@ -281,6 +282,9 @@ export default function FieldData() {
           </ul>
         </div>
       </div>
+
+      {/* I10 — Field verification loop (GPS + verdict + notes) */}
+      <FieldVerification />
     </InnovationPage>
   );
 }
