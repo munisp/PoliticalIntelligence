@@ -1,0 +1,12 @@
+# Edge perimeter (feat-mw-edge-authz): APISIX gateway + etcd + open-appsec
+# WAF. Applied as its own kustomization — it is additive to base and never
+# required for the fallback nginx ingress path. Usage:
+#   kubectl apply -k infra/k8s/edge
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - apisix.yaml
+  - apisix-routes.yaml
+  - openappsec.yaml
+commonLabels:
+  app.kubernetes.io/part-of: policy-twin
