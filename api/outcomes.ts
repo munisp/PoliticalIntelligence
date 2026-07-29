@@ -57,8 +57,20 @@ export const outcomesRouter = createRouter({
     )
     .query(async ({ ctx, input }) => {
       const rows = await observationsForSeries(input.series_id, input.from, input.to);
+      // I10 outcomes-upgrade hook: a series period is field_verified when
+      // ≥2 confirmed field verifications exist for its metric entity ref.
+      const refs = rows.map((r) => `series:${input.series_id}:${r.period}`);
+      const { confirmedCounts } = await import("./queries/field");
+      const { verificationStatusFor } = await import("@contracts/field");
+      const counts = await confirmedCounts("metric", refs);
+      const observations = rows.map((r) => ({
+        ...r,
+        verification_status: verificationStatusFor(
+          counts.get(`series:${input.series_id}:${r.period}`) ?? 0,
+        ),
+      }));
       return envelope(
-        { series_id: input.series_id, observations: rows },
+        { series_id: input.series_id, observations },
         ctx,
       );
     }),
