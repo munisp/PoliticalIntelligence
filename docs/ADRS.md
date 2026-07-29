@@ -99,3 +99,19 @@ Format: Context / Decision / Rationale / Consequences / Alternatives considered.
 **Consequences.** Retrieval plans are explicit, logged, and evaluated (prompt regression + retrieval recall in `TESTING.md`); `graph.index.updated`/`features.materialized` events drive cache invalidation of retrieval plans.
 
 **Alternatives.** Vector-only RAG (rejected: weak on exact figures and legal structure); SQL-only with LLM text-to-SQL (rejected: brittle for unstructured policy text); external managed retrieval service (rejected: sovereignty).
+
+---
+
+## ADR-010: Eventing (Kafka API via Redpanda), Temporal for durable workflows, scoped Dapr
+
+**Context.** Long multi-step ingestion/simulation pipelines outgrow the in-process job runner; the eventing backbone needs a permanent decision; Python services carry bespoke broker/state client boilerplate.
+
+**Decision.** Keep the Kafka API served by Redpanda as the event backbone (Fluvio rejected — overlap + ecosystem); adopt Temporal for durable workflows with phased coexistence alongside the existing runner; adopt Dapr scoped to sidecar building blocks (pub/sub, state, secrets) with no app rewrite.
+
+**Rationale.** Redpanda keeps Kafka-protocol compatibility (managed-Kafka escape hatch) at a fraction of the operational cost; Temporal provides durable execution/retries/compensation that a custom queue would re-implement badly; scoped Dapr removes client boilerplate without a control-plane takeover.
+
+**Consequences.** Temporal services in compose + k8s; new Go worker (`services/workflows-go`); TS trigger bridge with runner fallback when `TEMPORAL_URL` is unset; Dapr component YAML + opt-in sidecar annotations.
+
+**Alternatives.** Real Kafka (heavier ops, revisit at scale); Fluvio (rejected: ecosystem, no Kafka protocol); custom durable queue (rejected for long workflows); full Dapr adoption (rejected).
+
+_Full record: [`docs/adr/ADR-010-eventing.md`](adr/ADR-010-eventing.md)._
