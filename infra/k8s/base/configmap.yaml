@@ -16,10 +16,17 @@ data:
   DATA_MODE: "production"
   S3_BUCKET: "policy-twin"
   KAFKA_BROKERS: "redpanda.eventing.svc.cluster.local:9092"
-  OPENSEARCH_URL: "http://opensearch.search.svc.cluster.local:9200"
+  OPENSEARCH_URL: "http://opensearch.policy-twin.svc.cluster.local:9200"
+  REDIS_URL: "redis://redis.policy-twin.svc.cluster.local:6379"
   NEO4J_URI: "bolt://neo4j.graph.svc.cluster.local:7687"
   POSTGIS_URL: "postgres://postgis.geo.svc.cluster.local:5432/geo"
   KEYCLOAK_URL: "https://idp.example.gov.ng"
   KEYCLOAK_REALM: "policy-twin"
   KEYCLOAK_CLIENT_ID: "policy-twin-app"
+  # Permify ReBAC (feat-mw-edge-authz). Set PERMIFY_URL to enable Permify-
+  # primary dataset read checks with ABAC circuit-breaker fallback; leave
+  # empty to run ABAC-only (default, unchanged behavior).
+  PERMIFY_URL: ""
+  PERMIFY_TENANT_ID: "t1"
+  # PERMIFY_URL: "http://permify.policy-twin.svc.cluster.local:3476"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
