@@ -14,6 +14,7 @@
 #   neo4j          Knowledge graph (entities, laws, relationships)
 #   opensearch     Full-text + vector search (single-node, security disabled for dev)
 #   postgis        Geospatial store (wards, LGAs, facilities, GRID3 layers)
+#   redis          Cache + sliding-window rate limiting (REDIS_URL)
 #   keycloak       OIDC identity provider (dev mode, realm import placeholder)
 #   redpanda       Kafka-compatible event backbone (single broker)
 #   prometheus     Metrics scrape
@@ -34,10 +35,13 @@ volumes:
   neo4j-data:
   opensearch-data:
   postgis-data:
+  redis-data:
   redpanda-data:
+  temporal-data:
   prometheus-data:
   grafana-data:
   trino-data:
+  sedona-artifacts:
   vllm-cache:
 
 services:
@@ -77,7 +81,10 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-policytwin}
       OPENSEARCH_URL: http://opensearch:9200
       POSTGIS_URL: postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/${POSTGIS_DB:-geo}
+      REDIS_URL: redis://redis:6379
       KAFKA_BROKERS: redpanda:9092
+      # geo-rs Rust compute bridge (api/bridges/geoRs.ts); unset → TS fallback.
+      GEO_RS_URL: http://geo-rs:8500
       # Ingestion service + shared loader key (feat-data-loader).
       INGESTION_BASE_URL: http://ingestion:8300
       LOADER_API_KEY: ${LOADER_API_KEY:-policytwin-loader-dev}
@@ -87,7 +94,15 @@ services:
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-policy-twin}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-policy-twin-app}
+      # Permify ReBAC (optional): set PERMIFY_URL=http://permify:3476 with
+      # the `authz` profile; empty/unset ⇒ ABAC only, unchanged behavior.
+      PERMIFY_URL: ${PERMIFY_URL:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      # Temporal trigger bridge (ADR-010). When empty/unset the API falls
+      # back to the in-process job runner — see api/bridges/temporal.ts.
+      TEMPORAL_URL: ${TEMPORAL_URL:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-policy-twin}
     depends_on:
       mysql:
         condition: service_healthy
@@ -99,18 +114,21 @@ services:
         condition: service_healthy
       postgis:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       redpanda:
         condition: service_healthy
       keycloak:
         condition: service_started
-    
-        simulation:
+      simulation:
         condition: service_started
       ai:
         condition: service_started
       ingestion:
         condition: service_started
       documents:
+        condition: service_started
+      geo-rs:
         condition: service_started
     networks:
       platform:
@@ -516,6 +534,33 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # geo-rs: Rust geospatial compute (docs/GEOSPATIAL.md §6). Default-on,
+  # tiny footprint; the app degrades to an in-process TS fallback
+  # (geo_engine: "ts_fallback") when GEO_RS_URL is unset/unreachable.
+  geo-rs:
+    build:
+      context: ../../services/geo-rs
+    image: policy-twin/geo-rs:local
+    ports:
+      - "${GEO_RS_PORT:-8500}:8500"
+    environment:
+      PORT: "8500"
+      RUST_LOG: ${GEO_RS_LOG:-geo_rs=info,tower_http=info}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8500/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+
   ingestion:
     build:
       context: ../../services/ingestion
@@ -762,6 +807,22 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
   postgis:
     image: postgis/postgis:16-3.4
     ports:
@@ -772,6 +833,9 @@ services:
       POSTGRES_DB: ${POSTGIS_DB:-geo}
     volumes:
       - postgis-data:/var/lib/postgresql/data
+      # Creates the postgis/postgis_topology extensions on first boot
+      # (idempotent CREATE EXTENSION IF NOT EXISTS).
+      - ./postgis/init:/docker-entrypoint-initdb.d:ro
     networks: [platform]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -779,6 +843,107 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+    restart: unless-stopped
+
+  # Permify ReBAC authorization service (feat-mw-edge-authz, profile
+  # `authz`). Reuses the postgis Postgres as its backend (separate `permify`
+  # database, created by permify-db-init). The app checks dataset reads
+  # against Permify first when PERMIFY_URL is set, with circuit-breaker
+  # fallback to ABAC (api/utils/permify.ts). Enable with:
+  #   docker compose --profile authz up permify
+  # then load the model + relationships:
+  #   PERMIFY_URL=http://localhost:3476 npx tsx scripts/permify-sync.ts
+  permify-db-init:
+    image: postgres:16-alpine
+    profiles: ["authz"]
+    depends_on:
+      postgis:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "psql postgres://$${POSTGIS_USER}:$${POSTGIS_PASSWORD}@postgis:5432/postgres -tc
+      \"SELECT 1 FROM pg_database WHERE datname='permify'\" | grep -q 1
+      || psql postgres://$${POSTGIS_USER}:$${POSTGIS_PASSWORD}@postgis:5432/postgres -c 'CREATE DATABASE permify'"
+    environment:
+      POSTGIS_USER: ${POSTGIS_USER:-policytwin}
+      POSTGIS_PASSWORD: ${POSTGIS_PASSWORD:-policytwin}
+    networks: [platform]
+    restart: "no"
+
+  permify:
+    image: permify/permify:latest
+    profiles: ["authz"]
+    ports:
+      - "${PERMIFY_PORT:-3476}:3476"
+    command:
+      - serve
+      - --database-engine=postgres
+      - --database-uri=postgres://${POSTGIS_USER:-policytwin}:${POSTGIS_PASSWORD:-policytwin}@postgis:5432/permify?sslmode=disable
+      - --database-max-open-connections=20
+    depends_on:
+      permify-db-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3476/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Edge perimeter (feat-mw-edge-authz, profile `edge`): APISIX gateway +
+  # open-appsec WAF in front of the app, mirroring infra/k8s/edge. The
+  # default stack (app directly on :3000) is unchanged; enable with:
+  #   docker compose --profile edge up apisix openappsec
+  # then browse via http://localhost:9080 (detect-mode WAF, local policy).
+  # ------------------------------------------------------------------
+  apisix-etcd:
+    image: bitnami/etcd:3.5
+    profiles: ["edge"]
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "etcdctl endpoint health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  apisix:
+    image: apache/apisix:3.9.1-debian
+    profiles: ["edge"]
+    ports:
+      - "${APISIX_PORT:-9080}:9080"
+      - "${APISIX_ADMIN_PORT:-9180}:9180"
+    environment:
+      # Dev-only inline key (compose has no ESO; k8s pulls it from Vault).
+      APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:-edd1c9f034335f136f87ad84b625c8f1}
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
+      api-gateway:
+        condition: service_started
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9080/apisix/prometheus/metrics || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  openappsec:
+    image: openappsec/agent:latest
+    profiles: ["edge"]
+    environment:
+      managed_mode: local
+    volumes:
+      - ./openappsec/local_policy.yaml:/etc/cp/conf/local_policy.yaml:ro
+    networks: [platform]
     restart: unless-stopped
 
   keycloak:
@@ -1008,6 +1173,32 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # --- Apache Sedona (lakehouse-scale geo compute, opt-in) -----------------
+  # Distributed spatial joins/aggregates over the Iceberg warehouse on MinIO;
+  # writes the policy_twin.geo_analytics table consumed by Trino (see
+  # docs/LAKEHOUSE.md — Sedona section). Notebook UI is OFF: this runs the
+  # batch job once and exits (driver sleeps so logs stay inspectable).
+  #   docker compose -f infra/docker/docker-compose.yml --profile lakehouse up spark-sedona
+  spark-sedona:
+    image: apache/sedona:1.6.1
+    profiles: ["lakehouse"]
+    environment:
+      LAKEHOUSE_WAREHOUSE: s3://policy-twin/lakehouse
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      GEO_ENGINE: sedona
+      GEO_ANALYTICS_SEED: "${GEO_ANALYTICS_SEED:-20240801}"
+      SPARK_NO_DAEMONIZE: "1"
+    volumes:
+      - ../../public/geo:/data/geo:ro
+      - sedona-artifacts:/opt/spark/artifacts
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks: [platform]
+    restart: "no"
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.104.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -1018,6 +1209,105 @@ services:
       - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:
       prometheus:
+        condition: service_started
+    networks: [platform]
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Temporal durable-workflow stack (ADR-010, docs/TEMPORAL.md).
+  # Default-on for dev: `docker compose up` brings the server, its own
+  # Postgres (kept separate from the postgis service to isolate failure
+  # domains), and the UI. Slim environments can exclude it with
+  #   docker compose up --scale temporal=0 --scale temporal-ui=0 --scale temporal-db=0
+  # or by starting only the services they need. The TS API falls back to
+  # the in-process runner when TEMPORAL_URL is unset (api/bridges/temporal.ts).
+  # ------------------------------------------------------------------
+  temporal-db:
+    image: postgres:16
+    ports:
+      - "${TEMPORAL_DB_PORT:-5433}:5432"
+    environment:
+      POSTGRES_USER: ${TEMPORAL_DB_USER:-temporal}
+      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal}
+      POSTGRES_DB: ${TEMPORAL_DB_NAME:-temporal}
+    volumes:
+      - temporal-data:/var/lib/postgresql/data
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:1.25
+    ports:
+      - "${TEMPORAL_GRPC_PORT:-7233}:7233"
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: temporal-db
+      POSTGRES_USER: ${TEMPORAL_DB_USER:-temporal}
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:-temporal}
+      DBNAME: ${TEMPORAL_DB_NAME:-temporal}
+      VISIBILITY_DBNAME: ${TEMPORAL_VISIBILITY_DB_NAME:-temporal_visibility}
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      ENABLE_ES: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:2.31
+    ports:
+      - "${TEMPORAL_UI_PORT:-8088}:8080"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:${APP_PORT:-3000}
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # Go Temporal worker (services/workflows-go) — opt-in profile so the
+  # default dev stack stays Node+Python only; enable with:
+  #   docker compose --profile workflows up workflows-worker
+  workflows-worker:
+    build:
+      context: ../../services/workflows-go
+    image: policy-twin/workflows-go:local
+    profiles: ["workflows"]
+    environment:
+      TEMPORAL_URL: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-policy-twin}
+      INGESTION_BASE_URL: http://ingestion:8300
+      SIMULATION_BASE_URL: http://simulation:8100
+      PLATFORM_API_URL: http://app:3000
+      KAFKA_BROKERS: redpanda:9092
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      temporal:
+        condition: service_healthy
+      ingestion:
         condition: service_started
     networks: [platform]
     restart: unless-stopped
