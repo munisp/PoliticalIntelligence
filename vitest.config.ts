@@ -15,6 +15,15 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    env: {
+      // Gap #13: silence webhook HTTP fan-out noise during unit tests.
+      WEBHOOKS_ENABLED: "false",
+    },
+    // Gap #14: DB-touching suites (auditchain, worm, data-contracts, …)
+    // race when files run concurrently against the shared test schema —
+    // run files serially in forked processes. Runtime stays ~2min.
+    pool: "forks",
+    fileParallelism: false,
     include: [
       "api/**/*.test.ts",
       "api/**/*.spec.ts",
