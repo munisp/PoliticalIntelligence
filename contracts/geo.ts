@@ -56,6 +56,61 @@ export interface FacilityNearResult {
   origin: string;
 }
 
+/* ------------------------------------------------------------------ */
+/* geo-rs compute bridge (services/geo-rs — docs/GEOSPATIAL.md §6)     */
+/* ------------------------------------------------------------------ */
+
+const lngLat = z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]);
+
+export const spatialJoinInput = z.object({
+  /** GeoJSON Feature/FeatureCollection/Geometry of polygons. */
+  polygon_geojson: z.unknown(),
+  /** Points as [lng, lat] pairs (max 10k per call). */
+  points: z.array(lngLat).min(1).max(10_000),
+});
+export type SpatialJoinInput = z.infer<typeof spatialJoinInput>;
+
+export const withinKmInput = z
+  .object({
+    /** Reference point [lng, lat] (or supply line_geojson). */
+    point: lngLat.optional(),
+    /** Reference line (GeoJSON LineString) — alternative to point. */
+    line_geojson: z.unknown().optional(),
+    /** Candidate features (GeoJSON FeatureCollection). */
+    features_geojson: z.unknown(),
+    km: z.number().positive().max(1000),
+  })
+  .refine((v) => v.point !== undefined || v.line_geojson !== undefined, {
+    message: "provide either point or line_geojson",
+  });
+export type WithinKmInput = z.infer<typeof withinKmInput>;
+
+export type GeoEngine = "rust" | "ts_fallback";
+
+export interface SpatialJoinHit {
+  index: number;
+  point: [number, number];
+  properties: Record<string, unknown> | null;
+}
+
+export interface SpatialJoinResult {
+  results: SpatialJoinHit[];
+  polygon_count: number;
+  geo_engine: GeoEngine;
+}
+
+export interface WithinKmMatch {
+  index: number;
+  distance_km: number;
+  properties: Record<string, unknown>;
+}
+
+export interface WithinKmResult {
+  matches: WithinKmMatch[];
+  method: string;
+  geo_engine: GeoEngine;
+}
+
 export interface LgaSummaryEntry {
   unit_id: string;
   name: string;
