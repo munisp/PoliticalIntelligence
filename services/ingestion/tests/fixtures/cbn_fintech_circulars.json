@@ -1,0 +1,58 @@
+{
+  "publication": "CBN fintech/payments circulars (sample)",
+  "source_portal": "https://www.cbn.gov.ng",
+  "note": "Offline fixture mirroring the CBN payments-system circulars listing; used when the live listing is unreachable. Records are stamped origin=derived.",
+  "instruments": [
+    {
+      "title": "Guidelines for Licensing and Regulation of Payments Service Holding Companies and Payment Service Providers (PSSP/PTSP)",
+      "instrument_type": "licensing_guidelines",
+      "subject_sectors": ["fintech", "payments"],
+      "reference": "CBN/PSM/2020/PSP",
+      "issued_date": "2020-11-09",
+      "source_url": "https://www.cbn.gov.ng/out/2020/psmd/guidelines%20on%20licensing%20and%20regulation%20of%20psps.pdf"
+    },
+    {
+      "title": "Operational Guidelines for Open Banking in Nigeria",
+      "instrument_type": "operational_guidelines",
+      "subject_sectors": ["fintech", "open_banking", "data_sharing"],
+      "reference": "CBN/BPS/2023/OBN",
+      "issued_date": "2023-03-07",
+      "source_url": "https://www.cbn.gov.ng/out/2023/bpsd/operational%20guidelines%20for%20open%20banking%20in%20nigeria.pdf"
+    },
+    {
+      "title": "Guidelines for Licensing and Regulation of Payment Service Banks (PSB) in Nigeria",
+      "instrument_type": "licensing_guidelines",
+      "subject_sectors": ["fintech", "payments", "financial_inclusion"],
+      "reference": "CBN/PSM/2020/PSB",
+      "issued_date": "2020-08-27",
+      "source_url": "https://www.cbn.gov.ng/out/2020/psmd/guidelines%20for%20licensing%20and%20regulation%20of%20psbs.pdf"
+    },
+    {
+      "title": "Regulatory Framework for Agent Banking and Agent Banking Relationships in Nigeria",
+      "instrument_type": "framework",
+      "subject_sectors": ["fintech", "agent_banking", "financial_inclusion"],
+      "reference": "CBN/FPR/2013/AGB",
+      "issued_date": "2013-04-24",
+      "source_url": "https://www.cbn.gov.ng/out/2013/fprd/regulatory%20framework%20for%20agent%20banking.pdf"
+    },
+    {
+      "title": "Framework for Quick Response (QR) Code Payments in Nigeria",
+      "instrument_type": "framework",
+      "subject_sectors": ["fintech", "payments"],
+      "reference": "CBN/PSM/2021/QR",
+      "issued_date": "2021-01-15",
+      "source_url": "https://www.cbn.gov.ng/out/2021/psmd/framework%20for%20qr%20code%20payments.pdf"
+    },
+    {
+      "title": "Circular on the CBN Regulatory Sandbox Operations",
+      "instrument_type": "circular",
+      "subject_sectors": ["fintech", "innovation"],
+      "reference": "CBN/BPS/2021/SBX",
+      "issued_date": "2021-01-13",
+      "source_url": "https://www.cbn.gov.ng/out/2021/bpsd/framework%20for%20regulatory%20sandbox%20operations.pdf",
+      "metrics": [
+        {"metric_key": "licensed_psp_operators", "sector_code": "fintech", "value": 212, "period": "2024", "unit": "count"}
+      ]
+    }
+  ]
+}
