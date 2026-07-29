@@ -30,6 +30,7 @@ import {
   stakeholdersByIds,
   upcomingEngagementsFor,
 } from "./queries/advocacy";
+import { cached } from "./utils/cache";
 import type { RegulatoryPathway, Stakeholder } from "@db/schema";
 
 /**
@@ -307,9 +308,12 @@ export const advocacyRouter = createRouter({
   stakeholderMap: publicQuery
     .input(stakeholderMapInput)
     .query(async ({ ctx, input }) => {
+      // Hot read path (docs/REDIS.md): the full stakeholder/edge tables are
+      // the expensive part of the map query; the pathway lookup itself stays
+      // live so 404 semantics are unchanged. 5-minute read-through cache.
       const [stakeholders, edges] = await Promise.all([
-        allStakeholders(),
-        allEdges(),
+        cached("advocacy:stakeholders:all", 300, () => allStakeholders()),
+        cached("advocacy:edges:all", 300, () => allEdges()),
       ]);
       let seeds: Set<string>;
       if (input.pathwayId) {
