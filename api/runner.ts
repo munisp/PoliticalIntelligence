@@ -521,3 +521,33 @@ export async function enqueuePersistedJob(jobId: string): Promise<void> {
   if (job.status !== "queued") return; // idempotent re-submit guard
   jobRunner.enqueue({ jobId: job.jobId, type: job.type, input: job.input });
 }
+
+/* ---------------------------- radar.weeklyScan (I1) ------------------ */
+
+/**
+ * I1 — Policy Radar weekly digest job. The ops scheduler enqueues a job row
+ * of type "radar.weeklyScan" on a weekly cadence (default 7-day look-back);
+ * the handler reuses the deterministic scan from api/radar.ts, so manual
+ * radar.scan calls and the weekly job produce identical, idempotent results.
+ */
+jobRunner.register("radar.weeklyScan", async ({ input, reportProgress }) => {
+  const { days = 7, jurisdiction_id, actor_id } = (input ?? {}) as {
+    days?: number;
+    jurisdiction_id?: string;
+    actor_id?: number | null;
+  };
+  const { runRadarScanWithEvents } = await import("./radar");
+  await reportProgress(20);
+  const result = await runRadarScanWithEvents({ days, jurisdiction_id });
+  await reportProgress(90);
+  await auditBackground(actor_id ?? null, "radar.weeklyScan", "policy_alerts", jurisdiction_id ?? "all", {
+    scanned: result.scanned,
+    inserted: result.inserted,
+  });
+  return {
+    scanned: result.scanned,
+    inserted: result.inserted,
+    days,
+    jurisdiction_id: jurisdiction_id ?? null,
+  };
+});
