@@ -65,13 +65,37 @@ login as `oidc:<sub>`, so both issuers coexist in one users table.
 Realm import (`infra/docker/keycloak/realm-import/policy-twin-realm.json`):
 realm `policy-twin`; client `policy-twin-web` (public, Authorization Code +
 PKCE S256, redirect URIs `http://localhost:3000/*`); client `policy-twin-api`
-(bearer-only resource server + audience mapper); the six platform realm
-roles with descriptions; default group `/policy-twin-users` with per-role
-subgroups; one demo user per role (`demo-executive`, `demo-policy-analyst`,
-`demo-legal-analyst`, `demo-data-steward`, `demo-simulation-specialist`,
-`demo-platform-admin`) — **all passwords are `CHANGE-ME`** (dev only; rotate
-before any shared environment). Session/SSO timeouts: SSO idle 30 min,
-max 10 h; access tokens 15 min.
+(bearer-only resource server + audience mapper); default group
+`/policy-twin-users` with per-role subgroups; one demo user per legacy role
+(`demo-executive`, `demo-policy-analyst`, `demo-legal-analyst`,
+`demo-data-steward`, `demo-simulation-specialist`, `demo-platform-admin`) —
+**all passwords are `CHANGE-ME`** (dev only; rotate before any shared
+environment). Session/SSO timeouts: SSO idle 30 min, max 10 h; access
+tokens 15 min.
+
+**Role claim mapping (feat-mw-edge-authz).** The realm ships TWO role
+naming schemes, both mapped in `KEYCLOAK_ROLE_MAP` (api/utils/oidc.ts):
+
+- legacy hyphenated names (`executive-consumer`, `policy-analyst`, …), and
+- **canonical names matching the `platformRole` enum 1:1**:
+  `platform_admin`, `data_steward`, `policy_analyst`, `legal_analyst`,
+  `simulation_specialist`, `field_officer`, `executive`.
+
+Tokens carry realm roles in `realm_access.roles` (mapper on the
+`policy-twin-web` client); the first role present in `KEYCLOAK_ROLE_MAP`
+wins and becomes `users.platformRole` on first-login provisioning. New
+deployments should assign canonical roles; the hyphenated names remain for
+back-compat with existing realms. `field_officer` exists only in canonical
+form (field data collection, own-jurisdiction reads).
+
+**Jurisdiction groups.** `/jurisdictions/<id>` subgroups carry a
+`jurisdiction_id` attribute mirroring `admin_units`/`jurisdictions` ids
+(e.g. `ng-lagos`, `ng-cross-river`). Group membership is the operator-facing
+record of who belongs to which jurisdiction; `scripts/permify-sync.ts`
+converges the same hierarchy into Permify relationships. Fine-grained
+reads are still enforced server-side via `user_jurisdictions` grants
+(ABAC, api/utils/rbac.ts) or Permify when `PERMIFY_URL` is set — the token
+group claim is advisory, not an authorization input.
 
 ### PII redaction (AI-11)
 
