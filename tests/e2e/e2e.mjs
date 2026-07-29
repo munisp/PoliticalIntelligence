@@ -423,6 +423,83 @@ async function main() {
     assert(typeof d.ocr_confidence === "number", "ocr_confidence computed by fallback");
   });
 
+  group("advocacy surface (public)");
+  let firstPathwayId = null;
+  await test("advocacy.listPathways → pathway summaries envelope", async () => {
+    const env = await trpcQuery("advocacy.listPathways");
+    assert(Array.isArray(env.data.pathways), "data.pathways array");
+    for (const p of env.data.pathways) {
+      assert(p.pathwayId && p.sector && p.title, "pathway summary shape");
+    }
+    firstPathwayId = env.data.pathways[0]?.pathwayId ?? null;
+  });
+  await test("advocacy.stakeholderMap → nodes/edges graph", async () => {
+    const env = await trpcQuery("advocacy.stakeholderMap", {});
+    assert(Array.isArray(env.data.nodes) && Array.isArray(env.data.edges), "nodes/edges arrays");
+    assert(env.data.nodes.length > 0, "at least one stakeholder node");
+    const nodeIds = new Set(env.data.nodes.map((n) => n.stakeholderId));
+    for (const e of env.data.edges) {
+      assert(nodeIds.has(e.fromId) && nodeIds.has(e.toId), "edges reference included nodes");
+    }
+  });
+  await test("advocacy.stakeholderMap?pathwayId → filtered graph", async () => {
+    if (!firstPathwayId) throw skip("no pathways seeded");
+    const env = await trpcQuery("advocacy.stakeholderMap", { pathwayId: firstPathwayId });
+    assert(Array.isArray(env.data.nodes), "nodes array");
+  });
+
+  group("outcomes surface (public)");
+  await test("outcomes.listSeries → series envelope for seeded jurisdiction", async () => {
+    const env = await trpcQuery("outcomes.listSeries", { jurisdiction_id: JUR });
+    assert(env.data.jurisdiction_id === JUR, "jurisdiction_id echo");
+    assert(Array.isArray(env.data.series), "series array");
+  });
+
+  group("brief rendered export (authenticated)");
+  await test("briefs.exportRendered (html) → rendered artifact + audit", async () => {
+    const analyst = requireAuth("analyst");
+    if (!briefId) throw skip("no brief from lifecycle group");
+    const env = await trpcMutation(
+      "briefs.exportRendered",
+      { brief_id: briefId, format: "html" },
+      analyst,
+    );
+    const d = env.data;
+    assert(d.format === "html", `format ${d.format}`);
+    assert(typeof d.filename === "string" && d.filename.endsWith(".html"), "filename");
+    assert(typeof d.content === "string" && d.content.includes("<"), "rendered HTML content");
+  });
+  await test("briefs.exportRendered (doc) → Word-compatible artifact", async () => {
+    const analyst = requireAuth("analyst");
+    if (!briefId) throw skip("no brief from lifecycle group");
+    const env = await trpcMutation(
+      "briefs.exportRendered",
+      { brief_id: briefId, format: "doc" },
+      analyst,
+    );
+    assert(env.data.format === "doc", `format ${env.data.format}`);
+    assert(env.data.filename.endsWith(".doc"), "filename");
+  });
+
+  group("connectors health");
+  await test("ops.freshnessSummary → data freshness envelope", async () => {
+    const env = await trpcQuery("ops.freshnessSummary");
+    assert(typeof env.data.label === "string", "label present");
+    assert("asOf" in env.data, "asOf key present");
+  });
+  await test("ingestion service /v1/connectors → connector status list", async () => {
+    const base = (process.env.INGESTION_BASE_URL || "http://localhost:8300").replace(/\/$/, "");
+    let r;
+    try {
+      r = await fetch(`${base}/v1/connectors`, { signal: AbortSignal.timeout(3000) });
+    } catch {
+      throw skip(`ingestion service unreachable at ${base} (not part of this stack)`);
+    }
+    assert(r.status === 200, `status ${r.status}`);
+    const body = await r.json();
+    assert(Array.isArray(body.data) && body.data.length > 0, "connector status list");
+  });
+
   group("audit chain");
   await test("audit chain verify endpoint → intact chain", async () => {
     const exec = requireAuth("executive");
