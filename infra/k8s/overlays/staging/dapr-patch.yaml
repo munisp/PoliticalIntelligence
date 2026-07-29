@@ -1,0 +1,60 @@
+# Dapr sidecar opt-in patch for the Python services (ADR-010, docs/DAPR.md).
+#
+# COMMENTED OUT BY DEFAULT — Dapr adoption is scoped and opt-in. To enable
+# the sidecars on staging:
+#   1. Install the Dapr control plane: `dapr init -k` (or Helm chart).
+#   2. Apply the components: `kubectl apply -f infra/dapr/components/`
+#      (swap secretstores.local.env for the external-secrets-backed store).
+#   3. Add `dapr-patch.yaml` to the staging kustomization resources, or
+#      convert each document below into a kustomize `patches:` entry
+#      (sidecar annotations live on the pod template, so a strategic-merge
+#      patch against each Deployment works).
+#
+# What the annotations mean:
+#   dapr.io/enabled: "true"            inject the sidecar
+#   dapr.io/app-id: <svc>              service-invocation identity (mTLS scope)
+#   dapr.io/app-port: <port>           where the app listens (pub/sub delivery)
+#   dapr.io/app-protocol: http         FastAPI services speak HTTP
+#   dapr.io/config: (optional)         tracing config ref
+#
+# The Node API is intentionally NOT annotated: its event producer/consumer
+# path (api/utils/events.ts) stays direct-to-Redpanda for now.
+#
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: simulation
+# spec:
+#   template:
+#     metadata:
+#       annotations:
+#         dapr.io/enabled: "true"
+#         dapr.io/app-id: "simulation"
+#         dapr.io/app-port: "8100"
+#         dapr.io/app-protocol: http
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: ingestion
+# spec:
+#   template:
+#     metadata:
+#       annotations:
+#         dapr.io/enabled: "true"
+#         dapr.io/app-id: "ingestion"
+#         dapr.io/app-port: "8300"
+#         dapr.io/app-protocol: http
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: documents
+# spec:
+#   template:
+#     metadata:
+#       annotations:
+#         dapr.io/enabled: "true"
+#         dapr.io/app-id: "documents"
+#         dapr.io/app-port: "8400"
+#         dapr.io/app-protocol: http
