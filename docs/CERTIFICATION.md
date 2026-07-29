@@ -142,3 +142,25 @@ Master: 4a701d72. Independent audit (40 findings) actioned:
 **Innovations I1–I10 (all shipped, tested, documented in docs/INNOVATIONS.md):** Policy Radar, opportunity embed widgets, Corridor Twin (Lagos–Calabar milestones + variance), legislative diff-impact analyzer, Advocacy CRM, public participation, state domestication tracker (3 laws × 37), procurement supplier matching, scenario marketplace (publish/fork/verify), field verification loop.
 
 Gates: 353 vitest passed (53 files), 496 pytest across 4 services, tsc clean, build green, migration parity asserted.
+
+## Addendum 2026-07-29 — Middleware wave
+
+Five middleware branches integrated onto master (integration branch `integration-mw`):
+
+- **Temporal** — self-hosted `temporal` + `temporal-db` (compose + k8s base), Go workers (`services/workflows-go`), TS bridge (`api/bridges/temporal.ts`) and `workflows` tRPC router. Temporal coexists with the existing DB job queue in a phased migration: new durable workflows route to Temporal when `TEMPORAL_URL` is set; the legacy queue remains the fallback.
+- **Dapr (scoped)** — Dapr components for selected building blocks only; no runtime dependency for the monolith default path.
+- **Redis** — cache (`api/utils/cache.ts`) + sliding-window rate limiter (embed surface), `REDIS_URL`-gated with in-process fallback; k8s `redis.yaml`.
+- **OpenSearch** — search backend + outbox indexer consumer (`api/consumers/opensearch-indexer.ts`), mapping/fallback/idempotency tested; k8s `opensearch.yaml`; reindex script.
+- **Postgres formalized** — PostGIS init scripts and role documentation (`docs/DATA-STORES.md`) alongside MySQL.
+- **Keycloak first-class** — realm import (`policy-twin-realm.json`) shipped; OIDC path documented as the production IdP track.
+- **Permify ReBAC seam** — `infra/permify/schema.perm`, `api/utils/permify.ts` client, `scripts/permify-sync.ts`; `PERMIFY_URL`-gated check in `datasets.ts` with ABAC fallback unchanged.
+- **Edge perimeter** — APISIX (+ etcd, OIDC/limit-req/cors/prometheus routes) and OpenAppSec WAF (detect mode) under compose `edge` profile and `infra/k8s/edge/`; `docs/EDGE.md`.
+- **Sedona** — `spark-sedona` lakehouse compose profile + k8s batch job; `services/ingestion/app/geo_analytics/sedona_jobs.py`.
+- **GeoLibre seam** — copilot geospatial QA tool (`services/ai/app/tools/geolibre_tool.py`), HTTP-only delegation when `GEOLIBRE_URL` is set, template engine fallback, honest `geo_engine` markers.
+- **Rust geo-rs service** — `services/geo-rs` (axum + `geo`/`geojson`, no GDAL): spatial join / geodesic area / within-km / simplify, consumed via `api/bridges/geoRs.ts` with in-process TS fallback (`geo_engine: "rust" | "ts_fallback"`); new `geo.spatialJoin` / `geo.withinKm` procedures.
+
+**ADR-010** stands: eventing is Kafka-API via **Redpanda** (Fluvio evaluated and rejected); Temporal adopted for durable workflows; Dapr scoped. See `docs/ADRS.md` + `docs/adr/ADR-010-eventing.md`.
+
+**Toolchains note:** Go (`services/workflows-go`) and Rust (`services/geo-rs`) builds and tests run in CI / Docker builder stages — no local Go/Rust toolchain exists in the dev sandbox; the Node/Python gates below are run locally.
+
+Gates (this integration): `npm run check` clean (tsc + migration parity 53/53), vitest zero new failures vs master baseline (74 pre-existing sandbox failures from absent MySQL, identical set on clean master; all new middleware suites green), pytest across 4 services, `npm run build` green, YAML lint on all touched infra + compose clean.
