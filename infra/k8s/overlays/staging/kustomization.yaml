@@ -43,3 +43,24 @@ patches:
         value: policy-twin.stg.example.gov.ng
     target:
       kind: Ingress
+  # Middleware wave (batch 3): staging replicas/resources for new services.
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: workflows-go
+      spec:
+        replicas: 2
+    target:
+      kind: Deployment
+      name: workflows-go
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: geo-rs
+      spec:
+        replicas: 2
+    target:
+      kind: Deployment
+      name: geo-rs
