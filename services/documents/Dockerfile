@@ -7,10 +7,19 @@ ENV PYTHONUNBUFFERED=1 \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Heavy OCR extras (PaddleOCR/Docling/boto3) are intentionally NOT baked in:
-#   docker build --build-arg EXTRAS=1 ...   # or pip install -r requirements-extras.txt
-# The service falls back to deterministic stdlib extractors without them.
+# Heavy OCR extras (PaddleOCR/Docling/boto3) are NOT baked in by default to
+# keep the image slim (~200MB paddlepaddle wheel + ~1.5GB docling/torch
+# models). Opt in at build time:
+#   docker build --build-arg WITH_OCR_EXTRAS=true -t policy-twin/documents:ocr .
+#   # or in compose: services.documents.build.args.WITH_OCR_EXTRAS: "true"
+# Best-effort: a failed extras install does NOT fail the image build — the
+# service falls back to deterministic stdlib extractors without them.
+ARG WITH_OCR_EXTRAS=false
 COPY requirements-extras.txt ./
+RUN if [ "$WITH_OCR_EXTRAS" = "true" ]; then \
+      pip install --no-cache-dir -r requirements-extras.txt || \
+      echo "WARN: OCR extras install failed (best-effort) — stdlib fallbacks remain"; \
+    fi
 
 COPY app ./app
 COPY conftest.py pytest.ini ./
