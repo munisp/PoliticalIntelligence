@@ -43,24 +43,37 @@ patches:
         value: policy-twin.stg.example.gov.ng
     target:
       kind: Ingress
-  # Middleware wave (batch 3): staging replicas/resources for new services.
-  - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: workflows-go
-      spec:
-        replicas: 2
-    target:
-      kind: Deployment
-      name: workflows-go
-  - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: geo-rs
-      spec:
-        replicas: 2
-    target:
-      kind: Deployment
-      name: geo-rs
+  # ── Sovereign IdP (SEC-1): Kimi ↔ Keycloak switch — COMMENTED TEMPLATE ──
+  # Staging defaults to Kimi OAuth (AUTH_PROVIDER unset). To validate the
+  # Keycloak path on staging, uncomment the patch below. OIDC_ISSUER must be
+  # the EXTERNAL https issuer and match the token `iss` exactly; the client
+  # id is the token audience. Role claim mapping: realm_access.roles →
+  # platformRole via KEYCLOAK_ROLE_MAP (api/utils/oidc.ts); the realm import
+  # ships canonical roles matching the platformRole enum 1:1
+  # (infra/docker/keycloak/realm-import/policy-twin-realm.json).
+  # Full runbook: docs/SECURITY.md → "Keycloak switch-over runbook".
+  # - patch: |-
+  #     apiVersion: apps/v1
+  #     kind: Deployment
+  #     metadata:
+  #       name: app
+  #     spec:
+  #       template:
+  #         spec:
+  #           containers:
+  #             - name: app
+  #               env:
+  #                 - name: AUTH_PROVIDER
+  #                   value: "keycloak"
+  #                 - name: OIDC_ISSUER
+  #                   value: "https://keycloak.stg.example.gov.ng/realms/policy-twin"
+  #                 - name: OIDC_CLIENT_ID
+  #                   value: "policy-twin-web"
+  #                 - name: OIDC_CLIENT_SECRET
+  #                   valueFrom:
+  #                     secretKeyRef:
+  #                       name: platform-secrets
+  #                       key: OIDC_CLIENT_SECRET
+  #   target:
+  #     kind: Deployment
+  #     name: app
