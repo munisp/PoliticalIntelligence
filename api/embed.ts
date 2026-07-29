@@ -8,6 +8,7 @@ import {
 import { createRouter, publicQuery } from "./middleware";
 import { envelope, apiError } from "./utils/envelope";
 import { evidenceByIds, findOpportunity } from "./queries/opportunities";
+import { createSlidingWindowLimiter } from "./utils/ratelimit";
 import type { TrpcContext } from "./context";
 
 /**
@@ -20,14 +21,19 @@ import type { TrpcContext } from "./context";
  * platform through this surface.
  */
 
-/* ------------------------- naive fixed-window limiter ------------------------- */
-/* Per-instance, per-client fixed window: 60 req/min. Keyed on a hash of    */
-/* x-forwarded-for / x-real-ip (never logged raw). Good enough for a public */
-/* read surface behind an ingress; swap for Redis at multi-replica scale.   */
+/* --------------------- sliding-window limiter (Redis) --------------------- */
+/* Per-client sliding window: 60 req/min, keyed on a hash of                */
+/* x-forwarded-for / x-real-ip (never logged raw). Redis-backed when        */
+/* REDIS_URL is set (correct across replicas), in-process sliding window    */
+/* otherwise — see api/utils/ratelimit.ts.                                  */
 
 const WINDOW_MS = 60_000;
 const LIMIT = 60;
-const buckets = new Map<string, { windowStart: number; count: number }>();
+let embedLimiter = createSlidingWindowLimiter({
+  windowMs: WINDOW_MS,
+  limit: LIMIT,
+  prefix: "embed",
+});
 
 function clientKey(ctx: TrpcContext): string {
   const fwd = ctx.req.headers.get("x-forwarded-for") ?? "";
@@ -35,16 +41,9 @@ function clientKey(ctx: TrpcContext): string {
   return createHash("sha256").update(ip).digest("hex").slice(0, 24);
 }
 
-export function rateLimitEmbed(ctx: TrpcContext): void {
-  const key = clientKey(ctx);
-  const now = Date.now();
-  const b = buckets.get(key);
-  if (!b || now - b.windowStart > WINDOW_MS) {
-    buckets.set(key, { windowStart: now, count: 1 });
-    return;
-  }
-  b.count += 1;
-  if (b.count > LIMIT) {
+export async function rateLimitEmbed(ctx: TrpcContext): Promise<void> {
+  const decision = await embedLimiter.hit(clientKey(ctx));
+  if (!decision.allowed) {
     throw apiError(ctx, {
       http: "BAD_REQUEST",
       code: "EMBED_RATE_LIMITED",
@@ -56,7 +55,11 @@ export function rateLimitEmbed(ctx: TrpcContext): void {
 
 /** Test hook: reset the limiter window. */
 export function __resetEmbedRateLimit(): void {
-  buckets.clear();
+  embedLimiter = createSlidingWindowLimiter({
+    windowMs: WINDOW_MS,
+    limit: LIMIT,
+    prefix: "embed",
+  });
 }
 
 function escapeHtml(s: string): string {
@@ -103,7 +106,7 @@ export const embedRouter = createRouter({
   opportunityCard: publicQuery
     .input(embedCardInput)
     .query(async ({ ctx, input }) => {
-      rateLimitEmbed(ctx);
+      await rateLimitEmbed(ctx);
       const card = await buildCard(ctx, input.opportunity_id);
       return envelope(card, ctx);
     }),
@@ -116,7 +119,7 @@ export const embedRouter = createRouter({
   scriptTag: publicQuery
     .input(embedScriptInput)
     .query(async ({ ctx, input }) => {
-      rateLimitEmbed(ctx);
+      await rateLimitEmbed(ctx);
       const card = await buildCard(ctx, input.opportunity_id);
       const bg = input.theme === "dark" ? "#101A2E" : "#FFFFFF";
       const fg = input.theme === "dark" ? "#E6ECF5" : "#1E2C47";
