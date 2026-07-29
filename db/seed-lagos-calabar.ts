@@ -405,6 +405,117 @@ export const CORRIDOR_TEMPLATE: typeof schema.scenarioTemplates.$inferInsert = {
 };
 
 /* ------------------------------------------------------------------ */
+/* I3 — Corridor Twin milestones (ADDITIVE; idempotent via milestoneId) */
+/* Corridor: Lagos–Calabar coastal highway, ₦1.744trn planned envelope */
+/* ($1.126B S2 + $747M S1 at ~₦1,550/$). Disbursement figures are     */
+/* cumulative ₦ against each milestone; provenance origin="derived".  */
+/* ------------------------------------------------------------------ */
+
+export const CORRIDOR_ID = "corridor:lagos-calabar";
+
+export const CORRIDOR_MILESTONES: (typeof schema.corridorMilestones.$inferInsert)[] = [
+  {
+    milestoneId: "ms:lch-s1-financing-close",
+    corridorId: CORRIDOR_ID,
+    title: "Section 1 financing close ($747M)",
+    plannedDate: "2024-03-31",
+    actualDate: "2024-03-31",
+    status: "done",
+    pctComplete: 100,
+    fundingDisbursedNgn: 747_000_000 * 1550,
+    evidenceRef: EV.financing,
+  },
+  {
+    milestoneId: "ms:lch-esia-disclosure",
+    corridorId: CORRIDOR_ID,
+    title: "ESIA disclosure (FMEnv portal)",
+    plannedDate: "2024-06-30",
+    actualDate: "2024-09-15",
+    status: "done",
+    pctComplete: 100,
+    fundingDisbursedNgn: null,
+    evidenceRef: EV.esia,
+  },
+  {
+    milestoneId: "ms:lch-s1-crcp-sections",
+    corridorId: CORRIDOR_ID,
+    title: "Section 1 CRCP pavement sections (Hitech)",
+    plannedDate: "2025-02-28",
+    actualDate: "2025-04-30",
+    status: "done",
+    pctComplete: 100,
+    fundingDisbursedNgn: 500_000_000 * 1550,
+    evidenceRef: EV.design,
+  },
+  {
+    milestoneId: "ms:lch-s1-commissioning",
+    corridorId: CORRIDOR_ID,
+    title: "Section 1 commissioning (47.5km)",
+    plannedDate: "2025-05-31",
+    actualDate: "2025-05-31",
+    status: "done",
+    pctComplete: 100,
+    fundingDisbursedNgn: 247_000_000 * 1550,
+    evidenceRef: EV.commissioning,
+  },
+  {
+    milestoneId: "ms:lch-s2-financing",
+    corridorId: CORRIDOR_ID,
+    title: "Section 2 financing close ($1.126B — FAB $626M + Afreximbank $500M, ICIEC-wrapped)",
+    plannedDate: "2025-12-15",
+    actualDate: "2025-12-15",
+    status: "done",
+    pctComplete: 100,
+    fundingDisbursedNgn: 250_000_000 * 1550,
+    evidenceRef: EV.financing,
+  },
+  {
+    milestoneId: "ms:lch-solar-lighting-pilot",
+    corridorId: CORRIDOR_ID,
+    title: "Solar lighting pilot (Section 1 stretch)",
+    plannedDate: "2026-03-31",
+    actualDate: null,
+    status: "in_progress",
+    pctComplete: 40,
+    fundingDisbursedNgn: 12_000_000_000,
+    evidenceRef: EV.design,
+  },
+  {
+    milestoneId: "ms:lch-rail-median-study",
+    corridorId: CORRIDOR_ID,
+    title: "Rail-median feasibility study",
+    plannedDate: "2026-06-30",
+    actualDate: null,
+    status: "planned",
+    pctComplete: 5,
+    fundingDisbursedNgn: null,
+    evidenceRef: EV.design,
+  },
+  {
+    milestoneId: "ms:lch-s2-crcp-works",
+    corridorId: CORRIDOR_ID,
+    title: "Section 2 CRCP main works (55.7km, Eleko → Ode-Omi)",
+    plannedDate: "2027-12-31",
+    actualDate: null,
+    status: "delayed",
+    pctComplete: 10,
+    fundingDisbursedNgn: 60_000_000_000,
+    evidenceRef: EV.financing,
+  },
+  {
+    milestoneId: "ms:lch-full-corridor-2030",
+    corridorId: CORRIDOR_ID,
+    title: "Full corridor completion target (700km, 9 states)",
+    plannedDate: "2030-12-31",
+    actualDate: null,
+    status: "planned",
+    pctComplete: 8,
+    fundingDisbursedNgn: null,
+    evidenceRef: EV.commissioning,
+  },
+];
+
+/* ------------------------------------------------------------------ */
 /* Upsert                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -417,6 +528,8 @@ export async function seedLagosCalabar() {
   await ensureStringPk("budgets", schema.budgets as never, schema.budgets.budgetId as never, CORRIDOR_BUDGETS as never, "budgetId");
   await ensureStringPk("opportunities", schema.opportunities as never, schema.opportunities.opportunityId as never, CORRIDOR_OPPORTUNITIES as never, "opportunityId");
   await ensureStringPk("interventions", schema.interventions as never, schema.interventions.interventionId as never, CORRIDOR_INTERVENTIONS as never, "interventionId");
+  // I3 — corridor milestones (additive; ensureStringPk keeps idempotency).
+  await ensureStringPk("corridor_milestones", schema.corridorMilestones as never, schema.corridorMilestones.milestoneId as never, CORRIDOR_MILESTONES as never, "milestoneId");
   await db
     .insert(schema.scenarioTemplates)
     .values(CORRIDOR_TEMPLATE)
