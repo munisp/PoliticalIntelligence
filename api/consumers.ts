@@ -15,6 +15,7 @@ import {
 import { redactPayload, logRedactionEvent, type RedactionCounts } from "./utils/pii";
 import { exportWormNow, startWormExporter } from "./utils/worm";
 import { eventConsumerLag } from "./utils/metrics";
+import { createIndexerHandler, INDEXER_TOPICS } from "./consumers/opensearch-indexer";
 
 /**
  * Real event consumers (closes EVT-1/EVT-2 "eventing is one-way") plus job
@@ -246,6 +247,14 @@ export async function startConsumers(): Promise<void> {
     [Topics.recommendationsGenerated, onRecommendationGenerated],
     [Topics.auditEvents, onAuditEvent],
   ];
+  // OpenSearch indexer (docs/OPENSEARCH.md): only registered when a cluster
+  // is configured — with OPENSEARCH_URL unset the platform runs SQL-only.
+  if (process.env.OPENSEARCH_URL) {
+    const indexer = createIndexerHandler();
+    for (const topic of INDEXER_TOPICS) {
+      defs.push([topic, indexer]);
+    }
+  }
   for (const [topic, handler] of defs) {
     const handle = createConsumer(topic, handler, {
       group: `policy-twin-${topic}`,
