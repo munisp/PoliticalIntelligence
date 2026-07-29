@@ -54,8 +54,11 @@ export async function datasetPolicyFor(
   );
 }
 
-/** True when the caller may read the dataset under its policy. */
-export async function canReadDataset(
+/**
+ * Pure ABAC decision (the pre-Permify path), used as the circuit-breaker
+ * fallback and whenever PERMIFY_URL is unset.
+ */
+async function canReadDatasetAbac(
   ctx: TrpcContext,
   ref: DatasetRef,
 ): Promise<boolean> {
@@ -79,6 +82,75 @@ export async function canReadDataset(
     }
   }
   return true;
+}
+
+/**
+ * Record the authorization engine in the AUDIT TRAIL (never in responses —
+ * SEC: decision internals must not leak to clients). Fire-and-forget; only
+ * fires on the Permify path, and only for denies or degraded decisions, so
+ * the steady-state audit volume is unchanged.
+ */
+function auditAuthzEngine(
+  ctx: TrpcContext,
+  ref: DatasetRef,
+  decision: { allowed: boolean; engine: string; permifyError?: string },
+): void {
+  if (decision.engine === "permify" && decision.allowed) return;
+  void import("../queries/audit")
+    .then(({ insertAuditEvent }) =>
+      insertAuditEvent({
+        actorId: ctx.user?.id ?? null,
+        action: "datasets.authz.checked",
+        entityType: ref.entityType,
+        entityId: ref.datasetId,
+        scopes: null,
+        requestId: null,
+        correlationId: null,
+        payload: {
+          decision: decision.allowed ? "allow" : "deny",
+          meta: {
+            authz_engine: decision.engine,
+            permify_error: decision.permifyError ?? null,
+          },
+        },
+      }),
+    )
+    .catch(() => {
+      /* audit must never break a read */
+    });
+}
+
+/**
+ * True when the caller may read the dataset under its policy.
+ *
+ * Authorization seam (feat-mw-edge-authz): when `PERMIFY_URL` is set and a
+ * session exists, the decision goes to Permify first
+ * (`dataset:<id> read @ user:<userId>`); the in-process circuit breaker in
+ * api/utils/permify.ts degrades to the ABAC check above on any Permify
+ * failure, tagging the decision `abac-fallback`. The engine used is
+ * recorded in audit details as `meta.authz_engine`.
+ */
+export async function canReadDataset(
+  ctx: TrpcContext,
+  ref: DatasetRef,
+): Promise<boolean> {
+  const { permifyEnabled, checkAccess } = await import("./permify");
+  if (!permifyEnabled() || !ctx.user) {
+    return canReadDatasetAbac(ctx, ref);
+  }
+  const policy = await datasetPolicyFor(ref.entityType, ref.datasetId);
+  const decision = await checkAccess(
+    { id: ctx.user.id, role: resolveRole(ctx.user) },
+    "read",
+    {
+      type: "dataset",
+      id: ref.datasetId,
+      attributes: { classification: policy?.classification ?? "restricted" },
+    },
+    () => canReadDatasetAbac(ctx, ref),
+  );
+  auditAuthzEngine(ctx, ref, decision);
+  return decision.allowed;
 }
 
 /** Throw FORBIDDEN when the caller may not read the dataset. */
