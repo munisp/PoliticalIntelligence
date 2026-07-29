@@ -1,0 +1,143 @@
+# open-appsec WAF (feat-mw-edge-authz). Agent deployment attached to APISIX
+# via the open-appsec APISIX plugin (apisix-routes.yaml). Per open-appsec
+# docs the same agent can instead attach to ingress-nginx via the
+# `openappsec.io/` annotations — kept here as commented fallback since the
+# base ingress remains the non-APISIX path.
+#
+# Staging policy: DETECT mode (log + learn, never blocks). Prevent mode is
+# the commented option below — enable only after false-positive review of
+# the detect-mode logs.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openappsec-agent
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: openappsec-agent
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: openappsec-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: openappsec-agent
+        app.kubernetes.io/part-of: policy-twin
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: openappsec/agent:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            # Local management, no SaaS connection required.
+            - name: managed_mode
+              value: local
+            - name: TUNING_MODE
+              value: "false"
+          volumeMounts:
+            - name: policy
+              mountPath: /etc/cp/conf/local_policy.yaml
+              subPath: local_policy.yaml
+              readOnly: true
+            - name: agent-data
+              mountPath: /etc/cp/data
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: policy
+          configMap:
+            name: openappsec-policy
+        - name: agent-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openappsec-agent
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: openappsec-agent
+    app.kubernetes.io/part-of: policy-twin
+spec:
+  selector:
+    app.kubernetes.io/name: openappsec-agent
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# Local WAF policy — STAGING: detect/learn. To promote to prevent:
+#   mode: prevent   (on the practice below)
+# then re-apply and watch the detect→prevent delta in the agent logs.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openappsec-policy
+  namespace: edge
+  labels:
+    app.kubernetes.io/name: openappsec-agent
+    app.kubernetes.io/part-of: policy-twin
+data:
+  local_policy.yaml: |
+    policies:
+      - name: policy-twin-staging
+        practices:
+          - name: web-attacks
+            mode: detect        # staging: detect/learn only
+            # mode: prevent     # production option — enable after FP review
+          - name: api-threats
+            mode: detect
+        triggers:
+          - name: log-all
+            mode: detect
+    assets:
+      - name: policy-twin-app
+        urls:
+          - "https://policy-twin.stg.example.gov.ng"
+        policy: policy-twin-staging
+---
+# Fallback attachment for the non-APISIX path: when traffic still enters via
+# the base nginx Ingress, add these annotations there to route inspection
+# through the same agent (commented — apply to infra/k8s/base/ingress.yaml
+# only if the edge cut-over is reverted but WAF coverage must remain):
+#
+#   openappsec.io/policy: policy-twin-staging
+#   openappsec.io/mode: detect
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openappsec-ingress-annotations
+  namespace: edge
+  labels:
+    app.kubernetes.io/part-of: policy-twin
+data:
+  README: |
+    Reference-only manifest. To attach open-appsec to the fallback nginx
+    ingress instead of APISIX, annotate infra/k8s/base/ingress.yaml with:
+      openappsec.io/policy: policy-twin-staging
+      openappsec.io/mode: detect
+    Do not enable both attachments at once for the same host.
